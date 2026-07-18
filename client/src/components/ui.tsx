@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type ButtonHTMLAttributes } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckIcon, MenuIcon } from './icons';
+import { CheckIcon, MenuIcon, SoundOffIcon, SoundOnIcon } from './icons';
+import { isMuted, setMuted } from '../lib/sound';
 
 export function formatTime(ms: number) {
   const seconds = Math.max(0, ms) / 1000;
@@ -97,7 +98,39 @@ export interface MenuAction {
 }
 
 /** شريط علوي: الشعار + زر خيارات اللعبة */
-export function NavBar({ actions, cta }: { actions?: MenuAction[]; cta?: ReactNode }) {
+/** زر كتم الصوت — للصفحات التي تصدر أصواتاً */
+export function MuteButton() {
+  const [muted, setMutedState] = useState(isMuted());
+  return (
+    <button
+      onClick={() => {
+        const next = !muted;
+        setMuted(next);
+        setMutedState(next);
+      }}
+      title={muted ? 'تشغيل الصوت' : 'كتم الصوت'}
+      aria-label={muted ? 'تشغيل الصوت' : 'كتم الصوت'}
+      className={`flex size-10 shrink-0 items-center justify-center rounded-xl border transition active:scale-90 ${
+        muted
+          ? 'border-[#f5c9c6] bg-[#fdeae8] text-[#e52e25]'
+          : 'border-[#e8e4dd] bg-white text-[#103f91] hover:bg-[#faf9f6]'
+      }`}
+    >
+      {muted ? <SoundOffIcon size={18} /> : <SoundOnIcon size={18} />}
+    </button>
+  );
+}
+
+export function NavBar({
+  actions,
+  cta,
+  sound,
+}: {
+  actions?: MenuAction[];
+  cta?: ReactNode;
+  /** يعرض زر كتم الصوت */
+  sound?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -120,9 +153,11 @@ export function NavBar({ actions, cta }: { actions?: MenuAction[]; cta?: ReactNo
           </span>
         </Link>
 
-        {cta}
+        <div className="flex items-center gap-2">
+          {cta}
+          {sound && <MuteButton />}
 
-        {actions && actions.length > 0 && (
+          {actions && actions.length > 0 && (
           <div className="relative" ref={ref}>
             <Button variant="ghost" onClick={() => setOpen((v) => !v)}>
               <MenuIcon size={18} />
@@ -150,7 +185,8 @@ export function NavBar({ actions, cta }: { actions?: MenuAction[]; cta?: ReactNo
               </div>
             )}
           </div>
-        )}
+          )}
+        </div>
       </div>
     </header>
   );
@@ -183,18 +219,20 @@ export function MiniFooter() {
 export function Page({
   actions,
   cta,
+  sound,
   width = 'wide',
   children,
 }: {
   actions?: MenuAction[];
   cta?: ReactNode;
+  sound?: boolean;
   /** wide للوحات، narrow لنماذج الدخول */
   width?: 'wide' | 'narrow';
   children: ReactNode;
 }) {
   return (
     <div className="flex min-h-full flex-col">
-      <NavBar actions={actions} cta={cta} />
+      <NavBar actions={actions} cta={cta} sound={sound} />
       <main
         className={`mx-auto w-full flex-1 px-4 py-6 sm:px-5 sm:py-8 ${
           width === 'wide' ? 'max-w-6xl' : 'max-w-2xl'

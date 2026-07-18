@@ -42,6 +42,8 @@ class Team {
     this.name = name;
     this.score = 0;
     this.connected = true;
+    // يبقى عبر الجولات: لا يُعاد سؤال على الفريق حتى ينفد البنك كله
+    this.seen = new Set();
     this.resetForRound(settings);
   }
 
@@ -87,12 +89,22 @@ export class Room {
     return team;
   }
 
-  /** يسحب السؤال التالي للفريق، ويعيد خلط البنك عند نفاده */
+  /**
+   * يسحب السؤال التالي للفريق من الأسئلة التي لم يرها بعد.
+   * حين ينفد البنك كله يُمسح سجل المرئي ويُعاد الخلط من جديد.
+   */
   nextQuestion(team) {
     if (team.queue.length === 0) {
-      team.queue = shuffled(poolFor(this.bankIds));
+      const pool = poolFor(this.bankIds);
+      let fresh = pool.filter((q) => !team.seen.has(q.id));
+      if (fresh.length === 0) {
+        team.seen.clear();
+        fresh = pool;
+      }
+      team.queue = shuffled(fresh);
     }
     team.current = team.queue.shift();
+    if (team.current) team.seen.add(team.current.id);
     return team.current;
   }
 
@@ -272,6 +284,7 @@ export class Room {
     this.standings = null;
     for (const team of this.teams.values()) {
       team.score = 0;
+      team.seen.clear(); // لعبة جديدة تماماً — كل الأسئلة متاحة من جديد
       team.resetForRound(this.settings);
     }
     this.touch();

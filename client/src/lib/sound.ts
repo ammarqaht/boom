@@ -2,8 +2,10 @@
  * أصوات مولّدة بـ Web Audio — بلا ملفات صوتية، فلا شيء يُحمّل من الشبكة
  * ولا يتأخر الصوت عن الحدث.
  */
+const MUTE_KEY = 'qunbula:muted';
+
 let ctx: AudioContext | null = null;
-let muted = false;
+let muted = localStorage.getItem(MUTE_KEY) === '1'; // يبقى الاختيار بعد التحديث
 
 function audio(): AudioContext | null {
   if (muted) return null;
@@ -19,7 +21,9 @@ export function unlockAudio() {
 
 export function setMuted(value: boolean) {
   muted = value;
+  localStorage.setItem(MUTE_KEY, value ? '1' : '0');
   if (value && ctx) void ctx.suspend();
+  if (!value) audio(); // نوقظ السياق فوراً عند إلغاء الكتم
 }
 
 export function isMuted() {

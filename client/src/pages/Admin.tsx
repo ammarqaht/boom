@@ -34,7 +34,7 @@ import {
   TrophyIcon,
   UsersIcon,
 } from '../components/icons';
-import { Countdown, HistoryModal, TimeBar } from '../components/game';
+import { Countdown, HistoryModal, RollingNumber, TimeBar } from '../components/game';
 
 const SESSION_KEY = 'qunbula:admin';
 
@@ -429,7 +429,7 @@ function TeamCard({
           </div>
 
           <div className="flex shrink-0 items-baseline gap-1.5">
-            <span className="text-2xl font-black text-[#ff9f1c]">{team.score}</span>
+            <RollingNumber value={team.score} className="text-2xl font-black text-[#ff9f1c]" />
             <span className="text-xs font-bold text-[#9a968f]">نقطة</span>
           </div>
 

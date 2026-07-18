@@ -15,7 +15,14 @@ import {
   type MenuAction,
 } from '../components/ui';
 import { BombIcon, BoomIcon, ClockIcon, ExitIcon, HistoryIcon, TrophyIcon } from '../components/icons';
-import { Countdown, HistoryModal, Podium, ReviewList, optionGradient } from '../components/game';
+import {
+  Countdown,
+  HistoryModal,
+  Podium,
+  ReviewList,
+  RollingNumber,
+  optionGradient,
+} from '../components/game';
 import { playCorrect, playExplosion, playTick, playWrong, unlockAudio } from '../lib/sound';
 
 const SESSION_KEY = 'qunbula:team';
@@ -189,7 +196,10 @@ function TeamBadge({ state }: { state: TeamState }) {
         <div className="mt-1 text-sm font-bold text-white/60">الجولة {state.round}</div>
       </div>
       <div className="text-center">
-        <div className="text-4xl font-black text-[#ffb703] lg:text-5xl">{state.score}</div>
+        <RollingNumber
+          value={state.score}
+          className="block text-4xl font-black text-[#ffb703] lg:text-5xl"
+        />
         <div className="text-sm font-bold text-white/60">نقطة</div>
       </div>
     </div>
@@ -224,7 +234,7 @@ function TeamScreen({
    */
   if (over && phase === 'fading') {
     return (
-      <Page actions={actions}>
+      <Page actions={actions} sound>
         <div className="mx-auto max-w-3xl">
           <div className="fade-out">
             <TeamBadge state={state} />
@@ -258,7 +268,7 @@ function TeamScreen({
   // انتهت اللعبة كلياً — الأوائل على المدرّج
   if (state.status === 'finished' && state.standings) {
     return (
-      <Page actions={actions}>
+      <Page actions={actions} sound>
         <div className="mx-auto max-w-3xl py-4">
           <Podium standings={state.standings} />
         </div>
@@ -269,7 +279,7 @@ function TeamScreen({
   // شاشة الاستعداد قبل انطلاق العدادات
   if (state.status === 'countdown') {
     return (
-      <Page actions={actions}>
+      <Page actions={actions} sound>
         <div className="mx-auto max-w-3xl">
           <TeamBadge state={state} />
         </div>
@@ -280,7 +290,7 @@ function TeamScreen({
 
   if (state.status === 'lobby') {
     return (
-      <Page actions={actions}>
+      <Page actions={actions} sound>
         <div className="mx-auto max-w-3xl">
           <TeamBadge state={state} />
           <Centered>
@@ -300,7 +310,7 @@ function TeamScreen({
   // نهاية الجولة — سواء نجا الفريق أو انفجرت قنبلته، يراجع أسئلته
   if (state.status === 'ended' || state.exploded) {
     return (
-      <Page actions={actions}>
+      <Page actions={actions} sound>
         <div className="mx-auto max-w-3xl">
           <TeamBadge state={state} />
 
@@ -342,7 +352,12 @@ function TeamScreen({
   }
 
   return (
-    <Page actions={actions}>
+    <Page actions={actions} sound>
+      {/* الثواني الأخيرة: إطار أحمر ينبض على حواف الشاشة */}
+      {running && shown <= 5000 && (
+        <div className="danger-frame pointer-events-none fixed inset-0 z-10" aria-hidden="true" />
+      )}
+
       {flash && (
         <div
           key={flash.key}

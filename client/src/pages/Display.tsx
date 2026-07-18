@@ -16,8 +16,16 @@ import {
   formatTime,
   levelColor,
 } from '../components/ui';
-import { BombIcon, BoomIcon, EyeOffIcon, OfflineIcon, PauseIcon, ScreenIcon } from '../components/icons';
-import { Countdown, Podium, TimeBar } from '../components/game';
+import {
+  BombIcon,
+  BoomIcon,
+  CrownIcon,
+  EyeOffIcon,
+  OfflineIcon,
+  PauseIcon,
+  ScreenIcon,
+} from '../components/icons';
+import { Countdown, Podium, RollingNumber, TimeBar } from '../components/game';
 import { playExplosion, unlockAudio } from '../lib/sound';
 
 export default function Display() {
@@ -104,6 +112,11 @@ function Board({ room }: { room: RoomState }) {
   const qr = useQr(joinUrl);
   useExplosionAlert(room.teams);
 
+  // المتصدر = أعلى وقت متبقٍ بين الفرق الصامدة
+  const leaderId = room.teams
+    .filter((t) => !t.exploded)
+    .reduce<PublicTeam | null>((best, t) => (!best || t.timeMs > best.timeMs ? t : best), null)?.id;
+
   return (
     <div className="flex min-h-full flex-col">
       {/* نافبار ثابت: الشعار يميناً، ورمز الغرفة والجولة بخط صغير يساراً */}
@@ -168,7 +181,13 @@ function Board({ room }: { room: RoomState }) {
               {/* عمودان على الشاشات العريضة، عمود واحد على الضيقة */}
               <div className="grid content-start gap-4 xl:grid-cols-2">
                 {room.teams.map((team, index) => (
-                  <TeamRow key={team.id} team={team} rank={index + 1} status={room.status} />
+                  <TeamRow
+                    key={team.id}
+                    team={team}
+                    rank={index + 1}
+                    status={room.status}
+                    leader={team.id === leaderId}
+                  />
                 ))}
               </div>
             </>
@@ -206,10 +225,13 @@ function TeamRow({
   team,
   rank,
   status,
+  leader,
 }: {
   team: PublicTeam;
   rank: number;
   status: RoomState['status'];
+  /** صاحب أعلى وقت متبقٍ حالياً */
+  leader?: boolean;
 }) {
   const color = team.exploded ? '#e52e25' : levelColor[dangerLevel(team.timeMs)];
 
@@ -227,6 +249,10 @@ function TeamRow({
 
           <div className="flex-1">
             <div className="flex items-center gap-2 text-3xl font-black">
+              {/* تاج يطفو فوق المتصدر ما دامت اللعبة جارية */}
+              {leader && !team.exploded && (
+                <CrownIcon size={26} className="crown-bob shrink-0 text-[#ff9f1c]" />
+              )}
               {team.name}
               {!team.connected && <OfflineIcon size={19} className="text-[#9a968f]" />}
             </div>
@@ -236,7 +262,7 @@ function TeamRow({
           </div>
 
           <div className="text-center">
-            <div className="text-4xl font-black text-[#ff9f1c]">{team.score}</div>
+            <RollingNumber value={team.score} className="text-4xl font-black text-[#ff9f1c]" />
             <div className="text-xs text-[#9a968f]">نقطة</div>
           </div>
 

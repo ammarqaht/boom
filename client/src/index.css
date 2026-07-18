@@ -260,6 +260,34 @@ body {
   animation: slide-in-right 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/* إطار أحمر ينبض على حواف الشاشة في الثواني الأخيرة */
+@keyframes danger-frame {
+  0%, 100% { box-shadow: inset 0 0 0 0 rgba(229, 46, 37, 0); }
+  50% { box-shadow: inset 0 0 90px 14px rgba(229, 46, 37, 0.55); }
+}
+.danger-frame { animation: danger-frame 0.7s ease-in-out infinite; }
+
+/* قصاصات التتويج تتساقط وتتمايل */
+@keyframes confetti-fall {
+  0% { transform: translateY(-12vh) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+}
+.confetti-piece {
+  position: absolute;
+  top: 0;
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  animation: confetti-fall linear forwards;
+}
+
+/* التاج يطفو فوق المتصدر */
+@keyframes crown-bob {
+  0%, 100% { transform: translateY(0) rotate(-6deg); }
+  50% { transform: translateY(-4px) rotate(6deg); }
+}
+.crown-bob { animation: crown-bob 1.6s ease-in-out infinite; }
+
 /* توهج خفيف خلف بطل الصفحة الرئيسية */
 @keyframes drift {
   0%, 100% { transform: translate(0, 0) scale(1); }

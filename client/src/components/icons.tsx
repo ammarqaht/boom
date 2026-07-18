@@ -101,6 +101,26 @@ export const OfflineIcon = (p: IconProps) => (
   <Icon {...p}><path d="M2 2l20 20" /><path d="M5 12.5a11 11 0 0 1 4-2.6M2 8.8a16 16 0 0 1 5-3.2M17 10a11 11 0 0 1 2 2.5M12 5c3.3 0 6.4 1.2 8.8 3.2" /><path d="M8.5 16a5 5 0 0 1 7 0" /><circle cx="12" cy="20" r="0.6" fill="currentColor" /></Icon>
 );
 
+export const SoundOnIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M11 5L6 9H3v6h3l5 4V5z" />
+    <path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13" />
+  </Icon>
+);
+
+export const SoundOffIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M11 5L6 9H3v6h3l5 4V5z" />
+    <path d="M22 9l-6 6M16 9l6 6" />
+  </Icon>
+);
+
+export const CrownIcon = ({ size = 20, ...props }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
+    <path d="M3 8l4 3.5L12 4l5 7.5L21 8l-1.6 10.4a1 1 0 0 1-1 .85H5.6a1 1 0 0 1-1-.85L3 8z" />
+  </svg>
+);
+
 export const HistoryIcon = (p: IconProps) => (
   <Icon {...p}><path d="M3 12a9 9 0 1 0 2.6-6.4M3 4v4h4" /><path d="M12 8v4.5l3 1.8" /></Icon>
 );

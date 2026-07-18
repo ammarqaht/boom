@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ReviewItem, RoomResult, Standing } from '../lib/types';
 import { barPercent, dangerLevel, formatTime, levelColor } from './ui';
 import { BoomIcon, CheckIcon, CloseIcon, HistoryIcon, TrophyIcon } from './icons';
@@ -210,6 +210,66 @@ export function HistoryModal({
   );
 }
 
+/** رقم يتدحرج نحو قيمته الجديدة بدل أن يقفز */
+export function RollingNumber({ value, className }: { value: number; className?: string }) {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
+
+  useEffect(() => {
+    const start = performance.now();
+    const origin = from.current;
+    const diff = value - origin;
+    if (diff === 0) return;
+
+    let frame = 0;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / 650);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setShown(Math.round(origin + diff * eased));
+      if (t < 1) frame = requestAnimationFrame(step);
+      else from.current = value;
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return <span className={className}>{shown}</span>;
+}
+
+/** قصاصات التتويج — مولّدة مرة واحدة بألوان الشعار */
+export function Confetti({ count = 70 }: { count?: number }) {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: count }, (_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        delay: Math.random() * 2.2,
+        duration: 2.6 + Math.random() * 2,
+        color: ['#ff9f1c', '#103f91', '#12b3d5', '#e52e25', '#22a45d', '#ffb703'][i % 6],
+        skew: Math.random() * 40 - 20,
+      })),
+    [count],
+  );
+
+  return (
+    <div className="pointer-events-none fixed inset-0 z-30 overflow-hidden" aria-hidden="true">
+      {pieces.map((p) => (
+        <span
+          key={p.id}
+          className="confetti-piece"
+          style={{
+            left: `${p.left}%`,
+            backgroundColor: p.color,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+            transform: `skewY(${p.skew}deg)`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /**
  * المدرّج: الثاني ثم الأول ثم الثالث، الأعمدة تنمو من الأسفل
  * والأسماء تظهر بعدها، وباقي المجموعات في قائمة تحته.
@@ -229,6 +289,7 @@ export function Podium({ standings }: { standings: Standing[] }) {
 
   return (
     <div className="grid gap-6">
+      <Confetti />
       <div className="zoom-in text-center" style={{ animationDelay: '0.05s' }}>
         <span className="inline-flex size-16 items-center justify-center rounded-3xl bg-[#fff6e8] text-[#ff9f1c]">
           <TrophyIcon size={36} />

@@ -115,6 +115,10 @@ if (ended) {
   check('كل الفرق توقفت', adminState.status === 'ended');
 }
 
+// لا يتكرر سؤال على الفريق نفسه داخل الجولة
+const seenIds = teams[0].state.review?.map((x) => x.id) ?? [];
+check('لا تكرار للأسئلة داخل الجولة', seenIds.length === new Set(seenIds).size);
+
 // المراجعة تصل الفرق بعد الانتهاء فقط
 // (ننتظر قليلاً: room:ended يصل سوكِت المسؤول قبل أن تصل team:state سوكِتات الفرق)
 await wait(500);
@@ -156,6 +160,19 @@ check('رقم الجولة تقدم', adminState.round === 2);
 check('النقاط تراكمت', adminState.teams.some((t) => t.score > 0));
 check('العدادات رجعت 30 ث', adminState.teams.every((t) => t.timeMs === 30000));
 check('الجولة الثانية بدأت باستعداد', adminState.status === 'countdown');
+
+// أسئلة الجولة الثانية جديدة — لا تعيد ما رآه الفريق في الأولى
+await wait(3400);
+const round1Ids = new Set(seenIds);
+const round2Ids = [];
+for (let i = 0; i < 5 && teams[0].state.question; i++) {
+  round2Ids.push(teams[0].state.question.id);
+  await answer(teams[0], true);
+  await wait(80);
+}
+const repeated = round2Ids.filter((id) => round1Ids.has(id));
+console.log(`   الجولة 1: ${round1Ids.size} سؤال | الجولة 2: ${round2Ids.length} سؤال | مكرر: ${repeated.length}`);
+check('لا تتكرر أسئلة الجولة الأولى في الثانية', repeated.length === 0);
 
 // إنهاء اللعبة وعرض الأوائل
 check('إنهاء اللعبة', (await ask(admin, 'admin:finishGame')).ok);
