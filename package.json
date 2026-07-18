@@ -1,0 +1,21 @@
+{
+  "name": "qunbula",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "لعبة مسابقة القنبلة - عدة فرق تتسابق لحل الأسئلة قبل أن تنفجر قنابلهم",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --watch server/index.js",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client install --include=dev && npm --prefix client run build",
+    "start": "node server/index.js",
+    "test": "cd client && node e2e.mjs"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  }
+}
