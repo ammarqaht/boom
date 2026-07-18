@@ -263,34 +263,34 @@ function Console({
     <Page actions={actions}>
       <div className="grid gap-4">
         {/* بطاقة الغرفة: الرمز + بدء الجولة + الحالة */}
-        <div className="flex flex-wrap items-center justify-between gap-6 rounded-2xl bg-gradient-to-l from-[#0a2a63] via-[#103f91] to-[#1a5fc4] p-6 text-white shadow-lg shadow-[#103f91]/20">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-gradient-to-l from-[#0a2a63] via-[#103f91] to-[#1a5fc4] p-5 text-white shadow-lg shadow-[#103f91]/20 sm:p-6">
           <div>
-            <div className="text-sm font-bold text-white/60">رمز الغرفة</div>
-            <div className="text-6xl font-black tracking-[0.15em]">{room.code}</div>
-            <div className="mt-1 text-sm font-bold text-white/60">الجولة {room.round}</div>
+            <div className="text-xs font-bold text-white/60">رمز الغرفة</div>
+            <div className="text-3xl font-black tracking-[0.12em] sm:text-5xl">{room.code}</div>
+            <div className="mt-0.5 text-xs font-bold text-white/60">الجولة {room.round}</div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-2 text-sm font-black backdrop-blur">
-              <ClockIcon size={16} />
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-black backdrop-blur sm:px-4 sm:py-2 sm:text-sm">
+              <ClockIcon size={14} />
               {STATUS[room.status]}
             </span>
 
             {idle && (
-              <Button onClick={start} disabled={room.teams.length === 0} className="px-6 py-3 text-lg">
-                <PlayIcon size={18} />
-                {room.status === 'ended' ? 'جولة جديدة' : 'ابدأ الجولة'}
+              <Button onClick={start} disabled={room.teams.length === 0} className="sm:px-6 sm:py-3 sm:text-lg">
+                <PlayIcon size={16} />
+                {room.status === 'ended' || room.status === 'finished' ? 'جولة جديدة' : 'ابدأ الجولة'}
               </Button>
             )}
             {room.status === 'running' && (
-              <Button variant="ghost" onClick={() => send('admin:pause')} className="px-6 py-3 text-lg">
-                <PauseIcon size={18} />
+              <Button variant="ghost" onClick={() => send('admin:pause')} className="sm:px-6 sm:py-3 sm:text-lg">
+                <PauseIcon size={16} />
                 إيقاف
               </Button>
             )}
             {room.status === 'paused' && (
-              <Button onClick={() => send('admin:resume')} className="px-6 py-3 text-lg">
-                <PlayIcon size={18} />
+              <Button onClick={() => send('admin:resume')} className="sm:px-6 sm:py-3 sm:text-lg">
+                <PlayIcon size={16} />
                 استئناف
               </Button>
             )}
@@ -391,46 +391,51 @@ function TeamCard({
       {/* الخط الملوّن على طرف البطاقة */}
       <div className="w-2 shrink-0 transition-colors duration-500" style={{ backgroundColor: color }} />
 
-      <div className="flex flex-1 flex-wrap items-center gap-4 p-4">
-        <div className="min-w-40 flex-1">
-          <div className="flex items-center gap-2 text-xl font-black">
-            {team.name}
-            {!team.connected && <OfflineIcon size={15} className="text-[#9a968f]" />}
+      <div className="flex flex-1 flex-col gap-3 p-4">
+        {/* الاسم والإحصاءات يميناً، والأزرار على الطرف الأيسر */}
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 text-lg font-black sm:text-xl">
+              <span className="truncate">{team.name}</span>
+              {!team.connected && <OfflineIcon size={15} className="shrink-0 text-[#9a968f]" />}
+            </div>
+            <div className="text-sm text-[#9a968f]">
+              {team.answered} سؤال · {team.correct} صحيحة
+            </div>
           </div>
-          <div className="text-sm text-[#9a968f]">
-            أجابت على {team.answered} سؤال · {team.correct} صحيحة
+
+          <div className="flex shrink-0 gap-1.5">
+            <IconButton title="أضف 5 ثوانٍ" onClick={() => onAdjust(5)}>
+              <PlusIcon size={16} />
+            </IconButton>
+            <IconButton title="اخصم 5 ثوانٍ" onClick={() => onAdjust(-5)}>
+              <MinusIcon size={16} />
+            </IconButton>
+            <IconButton title="إزالة الفريق" danger onClick={onRemove}>
+              <CloseIcon size={16} />
+            </IconButton>
           </div>
         </div>
 
-        <div className="w-24 text-center">
-          <div
-            className="text-4xl font-black leading-none tabular-nums transition-colors duration-500"
-            style={{ color }}
-          >
-            {team.exploded ? <BoomIcon size={34} className="mx-auto" /> : formatTime(team.timeMs)}
+        <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-baseline gap-1.5">
+            <span
+              className="text-3xl font-black leading-none tabular-nums transition-colors duration-500"
+              style={{ color }}
+            >
+              {team.exploded ? <BoomIcon size={28} /> : formatTime(team.timeMs)}
+            </span>
+            {!team.exploded && <span className="text-xs font-bold text-[#9a968f]">ث</span>}
           </div>
-          {!team.exploded && <div className="text-xs font-bold text-[#9a968f]">ثانية</div>}
-        </div>
 
-        <div className="w-20 text-center">
-          <div className="text-2xl font-black text-[#ff9f1c]">{team.score}</div>
-          <div className="text-xs font-bold text-[#9a968f]">نقطة</div>
-        </div>
+          <div className="flex shrink-0 items-baseline gap-1.5">
+            <span className="text-2xl font-black text-[#ff9f1c]">{team.score}</span>
+            <span className="text-xs font-bold text-[#9a968f]">نقطة</span>
+          </div>
 
-        <div className="flex gap-1.5">
-          <IconButton title="أضف 5 ثوانٍ" onClick={() => onAdjust(5)}>
-            <PlusIcon size={16} />
-          </IconButton>
-          <IconButton title="اخصم 5 ثوانٍ" onClick={() => onAdjust(-5)}>
-            <MinusIcon size={16} />
-          </IconButton>
-          <IconButton title="إزالة الفريق" danger onClick={onRemove}>
-            <CloseIcon size={16} />
-          </IconButton>
-        </div>
-
-        <div className="w-full">
-          <TimeBar timeMs={team.timeMs} exploded={team.exploded} />
+          <div className="min-w-0 flex-1">
+            <TimeBar timeMs={team.timeMs} exploded={team.exploded} />
+          </div>
         </div>
       </div>
     </div>

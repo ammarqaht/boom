@@ -171,25 +171,38 @@ export function Footer() {
 }
 
 /** هيكل الصفحة: نافبار + محتوى + فوتر ملتصق بالأسفل */
+/** سطر حقوق مختصر — لكل الصفحات عدا التعريف */
+export function MiniFooter() {
+  return (
+    <footer className="mt-auto px-5 py-5 text-center text-xs text-[#b5b0a7]">
+      © {new Date().getFullYear()} نادي نبراس — تم إنشاء الموقع بواسطة مشعل الجلال
+    </footer>
+  );
+}
+
 export function Page({
   actions,
+  cta,
   width = 'wide',
   children,
 }: {
   actions?: MenuAction[];
+  cta?: ReactNode;
   /** wide للوحات، narrow لنماذج الدخول */
   width?: 'wide' | 'narrow';
   children: ReactNode;
 }) {
   return (
     <div className="flex min-h-full flex-col">
-      <NavBar actions={actions} />
+      <NavBar actions={actions} cta={cta} />
       <main
-        className={`mx-auto w-full flex-1 px-5 py-8 ${width === 'wide' ? 'max-w-6xl' : 'max-w-2xl'}`}
+        className={`mx-auto w-full flex-1 px-4 py-6 sm:px-5 sm:py-8 ${
+          width === 'wide' ? 'max-w-6xl' : 'max-w-2xl'
+        }`}
       >
         {children}
       </main>
-      <Footer />
+      <MiniFooter />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   Field,
   Input,
   Logo,
+  MiniFooter,
   Page,
   dangerLevel,
   formatTime,
@@ -104,38 +105,51 @@ function Board({ room }: { room: RoomState }) {
   useExplosionAlert(room.teams);
 
   return (
-    <div className="flex min-h-full flex-col gap-6 p-8">
-      <header className="flex items-center justify-between gap-6">
-        <div className="flex items-center gap-4">
-          <Logo className="h-14" />
-          <div className="border-r border-[#e8e4dd] pr-4">
-            <h1 className="flex items-center gap-2 text-3xl font-black text-[#103f91]">
-              <BombIcon size={28} className="text-[#ff9f1c]" />
+    <div className="flex min-h-full flex-col">
+      {/* نافبار ثابت: الشعار يميناً، ورمز الغرفة والجولة بخط صغير يساراً */}
+      <header className="sticky top-0 z-30 border-b border-[#e8e4dd] bg-white/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-3">
+          <div className="flex items-center gap-3">
+            <Logo className="h-9" />
+            <span className="flex items-center gap-1.5 border-r border-[#e8e4dd] pr-3 text-lg font-black text-[#103f91]">
+              <BombIcon size={18} className="text-[#ff9f1c]" />
               القنبلة
-            </h1>
-            <p className="text-sm font-bold text-[#6b6b6b]">الجولة {room.round}</p>
+            </span>
           </div>
-        </div>
 
-        <div className="flex items-center gap-5">
-          <div className="text-center">
-            <div className="text-xs font-bold text-[#6b6b6b]">رمز الغرفة</div>
-            <div className="text-5xl font-black tracking-[0.15em] text-[#ff9f1c]">{room.code}</div>
+          <div className="flex items-center gap-2 text-sm">
+            <span className="rounded-full bg-[#f2efe9] px-3 py-1 font-bold text-[#6b6b6b]">
+              الجولة {room.round}
+            </span>
+            <span className="rounded-full bg-[#fff6e8] px-3 py-1 font-black tracking-[0.15em] text-[#e68500]">
+              {room.code}
+            </span>
           </div>
-          {qr && (
-            <div className="rounded-xl border border-[#e8e4dd] bg-white p-2">
-              <img src={qr} alt="امسح للانضمام" className="size-24" />
-            </div>
-          )}
         </div>
       </header>
 
-      {room.status === 'lobby' && (
-        <p className="rounded-2xl border border-[#e8e4dd] bg-white p-4 text-center text-xl font-bold text-[#6b6b6b]">
-          امسح الرمز أو افتح{' '}
-          <span className="font-black text-[#103f91]">{location.host}/play</span> وأدخل الرمز
-        </p>
-      )}
+      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 p-5 sm:p-8">
+        {room.status === 'lobby' && (
+          <div className="flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-[#e8e4dd] bg-white p-6">
+            {qr && (
+              <div className="rounded-xl border border-[#e8e4dd] bg-white p-2">
+                <img src={qr} alt="امسح للانضمام" className="size-32" />
+              </div>
+            )}
+            <div className="text-center sm:text-right">
+              <p className="text-xl font-bold text-[#6b6b6b]">
+                امسح الرمز أو افتح{' '}
+                <span className="font-black text-[#103f91]">{location.host}/play</span>
+              </p>
+              <p className="mt-2 text-lg text-[#9a968f]">
+                وأدخل رمز الغرفة{' '}
+                <span className="text-3xl font-black tracking-[0.15em] text-[#ff9f1c]">
+                  {room.code}
+                </span>
+              </p>
+            </div>
+          </div>
+        )}
 
       {/* التغبيش يخفي الترتيب والعدادات عن الجمهور لزيادة التشويق */}
       <div className="relative flex-1">
@@ -171,21 +185,19 @@ function Board({ room }: { room: RoomState }) {
         )}
       </div>
 
-      {room.status === 'countdown' && <Countdown ms={room.countdownMs} />}
+        {room.status === 'countdown' && <Countdown ms={room.countdownMs} />}
 
-      {/* نتائج الجولة تظهر كبوب أب فوق خلفية مغبّشة، وتختفي مع بدء الجولة التالية */}
-      {room.status === 'ended' && room.result && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-8 backdrop-blur-md">
-          <div className="boom w-full max-w-3xl">
-            <Results result={room.result} />
+        {/* نتائج الجولة تظهر كبوب أب فوق خلفية مغبّشة، وتختفي مع بدء الجولة التالية */}
+        {room.status === 'ended' && room.result && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-6 backdrop-blur-md">
+            <div className="boom w-full max-w-3xl">
+              <Results result={room.result} />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      <footer className="flex items-center justify-between border-t border-[#e8e4dd] pt-4 text-sm text-[#9a968f]">
-        <span className="font-bold">© {new Date().getFullYear()} نادي نبراس</span>
-        <span>تم إنشاء الموقع بواسطة مشعل الجلال</span>
-      </footer>
+      <MiniFooter />
     </div>
   );
 }
