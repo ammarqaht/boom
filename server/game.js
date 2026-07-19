@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { normalizeBankIds, poolFor } from './banks.js';
+import { normalizeBankIds, validBankIds, questionsFor, sanitizeQuestions } from './banks.js';
 
 export const DEFAULT_SETTINGS = {
   startSeconds: 30,
@@ -61,10 +61,10 @@ class Team {
 }
 
 export class Room {
-  constructor(bankIds, settings = {}) {
+  constructor(bankIds, settings = {}, customQuestions = []) {
     this.code = makeRoomCode();
     this.adminKey = randomUUID();
-    this.bankIds = normalizeBankIds(bankIds);
+    this.setSources(bankIds, customQuestions);
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
     this.status = 'lobby'; // lobby | countdown | running | paused | ended | finished
     this.round = 1;
@@ -82,6 +82,26 @@ export class Room {
     this.touchedAt = Date.now();
   }
 
+  /**
+   * يحدّد مصادر الأسئلة: بنوك جاهزة + بنك مخصص ملصوق.
+   * لو لم يبق أي مصدر صالح، نرجع لبنك افتراضي حتى لا تخلو اللعبة من أسئلة.
+   */
+  setSources(bankIds, customQuestions) {
+    this.bankIds = validBankIds(bankIds);
+    this.customQuestions = sanitizeQuestions(customQuestions).map((q, i) => ({
+      ...q,
+      id: `custom:${i}`,
+    }));
+    if (this.bankIds.length === 0 && this.customQuestions.length === 0) {
+      this.bankIds = normalizeBankIds([]);
+    }
+  }
+
+  /** مجموعة الأسئلة الكاملة للغرفة: المخصص أولاً ثم البنوك الجاهزة */
+  pool() {
+    return [...this.customQuestions, ...questionsFor(this.bankIds)];
+  }
+
   addTeam(name) {
     const team = new Team(name, this.settings);
     this.teams.set(team.id, team);
@@ -95,7 +115,7 @@ export class Room {
    */
   nextQuestion(team) {
     if (team.queue.length === 0) {
-      const pool = poolFor(this.bankIds);
+      const pool = this.pool();
       let fresh = pool.filter((q) => !team.seen.has(q.id));
       if (fresh.length === 0) {
         team.seen.clear();
@@ -307,6 +327,8 @@ export class Room {
       status: this.status,
       round: this.round,
       bankIds: this.bankIds,
+      customCount: this.customQuestions.length,
+      poolCount: this.pool().length,
       settings: this.settings,
       result: this.result,
       history: this.history,
@@ -358,8 +380,8 @@ export class Room {
   }
 }
 
-export function createRoom(bankIds, settings) {
-  const room = new Room(bankIds, settings);
+export function createRoom(bankIds, settings, customQuestions) {
+  const room = new Room(bankIds, settings, customQuestions);
   rooms.set(room.code, room);
   return room;
 }

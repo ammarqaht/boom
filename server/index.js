@@ -3,7 +3,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server } from 'socket.io';
-import { listBanks, normalizeBankIds } from './banks.js';
+import { listBanks } from './banks.js';
 import { createRoom, getRoom, allRooms, sweepIdleRooms, DEFAULT_SETTINGS } from './game.js';
 
 const PORT = process.env.PORT || 3000;
@@ -46,8 +46,8 @@ io.on('connection', (socket) => {
     return getRoom(ctx.code);
   };
 
-  socket.on('admin:createRoom', ({ bankIds, settings } = {}, reply) => {
-    const room = createRoom(bankIds, settings);
+  socket.on('admin:createRoom', ({ bankIds, settings, customQuestions } = {}, reply) => {
+    const room = createRoom(bankIds, settings, customQuestions);
     ctx = { role: 'admin', code: room.code };
     socket.join(channel(room.code));
     reply?.({ ok: true, code: room.code, adminKey: room.adminKey, state: room.publicState() });
@@ -77,9 +77,23 @@ io.on('connection', (socket) => {
   socket.on('admin:setBanks', ({ bankIds } = {}, reply) => {
     const room = asAdmin();
     if (!room) return reply?.({ ok: false, error: 'غير مصرح' });
-    room.bankIds = normalizeBankIds(bankIds);
+    // البنوك قد تكون فارغة إن كان عند الغرفة بنك مخصص
+    room.setSources(bankIds, room.customQuestions);
+    for (const team of room.teams.values()) team.seen.clear();
     pushPublic(room);
     reply?.({ ok: true });
+  });
+
+  socket.on('admin:setCustomBank', ({ customQuestions } = {}, reply) => {
+    const room = asAdmin();
+    if (!room) return reply?.({ ok: false, error: 'غير مصرح' });
+    if (room.status === 'running') {
+      return reply?.({ ok: false, error: 'أوقف الجولة أولاً قبل تعديل الأسئلة' });
+    }
+    room.setSources(room.bankIds, customQuestions);
+    for (const team of room.teams.values()) team.seen.clear();
+    pushPublic(room);
+    reply?.({ ok: true, customCount: room.customQuestions.length, poolCount: room.pool().length });
   });
 
   socket.on('admin:start', (_payload, reply) => {

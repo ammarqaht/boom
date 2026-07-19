@@ -52,6 +52,8 @@ export interface RoomState {
   status: RoomStatus;
   round: number;
   bankIds: string[];
+  customCount: number;
+  poolCount: number;
   settings: Settings;
   result: RoomResult | null;
   history: RoomResult[];
