@@ -35,8 +35,6 @@ import {
   UsersIcon,
 } from '../components/icons';
 import { Countdown, HistoryModal, RollingNumber, TimeBar } from '../components/game';
-import { CustomBankInput } from '../components/CustomBank';
-import type { ParsedQuestion } from '../lib/parseTable';
 
 const SESSION_KEY = 'qunbula:admin';
 
@@ -53,8 +51,6 @@ export default function Admin() {
   const [error, setError] = useState('');
   const [bankIds, setBankIds] = useState<string[]>([]);
   const [draft, setDraft] = useState<Settings>(DEFAULTS);
-  const [customText, setCustomText] = useState('');
-  const [customQuestions, setCustomQuestions] = useState<ParsedQuestion[]>([]);
 
   useEffect(() => {
     void fetch('/api/banks')
@@ -99,7 +95,6 @@ export default function Admin() {
     const res = await ask<{ code: string; adminKey: string; state: RoomState }>('admin:createRoom', {
       bankIds,
       settings: draft,
-      customQuestions,
     });
     if (!res.ok) return setError(res.error);
     localStorage.setItem(SESSION_KEY, JSON.stringify({ code: res.code, adminKey: res.adminKey }));
@@ -133,32 +128,15 @@ export default function Admin() {
                 ))}
               </div>
               <p className="mt-2 text-sm text-[#9a968f]">
-                تُخلط أسئلة البنوك المختارة والمخصصة وتُعرض عشوائياً — المجموع{' '}
-                {total + customQuestions.length} سؤال
+                تُخلط أسئلة البنوك المختارة وتُعرض عشوائياً — المجموع {total} سؤال
               </p>
             </Field>
 
-            <CustomBankInput
-              value={customText}
-              onChange={(text, questions) => {
-                setCustomText(text);
-                setCustomQuestions(questions);
-              }}
-            />
-
             <SettingsEditor value={draft} onChange={setDraft} />
             <ErrorNote>{error}</ErrorNote>
-            <Button
-              onClick={createRoom}
-              disabled={bankIds.length === 0 && customQuestions.length === 0}
-            >
+            <Button onClick={createRoom} disabled={bankIds.length === 0}>
               أنشئ الغرفة
             </Button>
-            {bankIds.length === 0 && customQuestions.length === 0 && (
-              <p className="-mt-2 text-center text-sm text-[#9a968f]">
-                اختر بنكاً جاهزاً أو الصق أسئلتك المخصصة
-              </p>
-            )}
           </Card>
         </div>
       </Page>
@@ -502,24 +480,12 @@ function SettingsModal({
   onClose: () => void;
   onSave: () => void;
 }) {
-  const [customText, setCustomText] = useState('');
-  const [customQuestions, setCustomQuestions] = useState<ParsedQuestion[]>([]);
-  const [editCustom, setEditCustom] = useState(false);
-
   const toggleBank = (id: string) => {
     const next = room.bankIds.includes(id)
       ? room.bankIds.filter((x) => x !== id)
       : [...room.bankIds, id];
-    // يُسمح بإفراغ البنوك الجاهزة فقط إن كان عند الغرفة بنك مخصص
-    if (next.length === 0 && room.customCount === 0) return;
+    if (next.length === 0) return; // لا بد من بنك واحد على الأقل
     socket.emit('admin:setBanks', { bankIds: next });
-  };
-
-  const saveCustom = () => {
-    socket.emit('admin:setCustomBank', { customQuestions });
-    setEditCustom(false);
-    setCustomText('');
-    setCustomQuestions([]);
   };
 
   return (
@@ -556,50 +522,6 @@ function SettingsModal({
               ))}
             </div>
           </Field>
-
-          {/* البنك المخصص: عرض العدد الحالي وإمكانية استبداله */}
-          <div className="rounded-xl border border-[#e8e4dd] p-3">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-[#103f91]">
-                بنك مخصص:{' '}
-                {room.customCount > 0 ? `${room.customCount} سؤال` : 'لا يوجد'}
-              </span>
-              {idle && (
-                <button
-                  type="button"
-                  onClick={() => setEditCustom((v) => !v)}
-                  className="text-sm font-bold text-[#103f91] underline underline-offset-2"
-                >
-                  {editCustom ? 'إلغاء' : room.customCount > 0 ? 'استبدال' : 'إضافة'}
-                </button>
-              )}
-            </div>
-            {editCustom && idle && (
-              <div className="mt-3 grid gap-2">
-                <CustomBankInput
-                  value={customText}
-                  onChange={(text, questions) => {
-                    setCustomText(text);
-                    setCustomQuestions(questions);
-                  }}
-                />
-                <Button onClick={saveCustom} disabled={customQuestions.length === 0}>
-                  حفظ البنك المخصص ({customQuestions.length} سؤال)
-                </Button>
-                {room.customCount > 0 && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      socket.emit('admin:setCustomBank', { customQuestions: [] });
-                      setEditCustom(false);
-                    }}
-                  >
-                    حذف البنك المخصص
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
 
           <div className="flex gap-2">
             <Button className="flex-1" onClick={onSave} disabled={!idle}>
