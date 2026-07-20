@@ -82,6 +82,23 @@ check('نقاط الصقور تضاعفت ×3', bAward.doubled === true && bAwar
 console.log('   نتائج الجولة 2:', room.result.awards.map((x) => `${x.name}:${x.points}${x.doubled ? '(×3)' : ''}`).join(' · '));
 check('استُهلك المضاعِف', b.pendingMultiplier === 1);
 
+// الحالة العامة تعكس التجميد والمضاعفة للشاشات
+b.pendingMultiplier = 3;
+b.lockedMs = 4200;
+const pubTeams = room.publicState().teams;
+const pubB = pubTeams.find((x) => x.id === b.id);
+check('الحالة العامة تحمل عدّاد التجميد', pubB.lockedMs === 4200 && pubB.locked === true);
+check('الحالة العامة تحمل علامة المضاعفة', pubB.doubled === true);
+b.pendingMultiplier = 1;
+b.lockedMs = 0;
+
+// فتح البطاقات من جديد — الشراء يصير متاحاً مرة أخرى
+check('البطاقات مستخدمة قبل الفتح', a.usedCards.size > 0);
+room.reopenCards();
+check('فتح البطاقات أفرغ المستخدَم', [...room.teams.values()].every((t) => t.usedCards.size === 0));
+a.score = 5;
+check('يمكن الشراء بعد الفتح', room.buyCard(a.id, 'time').ok === true);
+
 // إعادة اللعبة تُعيد البطاقات
 room.resetAll();
 check('إعادة اللعبة تُتيح البطاقات', a.usedCards.size === 0 && b.pendingMultiplier === 1);

@@ -115,6 +115,14 @@ io.on('connection', (socket) => {
     reply?.({ ok: true });
   });
 
+  socket.on('admin:reopenCards', (_payload, reply) => {
+    const room = asAdmin();
+    if (!room) return reply?.({ ok: false, error: 'غير مصرح' });
+    room.reopenCards();
+    pushAll(room);
+    reply?.({ ok: true });
+  });
+
   socket.on('admin:toggleBlur', () => {
     const room = asAdmin();
     if (!room) return;

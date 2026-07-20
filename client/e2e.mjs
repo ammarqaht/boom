@@ -165,6 +165,12 @@ check('خُصم سعر البطاقة (نقطتان)', buyer.state.score === sco
 check('المتجر علّمها مستخدمة', buyer.state.shop.cards.find((c) => c.id === 'time').used === true);
 check('رفض إعادة الشراء', (await ask(buyer.socket, 'team:buyCard', { card: 'time' })).ok === false);
 
+// المسؤول يفتح البطاقات من جديد فتصير متاحة
+check('فتح البطاقات من المسؤول', (await ask(admin, 'admin:reopenCards')).ok === true);
+await wait(300);
+check('البطاقة رجعت متاحة بعد الفتح',
+  buyer.state.shop.cards.find((c) => c.id === 'time').used === false);
+
 // «ابدأ الجولة» بعد النهاية يبدأ جولة جديدة مباشرة بلا زر تجهيز
 check('بدء جولة جديدة مباشرة', (await ask(admin, 'admin:start')).ok);
 await wait(400);

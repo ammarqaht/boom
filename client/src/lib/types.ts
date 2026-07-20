@@ -32,6 +32,10 @@ export interface PublicTeam {
   correct: number;
   /** مجمّدة حالياً — مقفلة عن الإجابة */
   locked: boolean;
+  /** المتبقي من التجميد بالمللي — لعدّاد الشاشات */
+  lockedMs: number;
+  /** مضاعفة ×3 فعّالة هذه الجولة — بطاقة ذهبية */
+  doubled: boolean;
 }
 
 export interface Award {

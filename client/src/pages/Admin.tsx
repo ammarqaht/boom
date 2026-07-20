@@ -16,6 +16,7 @@ import {
 } from '../components/ui';
 import {
   BoomIcon,
+  CardsIcon,
   ClockIcon,
   CopyIcon,
   ExitIcon,
@@ -31,6 +32,7 @@ import {
   ScreenIcon,
   SettingsIcon,
   CloseIcon,
+  SnowflakeIcon,
   TrophyIcon,
   UsersIcon,
 } from '../components/icons';
@@ -235,6 +237,15 @@ function Console({
       },
     },
     {
+      label: 'فتح البطاقات من جديد',
+      icon: <CardsIcon size={18} />,
+      onClick: () => {
+        if (!confirm('فتح البطاقات لكل المجموعات ليشتروها مرة أخرى؟')) return;
+        send('admin:reopenCards');
+        flash('فُتحت البطاقات من جديد');
+      },
+    },
+    {
       label: room.displayBlurred ? 'إظهار شاشة العرض' : 'تغبيش شاشة العرض',
       icon: room.displayBlurred ? <EyeIcon size={18} /> : <EyeOffIcon size={18} />,
       onClick: () => send('admin:toggleBlur'),
@@ -384,10 +395,25 @@ function TeamCard({
   onAdjust: (seconds: number) => void;
   onRemove: () => void;
 }) {
-  const color = team.exploded ? '#e52e25' : levelColor[dangerLevel(team.timeMs)];
+  const frozen = team.locked && !team.exploded;
+  const golden = team.doubled && !team.exploded;
+  const color = team.exploded
+    ? '#e52e25'
+    : frozen
+      ? '#12b3d5'
+      : levelColor[dangerLevel(team.timeMs)];
+
+  // نفس كسوة شاشة العرض: ثلج للمجمّدة وذهب للمضاعِفة
+  const skin = team.exploded
+    ? 'border-[#f5c9c6] bg-[#fdeae8]'
+    : frozen
+      ? 'frost-card border-[#7ed4e8] bg-[#e7f7fb]'
+      : golden
+        ? 'gold-card border-[#ffd062] bg-gradient-to-bl from-[#fff3d6] via-[#fff8ea] to-white'
+        : 'border-[#e8e4dd] bg-white';
 
   return (
-    <div className="flex overflow-hidden rounded-2xl border border-[#e8e4dd] bg-white shadow-[0_1px_3px_rgba(26,26,26,0.04)]">
+    <div className={`flex overflow-hidden rounded-2xl border shadow-[0_1px_3px_rgba(26,26,26,0.04)] transition duration-500 ${skin}`}>
       {/* الخط الملوّن على طرف البطاقة */}
       <div className="w-2 shrink-0 transition-colors duration-500" style={{ backgroundColor: color }} />
 
@@ -397,6 +423,17 @@ function TeamCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 text-lg font-black sm:text-xl">
               <span className="truncate">{team.name}</span>
+              {frozen && (
+                <span className="flex shrink-0 items-center gap-1 rounded-full bg-[#12b3d5] px-2 py-0.5 text-sm font-black text-white">
+                  <SnowflakeIcon size={13} className="animate-pulse" />
+                  {Math.ceil(team.lockedMs / 1000)}
+                </span>
+              )}
+              {golden && (
+                <span className="shrink-0 rounded-full bg-gradient-to-l from-[#ffb703] to-[#e68500] px-2 py-0.5 text-sm font-black text-white">
+                  ×3
+                </span>
+              )}
               {!team.connected && <OfflineIcon size={15} className="shrink-0 text-[#9a968f]" />}
             </div>
             <div className="text-sm text-[#9a968f]">

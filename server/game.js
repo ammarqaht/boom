@@ -367,6 +367,12 @@ export class Room {
     return { ok: true };
   }
 
+  /** يفتح البطاقات من جديد لكل المجموعات — يستطيعون شراءها مرة أخرى */
+  reopenCards() {
+    for (const team of this.teams.values()) team.usedCards.clear();
+    this.touch();
+  }
+
   removeTeam(teamId) {
     this.teams.delete(teamId);
     this.touch();
@@ -401,6 +407,8 @@ export class Room {
           answered: t.answered,
           correct: t.correct,
           locked: t.lockedMs > 0, // مجمّدة حالياً — تظهر ❄️ على شاشة العرض
+          lockedMs: Math.round(t.lockedMs), // المتبقي من التجميد — لعدّاد الشاشات
+          doubled: t.pendingMultiplier > 1, // مضاعفة فعّالة هذه الجولة — بطاقة ذهبية
         }))
         .sort((a, b) => b.score - a.score || b.timeMs - a.timeMs),
     };

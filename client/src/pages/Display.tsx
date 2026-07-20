@@ -234,14 +234,25 @@ function TeamRow({
   /** صاحب أعلى وقت متبقٍ حالياً */
   leader?: boolean;
 }) {
-  const color = team.exploded ? '#e52e25' : levelColor[dangerLevel(team.timeMs)];
+  const frozen = team.locked && !team.exploded;
+  const golden = team.doubled && !team.exploded;
+  const color = team.exploded
+    ? '#e52e25'
+    : frozen
+      ? '#12b3d5'
+      : levelColor[dangerLevel(team.timeMs)];
+
+  // المجمّدة تكتسي بالثلج، والمضاعِفة تتذهّب طوال جولتها
+  const skin = team.exploded
+    ? 'border-[#f5c9c6] bg-[#fdeae8]'
+    : frozen
+      ? 'frost-card border-[#7ed4e8] bg-[#e7f7fb]'
+      : golden
+        ? 'gold-card border-[#ffd062] bg-gradient-to-bl from-[#fff3d6] via-[#fff8ea] to-white'
+        : 'border-[#e8e4dd] bg-white';
 
   return (
-    <div
-      className={`flex overflow-hidden rounded-2xl border transition ${
-        team.exploded ? 'border-[#f5c9c6] bg-[#fdeae8]' : 'border-[#e8e4dd] bg-white'
-      }`}
-    >
+    <div className={`flex overflow-hidden rounded-2xl border transition duration-500 ${skin}`}>
       <div className="w-3 shrink-0 transition-colors duration-500" style={{ backgroundColor: color }} />
 
       <div className="flex flex-1 flex-col gap-4 p-6">
@@ -255,8 +266,16 @@ function TeamRow({
                 <CrownIcon size={26} className="crown-bob shrink-0 text-[#ff9f1c]" />
               )}
               {team.name}
-              {team.locked && (
-                <SnowflakeIcon size={22} className="shrink-0 animate-pulse text-[#12b3d5]" />
+              {frozen && (
+                <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#12b3d5] px-3 py-1 text-lg font-black text-white">
+                  <SnowflakeIcon size={18} className="animate-pulse" />
+                  {Math.ceil(team.lockedMs / 1000)}
+                </span>
+              )}
+              {golden && (
+                <span className="shrink-0 rounded-full bg-gradient-to-l from-[#ffb703] to-[#e68500] px-3 py-1 text-lg font-black text-white shadow-sm shadow-[#ffb703]/40">
+                  ×3
+                </span>
               )}
               {!team.connected && <OfflineIcon size={19} className="text-[#9a968f]" />}
             </div>
