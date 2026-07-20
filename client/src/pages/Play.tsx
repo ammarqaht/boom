@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { socket, ask } from '../lib/socket';
 import type { RoomState, TeamState } from '../lib/types';
@@ -21,9 +21,9 @@ import {
   Podium,
   ReviewList,
   RollingNumber,
-  optionGradient,
 } from '../components/game';
 import { Shop, FreezeOverlay } from '../components/Shop';
+import { gradientsFor } from '../lib/optionColors';
 import { playCorrect, playExplosion, playTick, playWrong, unlockAudio } from '../lib/sound';
 
 const SESSION_KEY = 'qunbula:team';
@@ -47,8 +47,19 @@ export default function Play() {
   const [code, setCode] = useState(params.get('code')?.toUpperCase() ?? '');
   const [name, setName] = useState('');
   const [flash, setFlash] = useState<{ key: number; correct: boolean } | null>(null);
-  const [locked, setLocked] = useState(false); // يمنع الضغط المزدوج على نفس السؤال
+  // القفل مرتبط بمعرّف السؤال لا بقيمة منطقية:
+  // وصول سؤال جديد يفكّه تلقائياً حتى لو ضاع ردّ السيرفر.
+  const [lockedFor, setLockedFor] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+
+  const locked = !!lockedFor && lockedFor === state?.question?.id;
+
+  // شبكة أمان: لو رفض السيرفر الإجابة ولم يرسل ردّاً، نفكّ القفل بعد لحظة
+  useEffect(() => {
+    if (!lockedFor) return;
+    const timer = setTimeout(() => setLockedFor(null), 1500);
+    return () => clearTimeout(timer);
+  }, [lockedFor]);
 
   useEffect(() => {
     const onState = (next: TeamState) => setState(next);
@@ -88,7 +99,7 @@ export default function Play() {
   useEffect(() => {
     const onResult = ({ isCorrect }: { isCorrect: boolean }) => {
       setFlash({ key: Date.now(), correct: isCorrect });
-      setLocked(false);
+      setLockedFor(null);
       (isCorrect ? playCorrect : playWrong)();
     };
     socket.on('team:result', onResult);
@@ -116,7 +127,7 @@ export default function Play() {
 
   const answer = (choice: number) => {
     if (!state?.question || locked) return;
-    setLocked(true);
+    setLockedFor(state.question.id);
     socket.emit('team:answer', { questionId: state.question.id, choice });
   };
 
@@ -226,6 +237,12 @@ function TeamScreen({
   const frozen = running && state.lockedMs > 0;
   const over = state.status === 'ended' || state.exploded;
   const phase = useEndPhase(over);
+
+  // ألوان الخيارات تُخلط بحسب السؤال — ثابتة أثناء عرضه، مختلفة بين الأسئلة
+  const gradients = useMemo(
+    () => gradientsFor(state.question?.id ?? '', 4),
+    [state.question?.id],
+  );
 
   useTicking(shown, running);
   useExplosionSound(state.exploded);
@@ -401,14 +418,14 @@ function TeamScreen({
           </p>
         </Card>
 
-        {/* الخيارات في شبكة 2×2 بتدرّجات ألوان الشعار */}
+        {/* الخيارات في شبكة 2×2 — ترتيب الألوان يُخلط لكل سؤال فلا يظهر نمط */}
         <div className="grid grid-cols-2 gap-4">
           {state.question?.options.map((option, i) => (
             <button
               key={i}
               onClick={() => onAnswer(i)}
               disabled={locked || frozen}
-              style={{ backgroundImage: optionGradient(i) }}
+              style={{ backgroundImage: gradients[i] }}
               className="flex min-h-28 items-center justify-center rounded-2xl px-5 py-6 text-center text-2xl font-black leading-snug text-white shadow-md transition hover:brightness-110 active:scale-[0.96] disabled:opacity-50 lg:min-h-36 lg:text-3xl"
             >
               {option}
