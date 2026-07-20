@@ -45,6 +45,58 @@ function shuffled(array) {
   return copy;
 }
 
+/**
+ * يوزّع الأسئلة بحيث لا يتكرر موقع الإجابة الصحيحة في أسئلة متتالية.
+ * الخلط وحده لا يمنع التتابع: قد تأتي خمسة أسئلة إجابتها كلها الخيار الثاني.
+ * نوزّعها على دلاء حسب موقع الإجابة، ثم نسحب في كل خطوة من أكبر دلو
+ * يختلف عن الموقع السابق — فيتباعد التكرار ولا يلمح اللاعب نمطاً.
+ */
+export function spreadAnswers(questions) {
+  const buckets = new Map();
+  for (const question of questions) {
+    if (!buckets.has(question.answer)) buckets.set(question.answer, []);
+    buckets.get(question.answer).push(question);
+  }
+
+  const out = [];
+  let last = null;
+  let remaining = questions.length;
+
+  while (remaining > 0) {
+    const eligible = [...buckets].filter(([position, list]) => position !== last && list.length);
+
+    let pick = null;
+    if (eligible.length === 0) {
+      // لم يبق إلا الموقع السابق نفسه — نضطر لتكراره
+      pick = [...buckets].find(([, list]) => list.length)?.[0] ?? null;
+    } else {
+      // دلو أكبر من كل ما تبقّى مجتمعاً يجب سحبه الآن وإلا تتابع في النهاية
+      const forced = eligible.find(([, list]) => list.length * 2 > remaining);
+      if (forced) {
+        pick = forced[0];
+      } else {
+        // اختيار عشوائي مرجّح بحجم الدلو: يمنع التتابع دون أن ينتج دورة منتظمة
+        const total = eligible.reduce((sum, [, list]) => sum + list.length, 0);
+        let ticket = Math.random() * total;
+        for (const [position, list] of eligible) {
+          ticket -= list.length;
+          if (ticket <= 0) {
+            pick = position;
+            break;
+          }
+        }
+        if (pick === null) pick = eligible[eligible.length - 1][0];
+      }
+    }
+
+    if (pick === null) break;
+    out.push(buckets.get(pick).shift());
+    remaining--;
+    last = pick;
+  }
+  return out;
+}
+
 class Team {
   constructor(name, settings) {
     this.id = randomUUID();
@@ -119,7 +171,7 @@ export class Room {
         team.seen.clear();
         fresh = pool;
       }
-      team.queue = shuffled(fresh);
+      team.queue = spreadAnswers(shuffled(fresh));
     }
     team.current = team.queue.shift();
     if (team.current) team.seen.add(team.current.id);

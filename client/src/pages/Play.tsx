@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { socket, ask } from '../lib/socket';
 import type { RoomState, TeamState } from '../lib/types';
@@ -21,9 +21,9 @@ import {
   Podium,
   ReviewList,
   RollingNumber,
+  optionGradient,
 } from '../components/game';
 import { Shop, FreezeOverlay } from '../components/Shop';
-import { gradientsFor } from '../lib/optionColors';
 import { playCorrect, playExplosion, playTick, playWrong, unlockAudio } from '../lib/sound';
 
 const SESSION_KEY = 'qunbula:team';
@@ -238,11 +238,6 @@ function TeamScreen({
   const over = state.status === 'ended' || state.exploded;
   const phase = useEndPhase(over);
 
-  // ألوان الخيارات تُخلط بحسب السؤال — ثابتة أثناء عرضه، مختلفة بين الأسئلة
-  const gradients = useMemo(
-    () => gradientsFor(state.question?.id ?? '', 4),
-    [state.question?.id],
-  );
 
   useTicking(shown, running);
   useExplosionSound(state.exploded);
@@ -418,14 +413,14 @@ function TeamScreen({
           </p>
         </Card>
 
-        {/* الخيارات في شبكة 2×2 — ترتيب الألوان يُخلط لكل سؤال فلا يظهر نمط */}
+        {/* الخيارات في شبكة 2×2 بتدرّجات ألوان الشعار */}
         <div className="grid grid-cols-2 gap-4">
           {state.question?.options.map((option, i) => (
             <button
               key={i}
               onClick={() => onAnswer(i)}
               disabled={locked || frozen}
-              style={{ backgroundImage: gradients[i] }}
+              style={{ backgroundImage: optionGradient(i) }}
               className="flex min-h-28 items-center justify-center rounded-2xl px-5 py-6 text-center text-2xl font-black leading-snug text-white shadow-md transition hover:brightness-110 active:scale-[0.96] disabled:opacity-50 lg:min-h-36 lg:text-3xl"
             >
               {option}

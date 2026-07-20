@@ -41,6 +41,16 @@ export function TimeBar({
   );
 }
 
+/** تدرّجات الخيارات الأربعة — مأخوذة من ألوان الشعار، ثابتة بحسب الموقع */
+export const OPTION_GRADIENTS = [
+  'linear-gradient(135deg, #1a5fc4 0%, #103f91 100%)',
+  'linear-gradient(135deg, #3fc9e6 0%, #0e92af 100%)',
+  'linear-gradient(135deg, #ffb703 0%, #e68500 100%)',
+  'linear-gradient(135deg, #f4564d 0%, #c2231b 100%)',
+] as const;
+
+export const optionGradient = (i: number) => OPTION_GRADIENTS[i % OPTION_GRADIENTS.length];
+
 /** شاشة الاستعداد: 3 · 2 · 1 قبل انطلاق العدادات */
 export function Countdown({ ms }: { ms: number }) {
   const seconds = Math.max(1, Math.ceil(ms / 1000));
