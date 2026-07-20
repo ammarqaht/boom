@@ -183,6 +183,15 @@ io.on('connection', (socket) => {
     reply?.({ ok: true, teamId, token, state: room.teamState(teamId) });
   });
 
+  socket.on('team:buyCard', ({ card, targetId } = {}, reply) => {
+    if (ctx?.role !== 'team') return reply?.({ ok: false, error: 'غير مصرح' });
+    const room = getRoom(ctx.code);
+    if (!room) return reply?.({ ok: false, error: 'الغرفة غير موجودة' });
+    const result = room.buyCard(ctx.teamId, card, targetId);
+    if (result.ok) pushAll(room); // النقاط تغيّرت، والهدف قد يُنبَّه لاحقاً
+    reply?.(result);
+  });
+
   socket.on('team:answer', ({ questionId, choice } = {}) => {
     if (ctx?.role !== 'team') return;
     const room = getRoom(ctx.code);

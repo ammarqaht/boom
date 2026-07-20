@@ -12,7 +12,7 @@
     "dev:client": "npm --prefix client run dev",
     "build": "npm --prefix client install --include=dev && npm --prefix client run build",
     "start": "node server/index.js",
-    "test": "cd client && node e2e.mjs"
+    "test": "cd client && node cards-test.mjs && node e2e.mjs"
   },
   "dependencies": {
     "express": "^4.21.2",

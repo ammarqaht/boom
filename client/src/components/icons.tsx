@@ -121,6 +121,38 @@ export const CrownIcon = ({ size = 20, ...props }: IconProps) => (
   </svg>
 );
 
+export const HourglassIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M6 2h12M6 22h12" />
+    <path d="M7 2c0 4 3 5 5 7 2-2 5-3 5-7M7 22c0-4 3-5 5-7 2 2 5 3 5 7" />
+  </Icon>
+);
+
+export const SnowflakeIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 2v20M2 12h20" />
+    <path d="M12 2l-2.5 2.5M12 2l2.5 2.5M12 22l-2.5-2.5M12 22l2.5-2.5" />
+    <path d="M2 12l2.5-2.5M2 12l2.5 2.5M22 12l-2.5-2.5M22 12l2.5 2.5" />
+    <path d="M5 5l3.5 3.5M19 5l-3.5 3.5M5 19l3.5-3.5M19 19l-3.5-3.5" />
+  </Icon>
+);
+
+export const MultiplyIcon = ({ size = 20, ...props }: IconProps) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true" {...props}>
+    <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" />
+    <text x="12" y="10" fontSize="7" fontWeight="900" textAnchor="middle" fill="currentColor">
+      ×
+    </text>
+  </svg>
+);
+
+export const CardsIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="6" width="12" height="15" rx="2" transform="rotate(-8 9 13)" />
+    <rect x="9" y="4" width="12" height="15" rx="2" transform="rotate(6 15 11)" />
+  </Icon>
+);
+
 export const HistoryIcon = (p: IconProps) => (
   <Icon {...p}><path d="M3 12a9 9 0 1 0 2.6-6.4M3 4v4h4" /><path d="M12 8v4.5l3 1.8" /></Icon>
 );

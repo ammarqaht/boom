@@ -24,6 +24,7 @@ import {
   OfflineIcon,
   PauseIcon,
   ScreenIcon,
+  SnowflakeIcon,
 } from '../components/icons';
 import { Countdown, Podium, RollingNumber, TimeBar } from '../components/game';
 import { playExplosion, unlockAudio } from '../lib/sound';
@@ -254,6 +255,9 @@ function TeamRow({
                 <CrownIcon size={26} className="crown-bob shrink-0 text-[#ff9f1c]" />
               )}
               {team.name}
+              {team.locked && (
+                <SnowflakeIcon size={22} className="shrink-0 animate-pulse text-[#12b3d5]" />
+              )}
               {!team.connected && <OfflineIcon size={19} className="text-[#9a968f]" />}
             </div>
             <div className="text-base text-[#9a968f]">

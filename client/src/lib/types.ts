@@ -30,6 +30,8 @@ export interface PublicTeam {
   connected: boolean;
   answered: number;
   correct: number;
+  /** مجمّدة حالياً — مقفلة عن الإجابة */
+  locked: boolean;
 }
 
 export interface Award {
@@ -40,6 +42,26 @@ export interface Award {
   exploded?: boolean;
   /** صاحب أعلى وقت في الجولة */
   top?: boolean;
+  /** ضوعِفت نقاطه ببطاقة المضاعفة */
+  doubled?: boolean;
+}
+
+export type CardId = 'time' | 'freeze' | 'double';
+
+/** بطاقة في متجر الفريق */
+export interface ShopCard {
+  id: CardId;
+  name: string;
+  price: number;
+  used: boolean;
+  affordable: boolean;
+}
+
+export interface Shop {
+  open: boolean;
+  cards: ShopCard[];
+  pending: { time: boolean; double: boolean };
+  rivals: { id: string; name: string }[];
 }
 
 export interface RoomResult {
@@ -95,6 +117,10 @@ export interface TeamState {
   roundPoints: number | null;
   question: Question | null;
   review: ReviewItem[] | null;
+  /** قفل التجميد المتبقي بالمللي، واسم من جمّدك */
+  lockedMs: number;
+  frozenBy: string | null;
+  shop: Shop;
 }
 
 export interface Bank {

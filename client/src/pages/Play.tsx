@@ -23,6 +23,7 @@ import {
   RollingNumber,
   optionGradient,
 } from '../components/game';
+import { Shop, FreezeOverlay } from '../components/Shop';
 import { playCorrect, playExplosion, playTick, playWrong, unlockAudio } from '../lib/sound';
 
 const SESSION_KEY = 'qunbula:team';
@@ -222,6 +223,7 @@ function TeamScreen({
   const shown = useSmoothTime(state.timeMs, state.status === 'running' && !state.exploded);
   const level = dangerLevel(shown);
   const running = state.status === 'running' && !state.exploded;
+  const frozen = running && state.lockedMs > 0;
   const over = state.status === 'ended' || state.exploded;
   const phase = useEndPhase(over);
 
@@ -340,6 +342,9 @@ function TeamScreen({
             </div>
           )}
 
+          {/* متجر البطاقات — بين الجولات فقط */}
+          <Shop shop={state.shop} score={state.score} />
+
           {state.review && (
             <>
               <h2 className="mb-3 text-lg font-black text-[#103f91]">مراجعة أسئلة الجولة</h2>
@@ -402,7 +407,7 @@ function TeamScreen({
             <button
               key={i}
               onClick={() => onAnswer(i)}
-              disabled={locked}
+              disabled={locked || frozen}
               style={{ backgroundImage: optionGradient(i) }}
               className="flex min-h-28 items-center justify-center rounded-2xl px-5 py-6 text-center text-2xl font-black leading-snug text-white shadow-md transition hover:brightness-110 active:scale-[0.96] disabled:opacity-50 lg:min-h-36 lg:text-3xl"
             >
@@ -411,6 +416,9 @@ function TeamScreen({
           ))}
         </div>
       </div>
+
+      {/* التجميد يقفل الشاشة حتى ينقضي */}
+      {frozen && <FreezeOverlay frozenBy={state.frozenBy} />}
     </Page>
   );
 }

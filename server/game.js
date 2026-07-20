@@ -11,6 +11,16 @@ export const DEFAULT_SETTINGS = {
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // بدون الأحرف والأرقام المتشابهة
 const IDLE_ROOM_MS = 2 * 60 * 60 * 1000;
 const COUNTDOWN_MS = 3000;
+const FREEZE_MS = 5000; // مدة قفل الإجابة عند التجميد
+const TIME_CARD_MS = 5000; // الوقت الإضافي من بطاقة «وقت إضافي»
+const DOUBLE_FACTOR = 3; // مضاعِف بطاقة «مضاعفة»
+
+/** تعريفات البطاقات — المرجع الوحيد للأسعار والأنواع */
+export const CARDS = {
+  time: { price: 2, name: 'وقت إضافي' },
+  freeze: { price: 3, name: 'تجميد' },
+  double: { price: 4, name: 'مضاعفة' },
+};
 
 /** @type {Map<string, Room>} */
 const rooms = new Map();
@@ -44,6 +54,12 @@ class Team {
     this.connected = true;
     // يبقى عبر الجولات: لا يُعاد سؤال على الفريق حتى ينفد البنك كله
     this.seen = new Set();
+    // البطاقات المستخدمة (مرة واحدة لكل مجموعة طوال اللعبة)
+    this.usedCards = new Set();
+    // آثار مؤجّلة تُطبّق في الجولة التالية
+    this.pendingBonusMs = 0; // وقت إضافي يُضاف عند بدء الجولة
+    this.pendingMultiplier = 1; // مضاعِف نقاط الجولة القادمة
+    this.pendingFreezeBy = null; // اسم من جمّدك، يُطبّق قفلاً عند البدء
     this.resetForRound(settings);
   }
 
@@ -57,6 +73,8 @@ class Team {
     this.correct = 0;
     this.lastResult = null; // 'correct' | 'wrong' — لوميض الشاشة
     this.review = []; // أسئلة الجولة بترتيب ظهورها — للمراجعة بعد الانتهاء
+    this.lockedMs = 0; // قفل الإجابة المتبقي (تجميد) — يُطبّق عند بدء الجولة
+    this.frozenBy = null; // اسم من جمّدك أثناء فترة القفل
   }
 }
 
@@ -114,6 +132,17 @@ export class Room {
     if (this.status === 'ended' || this.status === 'finished') this.round++;
     for (const team of this.teams.values()) {
       team.resetForRound(this.settings);
+      // تطبيق البطاقات المؤجّلة عند بدء الجولة
+      if (team.pendingBonusMs) {
+        team.timeMs = this.clampTime(team.timeMs + team.pendingBonusMs);
+        team.pendingBonusMs = 0;
+      }
+      if (team.pendingFreezeBy) {
+        team.lockedMs = FREEZE_MS;
+        team.frozenBy = team.pendingFreezeBy;
+        team.pendingFreezeBy = null;
+      }
+      // pendingMultiplier يبقى حتى احتساب النقاط في نهاية الجولة
       this.nextQuestion(team);
     }
     this.result = null;
@@ -157,6 +186,7 @@ export class Room {
   answer(teamId, questionId, choice) {
     const team = this.teams.get(teamId);
     if (this.status !== 'running' || !team || team.exploded) return null;
+    if (team.lockedMs > 0) return null; // مقفلة عن الإجابة (تجميد)
     if (!team.current || team.current.id !== questionId) return null; // إجابة متأخرة أو مكررة
 
     const isCorrect = choice === team.current.answer;
@@ -213,6 +243,11 @@ export class Room {
     let firstExploded = null;
     for (const team of this.teams.values()) {
       if (team.exploded) continue;
+      // فترة التجميد: العدّاد ينزل لكن الإجابة مقفلة
+      if (team.lockedMs > 0) {
+        team.lockedMs = Math.max(0, team.lockedMs - elapsed);
+        if (team.lockedMs === 0) team.frozenBy = null;
+      }
       team.timeMs = Math.max(0, team.timeMs - elapsed);
       if (team.timeMs === 0 && !firstExploded) firstExploded = team;
     }
@@ -234,12 +269,15 @@ export class Room {
 
     const awards = [];
     survivors.forEach((team, index) => {
-      const points = Math.max(0, teams.length - 1 - index);
+      const base = Math.max(0, teams.length - 1 - index);
+      const doubled = team.pendingMultiplier > 1 && base > 0;
+      const points = base * team.pendingMultiplier;
       team.score += points;
       awards.push({
         teamId: team.id,
         name: team.name,
         points,
+        doubled, // ضوعِفت نقاطه ببطاقة المضاعفة
         timeMs: Math.round(team.timeMs),
         top: index === 0, // صاحب أعلى وقت — يُميَّز بالأخضر
       });
@@ -247,6 +285,8 @@ export class Room {
     for (const team of teams.filter((t) => t.exploded)) {
       awards.push({ teamId: team.id, name: team.name, points: 0, timeMs: 0, exploded: true });
     }
+    // المضاعِف يُستهلك بانتهاء الجولة
+    for (const team of teams) team.pendingMultiplier = 1;
 
     this.result = { round: this.round, awards };
     this.history.push(this.result);
@@ -285,9 +325,46 @@ export class Room {
     for (const team of this.teams.values()) {
       team.score = 0;
       team.seen.clear(); // لعبة جديدة تماماً — كل الأسئلة متاحة من جديد
+      team.usedCards.clear(); // البطاقات تعود متاحة
+      team.pendingBonusMs = 0;
+      team.pendingMultiplier = 1;
+      team.pendingFreezeBy = null;
       team.resetForRound(this.settings);
     }
     this.touch();
+  }
+
+  /**
+   * شراء بطاقة بين الجولات. تُخصم النقاط فوراً، ويُطبَّق أثرها في الجولة التالية.
+   * كل بطاقة مرة واحدة لكل مجموعة طوال اللعبة.
+   */
+  buyCard(teamId, cardId, targetId) {
+    const team = this.teams.get(teamId);
+    if (!team) return { ok: false, error: 'الفريق غير موجود' };
+    if (this.status !== 'ended') {
+      return { ok: false, error: 'الشراء متاح بين الجولات فقط' };
+    }
+    const card = CARDS[cardId];
+    if (!card) return { ok: false, error: 'بطاقة غير معروفة' };
+    if (team.usedCards.has(cardId)) return { ok: false, error: 'استخدمت هذه البطاقة' };
+    if (team.score < card.price) return { ok: false, error: 'نقاطك لا تكفي' };
+
+    if (cardId === 'freeze') {
+      const target = this.teams.get(targetId);
+      if (!target || target.id === team.id) {
+        return { ok: false, error: 'اختر مجموعة أخرى للتجميد' };
+      }
+      target.pendingFreezeBy = team.name;
+    } else if (cardId === 'time') {
+      team.pendingBonusMs += TIME_CARD_MS;
+    } else if (cardId === 'double') {
+      team.pendingMultiplier = DOUBLE_FACTOR;
+    }
+
+    team.score -= card.price;
+    team.usedCards.add(cardId);
+    this.touch();
+    return { ok: true };
   }
 
   removeTeam(teamId) {
@@ -323,6 +400,7 @@ export class Room {
           connected: t.connected,
           answered: t.answered,
           correct: t.correct,
+          locked: t.lockedMs > 0, // مجمّدة حالياً — تظهر ❄️ على شاشة العرض
         }))
         .sort((a, b) => b.score - a.score || b.timeMs - a.timeMs),
     };
@@ -354,7 +432,34 @@ export class Room {
           : null,
       // المراجعة تحمل الإجابات الصحيحة — لا تُرسل إلا بعد انتهاء الجولة
       review: this.status === 'ended' ? team.review : null,
+      // حالة القفل الحالية (تجميد)
+      lockedMs: Math.round(team.lockedMs),
+      frozenBy: team.frozenBy,
+      // متجر البطاقات: متاح بين الجولات فقط
+      shop: this.shopFor(team),
     };
+  }
+
+  /** حالة متجر البطاقات لفريق: ما اشتراه، وما يقدر عليه، ومن يجمّد */
+  shopFor(team) {
+    const open = this.status === 'ended'; // بين الجولات فقط
+    const cards = Object.entries(CARDS).map(([id, card]) => ({
+      id,
+      name: card.name,
+      price: card.price,
+      used: team.usedCards.has(id),
+      affordable: team.score >= card.price,
+    }));
+    // الآثار المؤجّلة الجاهزة للجولة القادمة — لتذكير الفريق
+    const pending = {
+      time: team.pendingBonusMs > 0,
+      double: team.pendingMultiplier > 1,
+    };
+    // خصوم يمكن تجميدهم (كل الفرق عداه)
+    const rivals = [...this.teams.values()]
+      .filter((t) => t.id !== team.id)
+      .map((t) => ({ id: t.id, name: t.name }));
+    return { open, cards, pending, rivals };
   }
 }
 

@@ -153,12 +153,26 @@ admin.emit('admin:toggleBlur');
 await wait(400);
 check('إلغاء التغبيش يعمل', adminState.displayBlurred === false);
 
+// متجر البطاقات عبر السوكِت: الفائز (نقطتان) يشتري «وقت إضافي»
+const buyer = teams.find((t) => t.state.score >= 2);
+check('يوجد فريق برصيد يكفي للشراء', !!buyer);
+check('المتجر مفتوح بين الجولات', buyer.state.shop.open === true);
+const scoreBefore2 = buyer.state.score;
+const bought = await ask(buyer.socket, 'team:buyCard', { card: 'time' });
+check('شراء بطاقة الوقت عبر السوكِت', bought.ok === true);
+await wait(300);
+check('خُصم سعر البطاقة (نقطتان)', buyer.state.score === scoreBefore2 - 2);
+check('المتجر علّمها مستخدمة', buyer.state.shop.cards.find((c) => c.id === 'time').used === true);
+check('رفض إعادة الشراء', (await ask(buyer.socket, 'team:buyCard', { card: 'time' })).ok === false);
+
 // «ابدأ الجولة» بعد النهاية يبدأ جولة جديدة مباشرة بلا زر تجهيز
 check('بدء جولة جديدة مباشرة', (await ask(admin, 'admin:start')).ok);
 await wait(400);
 check('رقم الجولة تقدم', adminState.round === 2);
 check('النقاط تراكمت', adminState.teams.some((t) => t.score > 0));
-check('العدادات رجعت 30 ث', adminState.teams.every((t) => t.timeMs === 30000));
+check('المشتري بدأ بـ35 ث والبقية بـ30',
+  adminState.teams.every((t) =>
+    t.id === buyer.id ? t.timeMs === 35000 : t.timeMs === 30000));
 check('الجولة الثانية بدأت باستعداد', adminState.status === 'countdown');
 
 // أسئلة الجولة الثانية جديدة — لا تعيد ما رآه الفريق في الأولى
