@@ -1,41 +1,33 @@
 import { Link } from 'react-router-dom';
-import { Button, Footer, NavBar } from '../components/ui';
-import {
-  BombIcon,
-  BoomIcon,
-  ClockIcon,
-  PlayIcon,
-  PlusIcon,
-  ScreenIcon,
-  SlidersIcon,
-  TrophyIcon,
-  UsersIcon,
-} from '../components/icons';
+import { Credit, Wordmark, useTheme } from '../components/ui';
+import { ScreenIcon, SlidersIcon, UsersIcon } from '../components/icons';
+
+/*
+ * صفحة التعريف — مرحلة أولى.
+ * أُعيد بناؤها لاحقاً بمعالجة مختلفة؛ ما يهمّ الآن أن تحمل الهوية الجديدة
+ * وألّا يبقى فيها أثر لهوية قديمة.
+ */
 
 const steps = [
   {
-    Icon: ClockIcon,
-    color: '#103f91',
-    title: 'ثلاثون ثانية… وتبدأ التكتكة',
-    desc: 'كل مجموعة تحمل قنبلتها، وعدّادها ينزل ثانية بثانية. لا أحد ينتظر أحداً.',
+    n: '٠١',
+    title: 'ثلاثون ثانية تعدّ',
+    desc: 'لكل لاعب مجراه الخاص، ونبضاته تقلّ أمام القاعة ثانية بثانية.',
   },
   {
-    Icon: PlusIcon,
-    color: '#22a45d',
-    title: 'كل إجابة صحيحة تشتري لك عمراً',
-    desc: 'أصبتم؟ خمس ثوانٍ تُضاف فوراً. أخطأتم؟ ثلاث تُقتطع بلا رحمة.',
+    n: '٠٢',
+    title: 'الصواب يُطيل النبض',
+    desc: 'أصبتَ فخمس ثوانٍ تُضاف فوراً، أخطأتَ فثلاث تُقتطع بلا رحمة.',
   },
   {
-    Icon: BoomIcon,
-    color: '#e52e25',
-    title: 'أول من يصل الصفر… ينفجر',
-    desc: 'لحظة الانفجار تتجمد اللعبة على الجميع، ويظهر من صمد ومن سقط.',
+    n: '٠٣',
+    title: 'أول من يبلغ الصفر',
+    desc: 'يستقيم خطّه، وتنتهي الجولة على الجميع في اللحظة نفسها.',
   },
   {
-    Icon: TrophyIcon,
-    color: '#ff9f1c',
-    title: 'من بقي له وقت أكثر… تصدّر',
-    desc: 'النقاط تُوزَّع حسب الوقت المتبقي، والمنفجرة تخرج صفر اليدين.',
+    n: '٠٤',
+    title: 'من طال نبضه تصدّر',
+    desc: 'النقاط تُوزَّع على ما بقي من الوقت، والمتوقّف يخرج صفر اليدين.',
   },
 ];
 
@@ -43,170 +35,109 @@ const roles = [
   {
     to: '/play',
     Icon: UsersIcon,
-    title: 'انضم كفريق',
-    desc: 'اجمع مجموعتك حول جهاز واحد، أدخل رمز الغرفة، واستعد للضغط',
-    color: '#12b3d5',
+    title: 'انضمّ كلاعب',
+    desc: 'افتحها على جهازك، أدخل الرمز، واستعدّ للضغط',
   },
   {
     to: '/display',
     Icon: ScreenIcon,
     title: 'شاشة العرض',
-    desc: 'اعرضها على البروجكتر ليتابع الجميع العدادات وهي تنهار',
-    color: '#103f91',
+    desc: 'على البروجكتر — القاعة تتابع النبضات وهي تخفت',
   },
   {
     to: '/admin',
     Icon: SlidersIcon,
-    title: 'لوحة المسؤول',
-    desc: 'أنشئ الغرفة، أطلق الجولات، وتحكّم في مصير المجموعات',
-    color: '#ff9f1c',
+    title: 'لوحة المنظّم',
+    desc: 'أنشئ الغرفة، أطلق الجولات، وتحكّم في المصير',
   },
 ];
 
 export default function Home() {
-  const scrollToRoles = () =>
-    document.getElementById('roles')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  useTheme('dark');
 
   return (
-    <div className="flex min-h-full flex-col">
-      <NavBar
-        cta={
-          <Button onClick={scrollToRoles} className="px-5">
-            <PlayIcon size={16} />
-            ابدأ اللعب
-          </Button>
-        }
-      />
+    <div className="flex min-h-full flex-col px-5 sm:px-10">
+      <header className="flex h-20 shrink-0 items-center justify-between border-b border-line">
+        <Wordmark className="text-2xl" />
+        <Link
+          to="/play"
+          className="rounded-chip bg-signal px-5 py-2.5 font-black text-on-signal transition hover:brightness-110 active:scale-[0.97]"
+        >
+          ابدأ اللعب
+        </Link>
+      </header>
 
-      {/* البطل */}
-      <section className="relative overflow-hidden bg-gradient-to-bl from-[#0a2a63] via-[#103f91] to-[#1a5fc4] text-white">
-        <div className="drift pointer-events-none absolute -left-24 -top-24 size-96 rounded-full bg-[#12b3d5]/25 blur-3xl" />
-        <div className="drift pointer-events-none absolute -bottom-32 -right-16 size-96 rounded-full bg-[#ff9f1c]/25 blur-3xl" />
-
-        <div className="relative mx-auto max-w-5xl px-5 py-20 text-center sm:py-28">
-          <span
-            className="fade-up halo inline-flex size-20 items-center justify-center rounded-3xl bg-white/10 backdrop-blur"
-            style={{ animationDelay: '0.05s, 1.6s' }}
-          >
-            <BombIcon size={44} className="text-[#ff9f1c]" />
-          </span>
-
-          {/* الفتيل يحترق نحو المركز، ثم ينفجر الاسم */}
-          <div className="relative mx-auto mt-8 h-2 w-full max-w-md">
-            <div
-              className="fuse-burn absolute inset-y-0 right-0 rounded-full bg-gradient-to-l from-[#ff9f1c] to-[#e52e25]"
-              style={{ animationDelay: '0.25s' }}
-            />
+      <main className="mx-auto w-full max-w-6xl flex-1">
+        {/* البطل: الاسم يقطع مخطّطاً يجري بعرض الشاشة */}
+        <section className="border-b border-line py-12 sm:py-16">
+          <div className="lane lane-bare relative mb-10 flex h-40 items-center justify-center sm:h-52">
             <span
-              className="spark-travel absolute top-1/2 size-4 -translate-y-1/2 rounded-full bg-[#ffd88a]"
-              style={{ animationDelay: '0.25s', boxShadow: '0 0 18px 7px rgba(255,159,28,0.85)' }}
+              className="lane-run lane-drift opacity-90"
+              style={
+                {
+                  '--state': 'var(--color-signal)',
+                  '--tile': '300px',
+                  '--amp': '120px',
+                  '--drift': '3.6s',
+                } as React.CSSProperties
+              }
             />
+            <Wordmark className="relative z-10 text-6xl sm:text-8xl" />
           </div>
 
-          <div className="blast-shake relative" style={{ animationDelay: '1.35s' }}>
-            {/* موجة الضوء لحظة الانفجار */}
-            <span
-              className="shock-wave pointer-events-none absolute left-1/2 top-1/2 size-40 -translate-x-1/2 -translate-y-1/2 rounded-full border-[#ff9f1c]"
-              style={{ animationDelay: '1.35s' }}
-            />
-            <h1
-              className="title-blast relative mt-6 text-7xl font-black sm:text-9xl"
-              style={{ animationDelay: '1.35s' }}
-            >
-              <span className="sheen">القنبلة</span>
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+            <h1 className="max-w-[19ch] text-3xl leading-snug font-black sm:text-4xl">
+              ثلاثون ثانية… والنبض بين يديك
             </h1>
-          </div>
-
-          <p
-            className="fade-up mx-auto mt-6 max-w-2xl text-2xl font-black leading-relaxed sm:text-3xl"
-            style={{ animationDelay: '2.25s' }}
-          >
-            ثلاثون ثانية تفصلكم عن الانفجار
-          </p>
-
-          <p
-            className="fade-up mx-auto mt-4 max-w-xl text-lg text-white/70"
-            style={{ animationDelay: '2.5s' }}
-          >
-            أجيبوا بسرعة… كل سؤال صحيح يطيل عمر قنبلتكم، وكل خطأ يقرّبها من الصفر.
-            أول قنبلة تنفجر تُخرج أصحابها من السباق.
-          </p>
-
-          <p className="fade-up mt-8 text-sm text-white/50" style={{ animationDelay: '2.75s' }}>
-            مسابقة جماعية من تنظيم نادي نبراس
-          </p>
-        </div>
-      </section>
-
-      <main className="flex-1">
-        {/* فكرة المسابقة */}
-        <section className="mx-auto max-w-6xl px-5 py-20">
-          <div className="fade-up text-center">
-            <h2 className="text-4xl font-black text-[#103f91]">كيف تُلعب؟</h2>
-            <p className="mx-auto mt-4 max-w-2xl text-lg leading-relaxed text-[#6b6b6b]">
-              مجموعات تتسابق في اللحظة نفسها، وكل واحدة تصارع عدّادها وحدها.
-              الأسئلة لا تنتهي، والوقت لا يرحم — فمن يجيب أسرع وأدقّ، يعيش أطول.
+            <p className="max-w-[44ch] leading-relaxed text-muted">
+              كل لاعب يصارع نبضه وحده: الإجابة الصحيحة تعيد إليه ثوانيه، والخطأ يقرّبه من السكون.
+              وأول نبض يسكن يُنهي الجولة على الجميع — لا على صاحبه وحده.
             </p>
-          </div>
-
-          <div className="mt-12 grid gap-5 md:grid-cols-2">
-            {steps.map(({ Icon, color, title, desc }, i) => (
-              <div
-                key={title}
-                className="slide-in-right flex gap-5 rounded-2xl border border-[#e8e4dd] bg-white p-6 shadow-[0_1px_3px_rgba(26,26,26,0.04)] transition hover:-translate-y-1 hover:shadow-lg"
-                style={{ animationDelay: `${0.1 + i * 0.13}s` }}
-              >
-                <span
-                  className="flex size-14 shrink-0 items-center justify-center rounded-2xl"
-                  style={{ backgroundColor: `${color}18`, color }}
-                >
-                  <Icon size={28} />
-                </span>
-                <div>
-                  <h3 className="text-xl font-black">{title}</h3>
-                  <p className="mt-2 leading-relaxed text-[#6b6b6b]">{desc}</p>
-                </div>
-              </div>
-            ))}
           </div>
         </section>
 
-        {/* خيارات الدخول — ثلاثة بجانب بعض على اللابتوب، فوق بعض على الجوال */}
-        <section id="roles" className="scroll-mt-16 border-t border-[#e8e4dd] bg-white">
-          <div className="mx-auto max-w-6xl px-5 py-20">
-            <h2 className="fade-up text-center text-4xl font-black text-[#103f91]">
-              جاهز؟ اختر مكانك
-            </h2>
-            <p className="fade-up mt-4 text-center text-lg text-[#6b6b6b]" style={{ animationDelay: '0.1s' }}>
-              ثلاثة أدوار… ودور واحد لك
-            </p>
-
-            <div className="mt-12 grid gap-5 md:grid-cols-3">
-              {roles.map(({ to, Icon, title, desc, color }, i) => (
-                <Link
-                  key={to}
-                  to={to}
-                  className="fade-up group flex flex-col items-center rounded-2xl border-2 border-[#e8e4dd] bg-[#faf9f6] p-8 text-center transition hover:-translate-y-2 hover:shadow-xl active:scale-[0.99]"
-                  style={{ animationDelay: `${0.2 + i * 0.14}s` }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = color)}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = '')}
-                >
-                  <span
-                    className="flex size-16 items-center justify-center rounded-2xl transition duration-300 group-hover:scale-110 group-hover:rotate-6"
-                    style={{ backgroundColor: `${color}18`, color }}
-                  >
-                    <Icon size={30} />
-                  </span>
-                  <h3 className="mt-5 text-2xl font-black">{title}</h3>
-                  <p className="mt-3 leading-relaxed text-[#6b6b6b]">{desc}</p>
-                </Link>
-              ))}
+        <section className="grid border-b border-line sm:grid-cols-2 lg:grid-cols-4">
+          {steps.map((step, i) => (
+            <div
+              key={step.n}
+              className={`py-6 sm:px-6 ${i === 0 ? 'sm:pr-0' : 'sm:border-r sm:border-line'}`}
+            >
+              <div className="tnum text-xs font-black tracking-[0.14em] text-signal">{step.n}</div>
+              <b className="mt-2 block text-lg font-black">{step.title}</b>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted">{step.desc}</p>
             </div>
-          </div>
+          ))}
+        </section>
+
+        <section className="grid gap-3 py-8 lg:grid-cols-3">
+          {roles.map(({ to, Icon, title, desc }) => (
+            <Link
+              key={to}
+              to={to}
+              className="tile group relative flex items-center gap-4 overflow-hidden p-5 transition hover:shadow-[inset_0_0_0_1px_var(--color-line-2)]"
+            >
+              <span
+                className="absolute inset-y-0 start-0 w-1 bg-signal opacity-60 transition group-hover:opacity-100"
+                aria-hidden="true"
+              />
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-chip bg-surface-2 text-signal">
+                <Icon size={22} />
+              </span>
+              <span>
+                <b className="block text-lg font-black">{title}</b>
+                <span className="mt-0.5 block text-sm leading-relaxed text-muted">{desc}</span>
+              </span>
+            </Link>
+          ))}
         </section>
       </main>
 
-      <Footer />
+      <footer className="flex h-14 shrink-0 items-center justify-between border-t border-line">
+        <Credit />
+        <span className="tnum text-xs font-medium text-faint">
+          نبضة · {new Date().getFullYear()}
+        </span>
+      </footer>
     </div>
   );
 }

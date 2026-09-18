@@ -1,35 +1,46 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import QRCode from 'qrcode';
 import { socket, ask } from '../lib/socket';
 import type { PublicTeam, RoomState } from '../lib/types';
 import {
   Button,
   Card,
+  Chip,
   ErrorNote,
   Field,
+  FormPage,
   Input,
-  Logo,
-  MiniFooter,
-  Page,
-  dangerLevel,
+  Wordmark,
   formatTime,
-  levelColor,
+  stateStyle,
+  teamLevel,
+  useQr,
+  useTheme,
 } from '../components/ui';
 import {
-  BombIcon,
-  BoomIcon,
   CrownIcon,
   EyeOffIcon,
+  FlatlineIcon,
   OfflineIcon,
-  PauseIcon,
-  ScreenIcon,
   SnowflakeIcon,
 } from '../components/icons';
-import { Countdown, Podium, RollingNumber, TimeBar } from '../components/game';
-import { playExplosion, unlockAudio } from '../lib/sound';
+import {
+  CURTAIN_OPEN_MS,
+  CURTAIN_OUT_MS,
+  CountdownGate,
+  Curtain,
+  Lane,
+  PausedMark,
+  ResultBars,
+  RollingNumber,
+  Standings,
+  useReorderSlide,
+} from '../components/game';
+import { playFlatline, unlockAudio } from '../lib/sound';
 
 export default function Display() {
+  // القاعة مظلمة والبروجكتر يغسل الفاتح — هذه الشاشة غامقة دائماً
+  useTheme('dark');
   const [params, setParams] = useSearchParams();
   const [room, setRoom] = useState<RoomState | null>(null);
   const [error, setError] = useState('');
@@ -45,7 +56,9 @@ export default function Display() {
 
   const connect = async (target: string) => {
     setError('');
-    const res = await ask<{ state: RoomState }>('display:join', { code: target });
+    const res = await ask<{ state: RoomState }>('display:join', {
+      code: target,
+    });
     if (!res.ok) return setError(res.error);
     setRoom(res.state);
     setParams({ code: target }, { replace: true });
@@ -69,160 +82,207 @@ export default function Display() {
 
   if (!room) {
     return (
-      <Page>
-        <div className="mx-auto max-w-md">
-          <div className="text-center">
-            <span className="inline-flex size-16 items-center justify-center rounded-3xl bg-[#eef3fa] text-[#103f91]">
-              <ScreenIcon size={34} />
-            </span>
-            <h1 className="mt-4 text-3xl font-black text-[#103f91]">شاشة العرض</h1>
-          </div>
-          <Card className="mt-5 grid gap-4">
-            <Field label="رمز الغرفة">
-              <Input
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                maxLength={4}
-                placeholder="A7K2"
-                className="text-center text-2xl font-black tracking-[0.4em]"
-                onKeyDown={(e) => e.key === 'Enter' && void connect(code)}
-              />
-            </Field>
-            <ErrorNote>{error}</ErrorNote>
-            <Button
-              onClick={() => {
-                unlockAudio();
-                void connect(code);
-              }}
-              disabled={code.length < 4}
-            >
-              اعرض
-            </Button>
-          </Card>
-        </div>
-      </Page>
+      <FormPage
+        title="شاشة العرض"
+        lead="افتحها على البروجكتر وأدخل رمز الغرفة. تتابع القاعة من هنا نبض كل لاعب، ولحظة سكون أول نبض."
+      >
+        <Card className="grid gap-4">
+          <Field label="رمز الغرفة">
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              maxLength={4}
+              placeholder="A7K2"
+              className="tnum text-center text-3xl tracking-[0.4em]"
+              onKeyDown={(e) => e.key === 'Enter' && void connect(code)}
+            />
+          </Field>
+          <ErrorNote>{error}</ErrorNote>
+          <Button
+            size="lg"
+            onClick={() => {
+              unlockAudio();
+              void connect(code);
+            }}
+            disabled={code.length < 4}
+          >
+            اعرض
+          </Button>
+        </Card>
+      </FormPage>
     );
   }
 
   return <Board room={room} />;
 }
 
-/** شاشة العرض تملأ البروجكتر — بلا نافبار ولا فوتر مزدحم */
+/** شاشة العرض تملأ البروجكتر — لا شيء فيها أصغر من ٢٨px */
 function Board({ room }: { room: RoomState }) {
   const joinUrl = `${location.origin}/play?code=${room.code}`;
-  const qr = useQr(joinUrl);
-  useExplosionAlert(room.teams);
+  const qr = useQr(joinUrl, '#060b12ff', '#e4f0f8ff');
+  /*
+   * مشهد نهاية الجولة في القاعة على ثلاث لقطات:
+   *   ١) ستارةُ السكون تنزل باسم من توقّف نبضه.
+   *   ٢) تنفرج نصفين — بلا نبضةٍ قاصّة — فتكشف تحتها نتائجَ الجولة.
+   *   ٣) فإذا بدأت الجولة التالية عبرت النبضةُ الزرقاء فقصّت النتائج
+   *      ونزاحت، فتُسلّم الشاشة إلى الجولة الجديدة.
+   * ولذلك تُركَّب الستارتان معاً: الثانية جاهزة تحت الأولى قبل انفراجها.
+   */
+  const stopped = useFlatlineMoment(room.teams, room.round);
+  const curtain = useLingering(room.status === 'ended' ? room.result : null, CURTAIN_OUT_MS);
 
-  // المتصدر = أعلى وقت متبقٍ بين الفرق الصامدة
-  const leaderId = room.teams
-    .filter((t) => !t.exploded)
-    .reduce<PublicTeam | null>((best, t) => (!best || t.timeMs > best.timeMs ? t : best), null)?.id;
+  const alive = room.teams.filter((t) => !t.flatlined).length;
+
+  /*
+   * القاعة تقرأ سباقاً لا جدولاً: الترتيب هنا بما بقي من الوقت لحظةً
+   * بلحظة، والساكنون في الذيل. فإذا سبق أحدٌ أحداً رأت القاعةَ التجاوزَ
+   * يحدث، لا نتيجتَه بعد أن حدث.
+   */
+  const ranked = [...room.teams].sort((a, b) => {
+    if (a.flatlined !== b.flatlined) return a.flatlined ? 1 : -1;
+    return b.timeMs - a.timeMs || b.score - a.score;
+  });
+  const leaderId = ranked.find((t) => !t.flatlined)?.id;
+
+  const board = useRef<HTMLDivElement>(null);
+  useReorderSlide(board, ranked.map((t) => t.id).join(','));
 
   return (
-    <div className="flex min-h-full flex-col">
-      {/* نافبار ثابت: الشعار يميناً، ورمز الغرفة والجولة بخط صغير يساراً */}
-      <header className="sticky top-0 z-30 border-b border-[#e8e4dd] bg-white/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-5 py-3">
-          <div className="flex items-center gap-3">
-            <Logo className="h-9" />
-            <span className="flex items-center gap-1.5 border-r border-[#e8e4dd] pr-3 text-lg font-black text-[#103f91]">
-              <BombIcon size={18} className="text-[#ff9f1c]" />
-              القنبلة
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 text-sm">
-            <span className="rounded-full bg-[#f2efe9] px-3 py-1 font-bold text-[#6b6b6b]">
-              الجولة {room.round}
-            </span>
-            <span className="rounded-full bg-[#fff6e8] px-3 py-1 font-black tracking-[0.15em] text-[#e68500]">
-              {room.code}
-            </span>
-          </div>
+    <div className="flex h-full flex-col px-14">
+      {/* الترويسة على سطحٍ لا على الأرضية: أبيضُ في الفاتح وأسودُ في الغامق */}
+      <header className="-mx-14 flex h-24 shrink-0 items-center justify-between border-b-2 border-line-2 bg-surface px-14">
+        <Wordmark className="text-[40px]" />
+        <div className="flex items-center gap-3 text-[26px]">
+          <Chip label="الجولة" value={room.round} />
+          <Chip label="الغرفة" value={room.code} signal />
         </div>
       </header>
 
-      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 p-5 sm:p-8">
-        {room.status === 'lobby' && (
-          <div className="flex flex-wrap items-center justify-center gap-6 rounded-2xl border border-[#e8e4dd] bg-white p-6">
-            {qr && (
-              <div className="rounded-xl border border-[#e8e4dd] bg-white p-2">
-                <img src={qr} alt="امسح للانضمام" className="size-32" />
-              </div>
-            )}
-            <div className="text-center sm:text-right">
-              <p className="text-xl font-bold text-[#6b6b6b]">
-                امسح الرمز أو افتح{' '}
-                <span className="font-black text-[#103f91]">{location.host}/play</span>
-              </p>
-              <p className="mt-2 text-lg text-[#9a968f]">
-                وأدخل رمز الغرفة{' '}
-                <span className="text-3xl font-black tracking-[0.15em] text-[#ff9f1c]">
-                  {room.code}
-                </span>
-              </p>
-            </div>
-          </div>
-        )}
-
-      {/* التغبيش يخفي الترتيب والعدادات عن الجمهور لزيادة التشويق */}
-      <div className="relative flex-1">
+      <div className="relative flex min-h-0 flex-1 flex-col">
         <div
-          className={`transition duration-500 ${
+          className={`flex min-h-0 flex-1 flex-col transition duration-500 ${
             room.displayBlurred ? 'pointer-events-none blur-lg select-none' : ''
           }`}
         >
-          {room.status === 'finished' && room.standings ? (
-            <Podium standings={room.standings} />
+          {room.status === 'lobby' ? (
+            <Lobby code={room.code} qr={qr} teams={room.teams} />
+          ) : room.status === 'finished' && room.standings ? (
+            <div className="flex min-h-0 flex-1 items-center overflow-y-auto py-6">
+              <Standings standings={room.standings} rounds={room.history.length} />
+            </div>
           ) : (
-            <>
-              {room.teams.length === 0 && (
-                <p className="mt-20 text-center text-2xl text-[#9a968f]">بانتظار انضمام الفرق…</p>
-              )}
-              {/* عمودان على الشاشات العريضة، عمود واحد على الضيقة */}
-              <div className="grid content-start gap-4 xl:grid-cols-2">
-                {room.teams.map((team, index) => (
-                  <TeamRow
-                    key={team.id}
-                    team={team}
-                    rank={index + 1}
-                    status={room.status}
-                    leader={team.id === leaderId}
-                  />
-                ))}
-              </div>
-            </>
+            <div ref={board} className="flex min-h-0 flex-1 flex-col justify-center gap-2.5 py-4">
+              {ranked.map((team, index) => (
+                <Channel
+                  key={team.id}
+                  team={team}
+                  rank={index + 1}
+                  status={room.status}
+                  leader={team.id === leaderId}
+                />
+              ))}
+            </div>
           )}
         </div>
 
         {room.displayBlurred && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex items-center gap-3 rounded-2xl border border-[#e8e4dd] bg-white/95 px-8 py-5 shadow-lg">
-              <EyeOffIcon size={28} className="text-[#103f91]" />
-              <span className="text-2xl font-black text-[#103f91]">الترتيب مخفي</span>
+            <div className="flex items-center gap-4 rounded-card bg-surface px-9 py-6 shadow-[inset_0_0_0_1px_var(--color-line-2)]">
+              <EyeOffIcon size={30} className="text-muted" />
+              <span className="text-3xl font-black">الترتيب مخفي</span>
             </div>
           </div>
         )}
       </div>
 
-        {room.status === 'countdown' && <Countdown ms={room.countdownMs} />}
+      <footer className="flex h-20 shrink-0 items-center justify-between border-t-2 border-line-2 text-[28px] font-medium text-muted">
+        <div className="flex items-center gap-9">
+          <Legend color="var(--color-safe)" label="نبض قوي" />
+          <Legend color="var(--color-warn)" label="يضعف" />
+          <Legend color="var(--color-danger)" label="على وشك السكون" />
+        </div>
+        <div className="tnum flex items-center gap-4">
+          <span>
+            {alive} نبضة حيّة من {room.teams.length}
+          </span>
+          <span className="text-faint">·</span>
+          <span className="font-black text-ink">{location.host}/play</span>
+        </div>
+      </footer>
 
-        {/* نتائج الجولة تظهر كبوب أب فوق خلفية مغبّشة، وتختفي مع بدء الجولة التالية */}
-        {room.status === 'ended' && room.result && (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-6 backdrop-blur-md">
-            <div className="boom w-full max-w-3xl">
-              <Results result={room.result} />
-            </div>
-          </div>
-        )}
-      </div>
+      <CountdownGate ms={room.countdownMs} on={room.status === 'countdown'} />
 
-      <MiniFooter />
+      {room.status === 'paused' && (
+        <div className="veil-in fixed inset-0 z-40 flex items-center justify-center bg-ground/92">
+          <PausedMark note="سيستأنف المنظّم بعد لحظات — أبقِ جهازك كما هو" />
+        </div>
+      )}
+
+      {curtain.value && <Results result={curtain.value} leaving={curtain.leaving} />}
+
+      {/* فوق النتائج: إعلانُ السكون، ينفرج عنها بعد لحظتين */}
+      {stopped.name && <FlatlineMoment name={stopped.name} leaving={stopped.leaving} />}
     </div>
   );
 }
 
-function TeamRow({
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-2.5">
+      <i className="size-5 rounded-[3px]" style={{ backgroundColor: color }} aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
+/**
+ * شاشة الانتظار: وظيفتها الوحيدة أن ينضمّ الناس.
+ * فلا عدادات ولا مجارٍ — رمز كبير يُقرأ من آخر صفّ، وأسماء من انضمّ.
+ */
+function Lobby({ code, qr, teams }: { code: string; qr: string; teams: PublicTeam[] }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col justify-center gap-12 py-8">
+      <div className="flex items-center justify-center gap-16">
+        {qr && (
+          <div className="rounded-card bg-ink p-4">
+            <img src={qr} alt="امسح للانضمام" className="size-60" />
+          </div>
+        )}
+        <div>
+          <p className="text-[34px] font-medium text-muted">
+            امسح الرمز أو افتح <span className="font-black text-ink">{location.host}/play</span>
+          </p>
+          <p className="mt-4 text-[34px] font-medium text-muted">ثم أدخل رمز الغرفة</p>
+          <div className="tnum mt-2 text-[150px] leading-none font-black tracking-[0.1em] text-signal">
+            {code}
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t-2 border-line-2 pt-8">
+        <p className="tnum mb-5 text-[28px] font-bold tracking-[0.14em] text-muted">
+          {teams.length === 0 ? 'بانتظار انضمام اللاعبين…' : `انضمّ ${teams.length} لاعباً`}
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {teams.map((team) => (
+            <span
+              key={team.id}
+              className="rise-in rounded-card bg-surface px-7 py-3.5 text-[34px] font-black shadow-[inset_0_0_0_1px_var(--color-line-2)]"
+            >
+              {team.name}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * القناة: لاعب واحد على سطح الجهاز.
+ * الشريط الملوّن على الطرف، والمخطّط في الوسط، والأرقام على اليسار.
+ */
+function Channel({
   team,
   rank,
   status,
@@ -231,133 +291,219 @@ function TeamRow({
   team: PublicTeam;
   rank: number;
   status: RoomState['status'];
-  /** صاحب أعلى وقت متبقٍ حالياً */
   leader?: boolean;
 }) {
-  const frozen = team.locked && !team.exploded;
-  const golden = team.doubled && !team.exploded;
-  const color = team.exploded
-    ? '#e52e25'
-    : frozen
-      ? '#12b3d5'
-      : levelColor[dangerLevel(team.timeMs)];
-
-  // المجمّدة تكتسي بالثلج، والمضاعِفة تتذهّب طوال جولتها
-  const skin = team.exploded
-    ? 'border-[#f5c9c6] bg-[#fdeae8]'
-    : frozen
-      ? 'frost-card border-[#7ed4e8] bg-[#e7f7fb]'
-      : golden
-        ? 'gold-card border-[#ffd062] bg-gradient-to-bl from-[#fff3d6] via-[#fff8ea] to-white'
-        : 'border-[#e8e4dd] bg-white';
+  const frozen = team.locked && !team.flatlined;
+  const gilded = team.doubled && !team.flatlined && !frozen;
+  const level = teamLevel(team.timeMs, team.flatlined);
+  const dying = level === 'danger' && status === 'running' && !frozen;
 
   return (
-    <div className={`flex overflow-hidden rounded-2xl border transition duration-500 ${skin}`}>
-      <div className="w-3 shrink-0 transition-colors duration-500" style={{ backgroundColor: color }} />
+    <div
+      data-row={team.id}
+      style={stateStyle(level, team.timeMs)}
+      className={`relative grid max-h-[128px] min-h-[86px] flex-1 grid-cols-[64px_340px_minmax(0,1fr)_168px_148px] items-center gap-6 overflow-hidden rounded-card px-6 ${
+        frozen
+          ? 'frosted'
+          : gilded
+            ? 'gilded'
+            : team.flatlined
+              ? 'bg-transparent shadow-[inset_0_0_0_1px_var(--color-line)]'
+              : 'bg-surface shadow-[inset_0_0_0_1px_var(--color-line)]'
+      } ${dying ? 'alarm-channel' : ''}`}
+    >
+      <span className="bg-state absolute inset-y-0 start-0 z-[1] w-1" aria-hidden="true" />
 
-      <div className="flex flex-1 flex-col gap-4 p-6">
-        <div className="flex items-center gap-4">
-          <div className="w-10 text-center text-3xl font-black text-[#c9c4bb]">{rank}</div>
+      <div
+        className={`tnum relative text-center text-[36px] font-light ${
+          leader && !team.flatlined ? 'font-black text-signal' : 'text-faint'
+        }`}
+      >
+        {rank}
+      </div>
 
-          <div className="flex-1">
-            <div className="flex items-center gap-2 text-3xl font-black">
-              {/* تاج يطفو فوق المتصدر ما دامت اللعبة جارية */}
-              {leader && !team.exploded && (
-                <CrownIcon size={26} className="crown-bob shrink-0 text-[#ff9f1c]" />
-              )}
-              {team.name}
-              {frozen && (
-                <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#12b3d5] px-3 py-1 text-lg font-black text-white">
-                  <SnowflakeIcon size={18} className="animate-pulse" />
-                  {Math.ceil(team.lockedMs / 1000)}
-                </span>
-              )}
-              {golden && (
-                <span className="shrink-0 rounded-full bg-gradient-to-l from-[#ffb703] to-[#e68500] px-3 py-1 text-lg font-black text-white shadow-sm shadow-[#ffb703]/40">
-                  ×3
-                </span>
-              )}
-              {!team.connected && <OfflineIcon size={19} className="text-[#9a968f]" />}
-            </div>
-            <div className="text-base text-[#9a968f]">
-              {team.correct}/{team.answered} إجابة صحيحة
-            </div>
-          </div>
-
-          <div className="text-center">
-            <RollingNumber value={team.score} className="text-4xl font-black text-[#ff9f1c]" />
-            <div className="text-xs text-[#9a968f]">نقطة</div>
-          </div>
-
-          <div className="flex w-12 justify-center">
-            {team.exploded ? (
-              <BoomIcon size={34} className="text-[#e52e25]" />
-            ) : status === 'running' ? (
-              <BombIcon size={32} className="text-[#103f91]" />
-            ) : (
-              <PauseIcon size={26} className="text-[#c9c4bb]" />
-            )}
-          </div>
+      <div className="relative">
+        <div
+          className={`flex items-center gap-2.5 text-[38px] leading-tight font-black ${
+            team.flatlined ? 'text-faint' : ''
+          }`}
+        >
+          {leader && !team.flatlined && <CrownIcon size={24} className="shrink-0 text-signal" />}
+          <span className="truncate">{team.name}</span>
+          {frozen && (
+            <span className="tnum flex shrink-0 items-center gap-2 rounded-chip px-3 py-0.5 text-[26px] font-black text-frost shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-frost)_55%,transparent)]">
+              <SnowflakeIcon size={18} />
+              {Math.ceil(team.lockedMs / 1000)}
+            </span>
+          )}
+          {team.doubled && !team.flatlined && (
+            <span className="shrink-0 rounded-chip px-3 py-0.5 text-[26px] font-black text-gold shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-gold)_55%,transparent)]">
+              ×٢
+            </span>
+          )}
+          {!team.connected && <OfflineIcon size={22} className="shrink-0 text-faint" />}
         </div>
+        <div
+          className={`tnum text-[28px] font-medium ${team.flatlined ? 'text-faint' : 'text-muted'}`}
+        >
+          {team.correct}/{team.answered} إجابة صحيحة
+        </div>
+      </div>
 
-        <TimeBar timeMs={team.timeMs} exploded={team.exploded} size="lg" />
+      <Lane
+        timeMs={team.timeMs}
+        running={status === 'running'}
+        flatlined={team.flatlined}
+        size="lg"
+        className="relative h-[58px]"
+      />
+
+      {/* العدّاد لا يغيب وإن سكن النبض: الصفر خبرٌ يُقرأ، والكلمة تحته تفسّره */}
+      <div className="relative text-center">
+        {team.flatlined ? (
+          <>
+            <b className="tnum block text-[50px] leading-none font-black text-danger">
+              {formatTime(team.timeMs)}
+            </b>
+            <span className="mt-1 flex items-center justify-center gap-2 text-[26px] font-black text-danger">
+              <FlatlineIcon size={20} />
+              توقف النبض
+            </span>
+          </>
+        ) : (
+          <>
+            <b className="ink-state tnum block text-[50px] leading-none font-black">
+              {formatTime(team.timeMs)}
+            </b>
+            <span className="mt-1 block text-[28px] font-medium text-muted">ثانية</span>
+          </>
+        )}
+      </div>
+
+      <div className="relative border-r border-line-2 pr-5 text-center">
+        <RollingNumber
+          value={team.score}
+          className={`tnum block text-[44px] leading-none font-black ${
+            team.flatlined ? 'text-faint' : 'text-signal'
+          }`}
+        />
+        <span className="mt-1 block text-[28px] font-medium text-muted">نقطة</span>
       </div>
     </div>
   );
 }
 
-function Results({ result }: { result: NonNullable<RoomState['result']> }) {
-  const rankColors = ['#ff9f1c', '#103f91', '#12b3d5'];
+/**
+ * أول نبض يسكن يُنهي الجولة على الجميع — فليكن حدثاً: ستارةٌ حمراء
+ * تنزل باسمه، ثم تنفرج نصفين عن نتائج الجولة تحتها.
+ */
+function FlatlineMoment({ name, leaving }: { name: string; leaving: boolean }) {
   return (
-    <Card className="boom">
-      <h2 className="mb-4 text-center text-3xl font-black text-[#103f91]">
-        نتائج الجولة {result.round}
-      </h2>
-      <div className="grid gap-2">
-        {result.awards.map((award, i) => (
-          <div
-            key={award.teamId}
-            className="flex items-center justify-between rounded-xl bg-[#faf9f6] px-5 py-3 text-xl"
-          >
-            <span className="flex items-center gap-3 font-black">
-              <span
-                className="flex size-8 items-center justify-center rounded-full text-sm text-white"
-                style={{ backgroundColor: award.exploded ? '#e52e25' : (rankColors[i] ?? '#9a968f') }}
-              >
-                {award.exploded ? <BoomIcon size={16} /> : i + 1}
-              </span>
-              {award.name}
-            </span>
-            <span className="text-[#6b6b6b]">
-              {award.exploded ? 'انفجرت' : `${formatTime(award.timeMs)} ث`}
-            </span>
-            <span className="font-black text-[#ff9f1c]">+{award.points}</span>
-          </div>
-        ))}
+    <Curtain mode="drop" tone="var(--color-danger)" cut={false} front leaving={leaving}>
+      <div className="relative flex flex-col items-center gap-8 px-20">
+        <div
+          className="alarm pointer-events-none absolute inset-x-[-80px] inset-y-[-60px]"
+          style={{ '--beat': '0.62s' } as React.CSSProperties}
+          aria-hidden="true"
+        />
+        <span className="relative block h-1.5 w-full rounded-full bg-danger" aria-hidden="true" />
+        <div className="relative text-center">
+          <p className="text-[34px] font-bold tracking-[0.2em] text-danger">توقف النبض</p>
+          <h2 className="thump mt-3 text-[132px] leading-none font-black">{name}</h2>
+          <p className="mt-5 text-[32px] font-medium text-muted">وانتهت الجولة على الجميع</p>
+        </div>
+        <span className="relative block h-1.5 w-full rounded-full bg-danger" aria-hidden="true" />
       </div>
-    </Card>
+    </Curtain>
   );
 }
 
-function useQr(url: string) {
-  const [src, setSrc] = useState('');
-  useEffect(() => {
-    void QRCode.toDataURL(url, { margin: 0, width: 200, color: { dark: '#103f91ff', light: '#ffffffff' } })
-      .then(setSrc)
-      .catch(() => setSrc(''));
-  }, [url]);
-  return src;
+/** ستارة النتائج: مصراعان يُطبقان، ثم تقصّهما نبضة فينفرجان */
+function Results({
+  result,
+  leaving,
+}: {
+  result: NonNullable<RoomState['result']>;
+  leaving: boolean;
+}) {
+  return (
+    <Curtain mode="drop" tone="var(--color-signal)" leaving={leaving}>
+      <div className="px-20">
+        <h2 className="mb-9 text-[48px] font-black">
+          نتائج الجولة <span className="tnum text-signal">{result.round}</span>
+        </h2>
+        <ResultBars awards={result.awards} big />
+      </div>
+    </Curtain>
+  );
 }
 
-/** دوي الانفجار على مكبر القاعة عند خروج أول فريق */
-function useExplosionAlert(teams: PublicTeam[]) {
+/** يُبقي القيمة مرسومة بعد اختفائها ريثما تنتهي حركة الخروج */
+function useLingering<T>(value: T | null, ms: number) {
+  const [shown, setShown] = useState<T | null>(value);
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    if (value) {
+      setShown(value);
+      setLeaving(false);
+      return;
+    }
+    if (!shown) return;
+    setLeaving(true);
+    const timer = setTimeout(() => {
+      setShown(null);
+      setLeaving(false);
+    }, ms);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, ms]);
+
+  return { value: shown, leaving };
+}
+
+/**
+ * صفير توقف النبض على مكبر القاعة عند خروج أول لاعب،
+ * ومعه اسمها على الشاشة لثلاث ثوانٍ.
+ */
+const FLATLINE_HOLD_MS = 2300;
+
+function useFlatlineMoment(teams: PublicTeam[], round: number) {
   const seen = useRef(new Set<string>());
+  const [name, setName] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState(false);
+
+  // كل جولة جديدة تبدأ بصفحة بيضاء: من توقف نبضه أمس قد يتوقف اليوم أيضاً
+  useEffect(() => {
+    seen.current.clear();
+    setName(null);
+    setLeaving(false);
+  }, [round]);
+
   useEffect(() => {
     for (const team of teams) {
-      if (team.exploded && !seen.current.has(team.id)) {
+      if (team.flatlined && !seen.current.has(team.id)) {
         seen.current.add(team.id);
-        playExplosion();
+        playFlatline();
+        setName(team.name);
+        setLeaving(false);
       }
     }
   }, [teams]);
+
+  // تمهل، ثم تنفرج، ثم تُرفع — فتظهر النتائج التي كانت تحتها
+  useEffect(() => {
+    if (!name) return;
+    const open = setTimeout(() => setLeaving(true), FLATLINE_HOLD_MS);
+    const gone = setTimeout(() => {
+      setName(null);
+      setLeaving(false);
+    }, FLATLINE_HOLD_MS + CURTAIN_OPEN_MS);
+    return () => {
+      clearTimeout(open);
+      clearTimeout(gone);
+    };
+  }, [name]);
+
+  return { name, leaving };
 }

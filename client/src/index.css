@@ -32,28 +32,145 @@
   font-display: swap;
 }
 
-/* ألوان مأخوذة من شعار نادي نبراس */
-@theme {
+/*
+ * ══════════════════════════════════════════════════════════════
+ * نظام «المِرقاب»
+ *
+ * الاستعارة: سطح جهاز مراقبة. كل كيان في المنتج يعيش داخل «مجرى»
+ * يمينه ما بقي من الوقت تجري فيه النبضات، ويساره خطّ ساكن.
+ *
+ * الأسماء دلالية لا حرفية: --color-signal لا --color-cyan.
+ * الوضعان ليسا تصميمين بل مجموعتا قيم: data-theme على <html>.
+ * ══════════════════════════════════════════════════════════════
+ */
+/*
+ * static: تيلويند يحذف من @theme كل متغيّر لا تستهلكه أداةٌ مولّدة.
+ * ومواقع الخيارات الأربعة تُقرأ من سمة style في JSX لا من أداة، فكانت
+ * تُحذف من الوضع الغامق وحده — فيبطل color-mix ويسقط حدّ البطاقة ولونها.
+ * الرموز عقدٌ كامل لا مجموعة صدف: تُكتب كلها وتبقى كلها.
+ */
+@theme static {
   --font-sans: 'Thmanyah', system-ui, sans-serif;
 
-  --color-cream: #faf9f6;
-  --color-surface: #ffffff;
-  --color-line: #e8e4dd;
+  /* الأسطح — من الأغور إلى الأعلى */
+  --color-ground: #060b12;
+  --color-sunk: #04080e;
+  --color-surface: #0b131c;
+  --color-surface-2: #101c27;
 
-  --color-ink: #1a1a1a;
-  --color-muted: #6b6b6b;
-  --color-faint: #9a968f;
+  /* الخطوط: فاصلُ صفٍّ، ثم حدٌّ، ثم ظاهر */
+  --color-line-soft: #0f1a24;
+  --color-line: #16232f;
+  --color-line-2: #22394c;
 
-  --color-blue: #103f91;
-  --color-blue-soft: #eef3fa;
-  --color-cyan: #12b3d5;
-  --color-cyan-soft: #e7f7fb;
-  --color-orange: #ff9f1c;
-  --color-orange-soft: #fff6e8;
-  --color-red: #e52e25;
-  --color-red-soft: #fdeae8;
+  /* الحبر */
+  --color-ink: #e4f0f8;
+  --color-ink-2: #aec2d0;
+  --color-muted: #7c94a6;
+  --color-faint: #33475a;
+
+  /* لون الهوية الوحيد */
+  --color-signal: #4ad5ff;
+  --color-signal-2: #0c2e3d;
+  --color-on-signal: #04222e;
+  /* حبرُ الإشارة: لونها حين تكون نصّاً على سطحٍ مصبوغ بها — والتباين يفرضه */
+  --color-signal-ink: #8fe3ff;
+  /*
+   * لونُ الفعل: خلفيةُ الأزرار الأولى. في الغامق هو الإشارة نفسها، وفي
+   * الفاتح أغمقُ منها — لأن الأبيض على الإشارة الفاتحة يعطي ٣.٧:١ فيسقط
+   * دون حدّ القراءة، والزرُّ نصٌّ قبل أن يكون لوناً.
+   */
+  --color-action: #4ad5ff;
+  --color-on-action: #04222e;
+
+  /*
+   * الحالات — وظيفية فقط، لا تُستعمل للهوية أبداً.
+   *
+   * ولكلٍّ منها سطحٌ خافت (‎-2‎) وحبرٌ عليه (‎-ink‎): لونُ الحالة نفسه على
+   * سطحها يعطي ٣.٧:١ فلا يبلغ حدّ القراءة، فالشارة تُرى ولا تُقرأ.
+   */
+  --color-safe: #22c55e;
+  --color-safe-2: #0a2a19;
+  --color-safe-ink: #4ade80;
+  --color-warn-2: #2c2008;
+  --color-warn-ink: #fbbf24;
+  --color-danger-ink: #ff6b63;
+  /* التجميد حالةٌ لا هوية: أزرقٌ ثلجيّ يُميَّز عن سماوي الإشارة */
+  --color-frost: #5fb0ff;
+  /* المضاعفة حالةٌ أيضاً: ذهبٌ باهت لا يُزاحم لون الإشارة */
+  --color-gold: #e8bf5a;
+  --color-warn: #f5a524;
+  --color-danger: #ff3b30;
+  --color-danger-2: #2a0d0c;
+
+  /* مواقع الخيارات الأربعة — ثابتة بالموقع لا بالمعنى */
+  --color-opt-1: #34c8f0;
+  --color-opt-2: #5b7fef;
+  --color-opt-3: #12a594;
+  --color-opt-4: #e2547e;
+
+  /* نصفا قطر لا غير: الشارات والحقول، ثم المجاري والبطاقات */
+  --radius-chip: 8px;
+  --radius-card: 14px;
+
+  /* الإيقاع — كل حركة دورية تشتقّ زمنها من النبض */
+  --ease-monitor: cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 
+/* الوضع الفاتح: نفس النظام بقيم أخرى */
+[data-theme='light'] {
+  /*
+   * «نبضٌ على ورق»: ورقةٌ سريرية هادئة — أرضيةٌ رماديةٌ باردة، وألواحٌ
+   * بيضاء، وتراتبٌ بالحبر لا بالحدود. ولونٌ واحدٌ للإشارة، وله حبرٌ أغمق
+   * منه يُكتب به على الفاتح (٥.٤:١) لأنه نفسه يعطي ٣.٧:١ فيُرى ولا يُقرأ.
+   */
+  --color-ground: #f6f8f9;
+  --color-sunk: #f0f5f6;
+  --color-surface: #ffffff;
+  --color-surface-2: #fbfcfd;
+
+  --color-line-soft: #f2f5f6;
+  --color-line: #e3eaec;
+  --color-line-2: #d8e0e3;
+
+  --color-ink: #0c1d21;
+  --color-ink-2: #3f5257;
+  --color-muted: #5b6e73;
+  --color-faint: #8a9aa0;
+
+  --color-signal: #0891b2;
+  --color-signal-2: #e7f3f6;
+  --color-on-signal: #ffffff;
+  --color-signal-ink: #0e7490;
+  --color-action: #0e7490;
+  --color-on-action: #ffffff;
+
+  --color-safe: #2e7d46;
+  --color-safe-2: #eaf4ee;
+  --color-safe-ink: #256b3a;
+  --color-frost: #0f5fb0;
+  --color-gold: #8a6100;
+  --color-warn: #92600a;
+  --color-warn-2: #fbf0dd;
+  --color-warn-ink: #92600a;
+  --color-danger: #b3261e;
+  --color-danger-2: #fbeceb;
+  --color-danger-ink: #b3261e;
+
+  --color-opt-1: #0e93b8;
+  --color-opt-2: #3f5fd0;
+  --color-opt-3: #0e8c7e;
+  --color-opt-4: #cf3d69;
+}
+
+/* شبكة الجهاز وأزمنة الانتقال — متغيرات عادية لا أدوات Tailwind */
+:root {
+  --cut-bg: var(--color-ground);
+
+  --t-tap: 0.16s;
+  --t-state: 0.32s;
+  --t-enter: 0.56s;
+}
 html,
 body,
 #root {
@@ -63,264 +180,1134 @@ body,
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--color-cream);
+  background: var(--color-ground);
   color: var(--color-ink);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
 }
 
-/* نبض العداد — يتسارع كلما اقترب الخطر */
-@keyframes pulse-beat {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-}
-.beat-slow { animation: pulse-beat 1s ease-in-out infinite; }
-.beat-fast { animation: pulse-beat 0.42s ease-in-out infinite; }
-
-@keyframes shake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-5px) rotate(-0.8deg); }
-  75% { transform: translateX(5px) rotate(0.8deg); }
-}
-.shake { animation: shake 0.35s ease-in-out infinite; }
-
-/* وميض بعد كل إجابة */
-@keyframes flash-in {
-  0% { opacity: 0.6; }
-  100% { opacity: 0; }
-}
-.flash { animation: flash-in 0.5s ease-out forwards; }
-
-@keyframes float-up {
-  0% { opacity: 1; transform: translateY(0) scale(1); }
-  100% { opacity: 0; transform: translateY(-70px) scale(1.35); }
-}
-.float-up { animation: float-up 0.9s ease-out forwards; }
-
-@keyframes boom {
-  0% { transform: scale(0.3); opacity: 0; }
-  40% { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
-}
-.boom { animation: boom 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-
-@keyframes drop-in {
-  from { opacity: 0; transform: translateY(-8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.drop-in { animation: drop-in 0.16s ease-out forwards; }
-
-.fuse-bar {
-  transition: width 0.25s linear, background-color 0.4s ease;
+/* أسطح المتصفح ترث النظام: لا شيء يبقى بالإعداد الافتراضي */
+::selection {
+  background: color-mix(in srgb, var(--color-signal) 30%, transparent);
+  color: var(--color-ink);
 }
 
-/* دخوليات الصفحة الرئيسية والمدرّج */
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(24px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.fade-up {
-  opacity: 0;
-  animation: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-@keyframes zoom-in {
-  from { opacity: 0; transform: scale(0.86); letter-spacing: 0.3em; }
-  to { opacity: 1; transform: scale(1); letter-spacing: 0; }
-}
-.zoom-in {
-  opacity: 0;
-  animation: zoom-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-/* أعمدة المدرّج تنمو من الأسفل */
-@keyframes rise {
-  from { transform: scaleY(0); }
-  to { transform: scaleY(1); }
-}
-.rise {
-  transform-origin: bottom;
-  animation: rise 0.75s cubic-bezier(0.34, 1.4, 0.64, 1) forwards;
-}
-
-@keyframes pop-in {
-  0% { opacity: 0; transform: translateY(14px) scale(0.9); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
-}
-.pop-in {
-  opacity: 0;
-  animation: pop-in 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+:focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 2px;
+  border-radius: var(--radius-chip);
 }
 
 /*
- * عنوان البطل: الكلمة كاملة — لا نقسّمها إلى حروف
- * لأن فصل الحروف في span منفصل يكسر تشكيل العربية المتصلة.
- * الفتيل يجري أولاً، ثم ينفجر الاسم من المركز.
+ * شريط التمرير: خيطٌ باهت يطفو على المحتوى. المجرى شفّاف تماماً فلا يظهر
+ * شريطٌ رماديّ يقتطع عرض الشاشة، ولا يُرى إلا الإبهام نفسه.
+ *
+ * وشريطُ الصفحة نفسه مُخفىً بالكامل: مكانَه خيطٌ مرسومٌ في الحافّة اليسرى
+ * لا يدخل في التخطيط أصلاً — انظر Scrollbar في ui.tsx و‎.scroll-thumb أدناه.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-muted) 22%, transparent) transparent;
+}
+html {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--color-muted) 22%, transparent);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--color-muted) 45%, transparent);
+}
+
+input,
+textarea {
+  caret-color: var(--color-signal);
+}
+
+/* الأرقام في الأعمدة لا ترقص */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * البلاطة: كل رقم وكل سؤال وكل بطاقة يجلس على سطحٍ خاصّ به لا على الأرضية.
+ * السطح وحده لا يكفي في الوضع الغامق (الفرق بينه وبين الأرضية خمس نقاط)،
+ * فيصحبه خطٌّ داخليّ يرسم الحدّ في الوضعين.
+ */
+.tile {
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+}
+.tile-sunk {
+  border-radius: var(--radius-card);
+  background: var(--color-surface-2);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+}
+
+/*
+ * ══════════════════ المجرى ══════════════════
+ * الجزء الحيّ ملتصق بالطرف الأيمن (اتجاه القراءة)، تجري فيه النبضات
+ * من اليمين إلى اليسار. المسافة بين نبضة وأخرى ثابتة بالبكسل،
+ * فعدد النبضات الظاهرة ينقص مع الوقت وحده حتى يستقيم الخطّ.
+ */
+.lane {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-chip);
+  background: var(--color-sunk);
+  border: 1px solid var(--color-line-2);
+  --tile: 120px;
+  --amp: 44px;
+  --glow: 14px;
+  --line: 2.4px;
+  --trace: url('/trace.svg');
+}
+
+.lane-bare {
+  border: 0;
+  background: transparent;
+}
+
+/*
+ * خطّ الاتصال — للمقاس الصغير وحده (صفّ المنظّم).
+ *
+ * القاعدة أن لا شريط خلف الموجة: خطّ الأساس مرسومٌ في المسار نفسه، فإن
+ * وُضع تحته مستقيمٌ ثانٍ سدّ بطن الموجة حيث يجب أن يكون خاوياً — والقوسُ
+ * المملوء أسفلُه ليس نبضةً بل نصف دائرة.
+ *
+ * والاستثناء هنا لأن المقاس يقلبه: القلم يخرج عند ٢٢px رقيقاً حتى يذوب
+ * الخطّ الأفقيّ فتُقرأ النبضات متقطّعة، وبطنُ الموجة يخرج أقلّ من بكسلين
+ * فلا يراه أحد أصلاً. فنكسب الاتصال ولا نخسر شيئاً يُرى.
+ */
+.lane-line {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: var(--line);
+  margin-top: calc(var(--line) / -2);
+  background: var(--state);
+}
+
+/*
+ * النبضات: عنصر أوسع من المجرى بوحدة كاملة من كل طرف، يُزاح بـtransform وحده.
+ * القناع يتكرّر أفقياً، والإزاحة بمقدار وحدة كاملة بالضبط تُطابق النهايةَ
+ * البدايةَ فلا يظهر وصل.
+ */
+.lane-run {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(var(--tile) * -1);
+  width: calc(100% + var(--tile) * 2);
+  background: var(--state);
+  -webkit-mask-image: var(--trace);
+  mask-image: var(--trace);
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+  -webkit-mask-size: var(--tile) var(--amp);
+  mask-size: var(--tile) var(--amp);
+  -webkit-mask-position: right center;
+  mask-position: right center;
+  will-change: transform;
+}
+
+/*
+ * ما انقضى من الوقت: غطاءٌ بلون قاع المجرى يُزاح يساراً بمقدار ما بقي.
+ * الانحسار بـtransform لا بـwidth — فلا تخطيط ولا إعادة رسم للقناع في كل إطار،
+ * وتبقى ثمانية مجارٍ حيّة عند ستين إطاراً على لابتوب متواضع.
+ */
+.lane-cover {
+  position: absolute;
+  inset: 0;
+  background: var(--color-sunk);
+  will-change: transform;
+}
+
+/* الخطّ المستقيم: ما انقضى */
+.lane-cover::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 0;
+  top: 50%;
+  height: var(--line);
+  margin-top: calc(var(--line) / -2);
+  border-radius: 2px;
+  background: var(--color-line-2);
+}
+
+/*
+ * رأس الكاتب: الحدّ بين ما بقي وما انقضى.
+ * وهجه مشتقٌّ من مقاس المجرى — فما يليق بشاشة القاعة يصير لطخةً
+ * على صفٍّ بارتفاع ٣٨px في لوحة المنظّم.
+ */
+.lane-cover::after {
+  content: '';
+  position: absolute;
+  inset-block: 14%;
+  right: -1px;
+  width: 2px;
+  background: var(--state);
+  box-shadow: 0 0 var(--glow) calc(var(--glow) / 7) var(--state);
+}
+
+/*
+ * جريان زخرفي بسرعة ثابتة — للبطل وشاشات الدخول وحدها، حيث لا وقت يُقاس.
+ * سرعته لا تتغيّر، فحركة CSS هنا سليمة ولا تتقطّع.
+ */
+@keyframes lane-drift {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(var(--tile) * -1));
+  }
+}
+.lane-drift {
+  animation: lane-drift var(--drift, 3.4s) linear infinite;
+}
+
+/* نبض ساكن */
+.lane-flat {
+  position: absolute;
+  inset-inline: 10px;
+  top: 50%;
+  height: var(--line);
+  margin-top: calc(var(--line) / -2);
+  border-radius: 2px;
+  background: var(--color-danger);
+}
+
+.ink-state {
+  color: var(--state);
+  transition: color var(--t-tap) ease;
+}
+.bg-state {
+  background: var(--state);
+  transition: background-color var(--t-state) ease;
+}
+
+/*
+ * ══════════════════ لغة الحركة ══════════════════
+ * الإيقاع الأساسي هو النبض: كل حركة دورية تأخذ زمنها من --beat،
+ * و--beat يُحسب من الثواني المتبقية فيتسارع كل شيء معاً.
  */
 
-/* شرارة الفتيل تزحف من اليمين إلى المركز */
-@keyframes fuse-burn {
-  from { width: 0; }
-  to { width: 50%; }
+/* إنذار الثواني الأخيرة: وهج أحمر ينبض على حواف الشاشة */
+@keyframes alarm-vignette {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 rgb(255 59 48 / 0);
+  }
+  50% {
+    box-shadow: inset 0 0 58px 8px rgb(255 59 48 / 0.48);
+  }
 }
-.fuse-burn {
-  width: 0;
-  animation: fuse-burn 1.1s cubic-bezier(0.45, 0, 0.55, 1) forwards;
+.alarm {
+  animation: alarm-vignette var(--beat) ease-in-out infinite;
 }
 
-@keyframes spark-travel {
-  from { right: 0; opacity: 1; }
-  92% { opacity: 1; }
-  to { right: 50%; opacity: 0; }
+/* إنذار داخل قناة واحدة على شاشة العرض */
+@keyframes alarm-inset {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 0 rgb(255 59 48 / 0);
+  }
+  50% {
+    box-shadow: inset 0 0 80px 0 rgb(255 59 48 / 0.22);
+  }
 }
-.spark-travel {
+.alarm-channel {
+  animation: alarm-inset var(--beat) ease-in-out infinite;
+}
+
+/* العدّاد ينبض بنبض المجرى نفسه */
+@keyframes beat-scale {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+.beat {
+  animation: beat-scale var(--beat) ease-in-out infinite;
+}
+
+/* مؤشّر «جارية» */
+@keyframes live-blink {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  61%,
+  100% {
+    opacity: 0.25;
+  }
+}
+.blink {
+  animation: live-blink 2.2s steps(1) infinite;
+}
+
+/* دخوليات: تحمل معلومة «هذا جديد» ولا تتكرّر */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.rise-in {
   opacity: 0;
-  animation: spark-travel 1.1s cubic-bezier(0.45, 0, 0.55, 1) forwards;
+  animation: rise-in var(--t-enter) var(--ease-monitor) forwards;
 }
 
-/* الانفجار: الاسم يندفع من المركز مع ارتدادة */
-@keyframes title-blast {
-  0% { opacity: 0; transform: scale(0.15); filter: blur(10px); }
-  45% { opacity: 1; transform: scale(1.22); filter: blur(0); }
-  70% { transform: scale(0.95); }
-  85% { transform: scale(1.04); }
-  100% { opacity: 1; transform: scale(1); }
+@keyframes thump {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
-.title-blast {
+.thump {
   opacity: 0;
-  animation: title-blast 0.85s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: thump 0.42s var(--ease-monitor) forwards;
 }
-
-/* موجة ضوء تتمدد لحظة الانفجار */
-@keyframes shock-wave {
-  0% { opacity: 0.85; transform: scale(0.2); border-width: 14px; }
-  100% { opacity: 0; transform: scale(2.6); border-width: 0; }
-}
-.shock-wave {
-  opacity: 0;
-  animation: shock-wave 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-/* هزة خفيفة للقسم كله لحظة الانفجار */
-@keyframes blast-shake {
-  0%, 100% { transform: translate(0, 0); }
-  20% { transform: translate(-7px, 4px); }
-  40% { transform: translate(6px, -5px); }
-  60% { transform: translate(-4px, 3px); }
-  80% { transform: translate(3px, -2px); }
-}
-.blast-shake { animation: blast-shake 0.45s ease-out forwards; }
-
-/* وميض يمرّ فوق العنوان بعد ظهوره */
-@keyframes sheen {
-  0% { background-position: 200% 0; }
-  100% { background-position: -80% 0; }
-}
-.sheen {
-  background-image: linear-gradient(
-    100deg,
-    #fff 40%,
-    #ffd88a 48%,
-    #ff9f1c 52%,
-    #fff 60%
-  );
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: sheen 2.6s ease-in-out 2.4s infinite;
-}
-
-/* نبض هادئ للشارة العلوية */
-@keyframes halo {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 159, 28, 0.45); }
-  50% { box-shadow: 0 0 0 22px rgba(255, 159, 28, 0); }
-}
-.halo { animation: halo 2.8s ease-out infinite; }
-
-/* الشاشة تتلاشى قبل أن تُستبدل بالمراجعة */
-@keyframes fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
-}
-.fade-out { animation: fade-out 0.45s ease-in forwards; }
 
 @keyframes veil-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
-.veil-in { animation: veil-in 0.35s ease-out forwards; }
-
-@keyframes slide-in-right {
-  from { opacity: 0; transform: translateX(40px); }
-  to { opacity: 1; transform: translateX(0); }
-}
-.slide-in-right {
-  opacity: 0;
-  animation: slide-in-right 0.7s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+.veil-in {
+  animation: veil-in 0.3s ease-out forwards;
 }
 
-/* إطار أحمر ينبض على حواف الشاشة في الثواني الأخيرة */
-@keyframes danger-frame {
-  0%, 100% { box-shadow: inset 0 0 0 0 rgba(229, 46, 37, 0); }
-  50% { box-shadow: inset 0 0 90px 14px rgba(229, 46, 37, 0.55); }
+/* وشاشة الاستعداد لا تُقطع: تخبو وتتباعد قبل أن يبدأ العدّ الحقيقي */
+@keyframes veil-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+  }
 }
-.danger-frame { animation: danger-frame 0.7s ease-in-out infinite; }
+.veil-out {
+  animation: veil-out 0.5s var(--ease-monitor) forwards;
+}
 
-/* قصاصات التتويج تتساقط وتتمايل */
-@keyframes confetti-fall {
-  0% { transform: translateY(-12vh) rotate(0deg); opacity: 1; }
-  100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+/*
+ * ══════════════════ الستارة ══════════════════
+ * لوحةٌ تملأ الشاشة، تدخل بأحد أسلوبين ثم تخرج بأسلوب واحد.
+ *
+ * الدخول:
+ *   drop  — تنزل من أعلى كلوحة واحدة. لشاشة القاعة: حركةٌ واحدة كبيرة
+ *           تُرى من آخر صفّ.
+ *   bloom — وميضٌ بلون المصير ثم تتفتّح التفاصيل من خطّ المنتصف إلى
+ *           الأطراف. لشاشة اللاعب: المصير يصل قبل التفاصيل.
+ *
+ * الخروج (واحد في الحالين): نبضةٌ تعبر خطّ المنتصف من اليمين — موجةٌ
+ * حقيقية بالقناع نفسه لا خطاً مستقيماً — فتقصّ اللوحة نصفين ينزاحان
+ * صاعداً وهابطاً. كل نصف يحمل نسخةً كاملة من المحتوى مقصوصةً عند
+ * خصره، فيُقرأ سطراً واحداً مشقوقاً لا سطرين.
+ */
+.curtain-set {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
 }
-.confetti-piece {
+/* ستارةٌ فوق ستارة: إعلانُ السكون يعلو النتائج، فإذا انفرج كشفها */
+.curtain-front {
+  z-index: 70;
+}
+.curtain-half {
   position: absolute;
+  inset-inline: 0;
+  height: 50%;
+  overflow: hidden;
+  will-change: transform;
+}
+.curtain-top {
   top: 0;
-  width: 10px;
-  height: 16px;
-  border-radius: 2px;
-  animation: confetti-fall linear forwards;
+}
+.curtain-bottom {
+  bottom: 0;
+}
+/* الجسم بارتفاع الشاشة كاملةً، مثبّتاً بحافّة نصفه — فيتطابق النصفان */
+.curtain-body {
+  position: absolute;
+  inset-inline: 0;
+  height: 200%;
+}
+.curtain-top .curtain-body {
+  top: 0;
+}
+.curtain-bottom .curtain-body {
+  bottom: 0;
 }
 
-/* بطاقة المجموعة المجمّدة — وهج ثلجي داخلي ينبض */
-@keyframes frost-pulse {
-  0%, 100% { box-shadow: inset 0 0 24px 4px rgba(18, 179, 213, 0.28); }
-  50% { box-shadow: inset 0 0 40px 10px rgba(18, 179, 213, 0.45); }
+/* ── الدخول: نزولٌ من أعلى ── */
+@keyframes curtain-drop {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
-.frost-card { animation: frost-pulse 1.4s ease-in-out infinite; }
+.curtain-drop {
+  animation: curtain-drop 0.62s cubic-bezier(0.3, 0.9, 0.3, 1) backwards;
+}
 
-/* بطاقة المضاعفة الذهبية — لمعة تمرّ عليها */
-@keyframes gold-sweep {
-  0% { background-position: 220% 0; }
-  100% { background-position: -120% 0; }
+/* ── الدخول: تفتّحٌ من خطّ المنتصف ── */
+@keyframes bloom-up {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
 }
-.gold-card {
+@keyframes bloom-down {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.curtain-bloom .curtain-top {
+  animation: bloom-up 0.62s cubic-bezier(0.25, 0.8, 0.3, 1) 0.14s backwards;
+}
+.curtain-bloom .curtain-bottom {
+  animation: bloom-down 0.62s cubic-bezier(0.25, 0.8, 0.3, 1) 0.14s backwards;
+}
+
+/* وميض المصير: يسبق التفاصيل فيصل الخبر قبل تفصيله */
+@keyframes curtain-flash {
+  0% {
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.62;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.curtain-flash {
+  position: absolute;
+  inset: 0;
+  background: var(--tone);
+  animation: curtain-flash 0.62s ease-out forwards;
+}
+
+/* ── الخروج: نبضةٌ تقصّ، ثم ينفرج النصفان ── */
+@keyframes shutter-out-top {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-100%);
+  }
+}
+@keyframes shutter-out-bottom {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+.curtain-set-out .curtain-top {
+  animation: shutter-out-top 0.8s cubic-bezier(0.55, 0, 0.25, 1) 0.66s both;
+}
+.curtain-set-out .curtain-bottom {
+  animation: shutter-out-bottom 0.8s cubic-bezier(0.55, 0, 0.25, 1) 0.66s both;
+}
+/* بلا نبضةٍ قاصّة: لا داعي لانتظارها، فينفرج النصفان فوراً */
+.curtain-nocut.curtain-set-out .curtain-top,
+.curtain-nocut.curtain-set-out .curtain-bottom {
+  animation-delay: 0s;
+}
+
+/* النبضة القاصّة: موجةٌ بالقناع نفسه، تُرسم من اليمين ويسبقها رأسٌ مضيء */
+.curtain-cut {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 68px;
+  margin-top: -34px;
+}
+.curtain-cut-wave {
+  position: absolute;
+  inset: 0;
+  background: var(--tone);
+  -webkit-mask-image: url('/trace.svg');
+  mask-image: url('/trace.svg');
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+  -webkit-mask-size: 150px 100%;
+  mask-size: 150px 100%;
+  -webkit-mask-position: right center;
+  mask-position: right center;
+  animation:
+    cut-reveal 0.66s cubic-bezier(0.32, 0, 0.2, 1) both,
+    cut-fade 0.5s 0.72s ease-out forwards;
+}
+@keyframes cut-reveal {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes cut-fade {
+  to {
+    opacity: 0;
+  }
+}
+/* رأس النبضة: يجري أمام الموجة من أقصى اليمين إلى أقصى اليسار */
+.curtain-cut-head {
+  position: absolute;
+  inset-block: 0;
+  right: 0;
+  width: 3px;
+  background: var(--tone);
+  box-shadow: 0 0 30px 7px var(--tone);
+  animation:
+    cut-head 0.66s cubic-bezier(0.32, 0, 0.2, 1) both,
+    cut-fade 0.3s 0.62s ease-out forwards;
+}
+@keyframes cut-head {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100vw);
+  }
+}
+
+/* وميض نتيجة الإجابة — يمرّ في ١٦٠ms ولا يعطّل القراءة */
+@keyframes flash-out {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.flash {
+  animation: flash-out 0.42s ease-out forwards;
+}
+
+@keyframes float-up {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-56px);
+  }
+}
+.float-up {
+  animation: float-up 0.8s var(--ease-monitor) forwards;
+}
+
+/* المدرّج: الأعمدة تنهض من الأرض */
+@keyframes rise-bar {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.rise-bar {
+  transform-origin: bottom;
+  animation: rise-bar 0.7s var(--ease-monitor) forwards;
+}
+
+/* رسم مخطّط البطل: يُرسم من اليمين ثم تنبض معه الكلمة */
+@keyframes ecg-draw {
+  from {
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.ecg-draw {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: ecg-draw 1.1s var(--ease-monitor) forwards;
+}
+
+/*
+ * ══════════════════ الوردمارك ══════════════════
+ * المخطّط هو سطر الكتابة: يدخل من اليمين عند سطر الحروف، تقطعه الحروف
+ * لأنها مرسومة فوقه بحدّ من لون الخلفية، وقمّة R وحدها تنهض فوقها.
+ */
+.word {
   position: relative;
+  display: inline-block;
+  line-height: 1;
+  isolation: isolate;
 }
-.gold-card::after {
+.word-txt {
+  position: relative;
+  z-index: 2;
+  display: block;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  paint-order: stroke fill;
+  -webkit-text-stroke: 0.075em var(--cut-bg);
+}
+.word-sig {
+  position: absolute;
+  z-index: 1;
+  left: -6%;
+  width: 112%;
+  bottom: -0.08em;
+  height: 1.3em;
+  overflow: visible;
+}
+.word-sig path {
+  fill: none;
+  stroke: var(--color-signal);
+  stroke-width: 3.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/*
+ * ══════════════════ بطاقات الإجابة ══════════════════
+ * سطح واحد لا يتغيّر، وحدّ ملوّن باهت ثابت بالموقع: الأول سماوي والثاني
+ * نيلي والثالث فيروزي والرابع توتي. الألوان للموقع لا للمعنى،
+ * ولذلك بقيت باهتة كي لا تُقرأ كحالة.
+ */
+.opt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  text-align: start;
+  border-radius: var(--radius-card);
+  /* السطح طبيعيّ كبقية البطاقات — اللون في الحدّ وحده */
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--opt) 60%, transparent);
+  transition:
+    background-color var(--t-tap) var(--ease-monitor),
+    box-shadow var(--t-tap) var(--ease-monitor),
+    transform var(--t-tap) var(--ease-monitor);
+}
+.opt:active:not(:disabled) {
+  transform: scale(0.975);
+}
+.opt-on {
+  background: color-mix(in srgb, var(--opt) 14%, var(--color-surface));
+  box-shadow: inset 0 0 0 2px var(--opt);
+}
+.opt:disabled {
+  cursor: not-allowed;
+}
+
+/*
+ * ══════════════ كشف الصواب ══════════════
+ * الخطأ لحظةُ تعلّمٍ لا لحظةُ عقابٍ وحدها. فتُجمَّد البطاقات أقل من ثانية:
+ * يُضيء الصواب بحدٍّ أخضر ويهتزّ هزّةً قصيرة تشدّ العين إليه، وتعبره
+ * نبضةٌ خضراء بالقناع نفسه — فالتصحيح يأتي بلغة اللعبة لا بلغةٍ غريبة
+ * عنها. ويخفت ما عداه فلا يُزاحم ما يجب أن يُحفظ.
+ *
+ * ترتيب القواعد بعد .opt متعمّد: هي وإياها في درجة واحدة من التخصيص،
+ * فالسبق للمتأخّر — ولا حاجة إلى important.
+ */
+.opt-right {
+  /*
+   * فوق وميض الخطأ الأحمر (z-20): الحمرة تغمر الشاشة أربعمئة جزءٍ من
+   * الثانية، ولو نفذت على البطاقة الصحيحة لخرج أخضرها زيتونياً باهتاً —
+   * وهي وحدها ما جاء الكشف لأجله، فلتُرَ نقيّة.
+   */
+  z-index: 30;
+  background: color-mix(in srgb, var(--color-safe) 16%, var(--color-surface));
+  box-shadow:
+    inset 0 0 0 2.5px var(--color-safe),
+    0 0 30px -6px var(--color-safe);
+  animation: right-nudge 0.42s var(--ease-monitor) 2;
+}
+@keyframes right-nudge {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  22% {
+    transform: translateY(-4px) rotate(-1.4deg);
+  }
+  55% {
+    transform: translateY(0) rotate(1.4deg);
+  }
+  78% {
+    transform: translateY(-2px) rotate(-0.6deg);
+  }
+}
+
+/* نبضة تعبر البطاقة الصحيحة من اليمين ثم تخبو */
+.opt-right::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  height: 52px;
+  margin-top: -26px;
+  pointer-events: none;
+  background: var(--color-safe);
+  -webkit-mask-image: url('/trace.svg');
+  mask-image: url('/trace.svg');
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+  -webkit-mask-size: 110px 100%;
+  mask-size: 110px 100%;
+  -webkit-mask-position: right center;
+  mask-position: right center;
+  animation: right-sweep 0.85s cubic-bezier(0.3, 0, 0.2, 1) both;
+}
+@keyframes right-sweep {
+  0% {
+    clip-path: inset(0 0 0 100%);
+    opacity: 0.75;
+  }
+  55% {
+    clip-path: inset(0 0 0 0);
+    opacity: 0.75;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 0;
+  }
+}
+
+/* ما اختاره اللاعب وكان خطأ: ينكمش ويحمرّ حدّه */
+.opt-wrong {
+  background: color-mix(in srgb, var(--color-danger) 12%, var(--color-surface));
+  box-shadow: inset 0 0 0 2px var(--color-danger);
+  animation: wrong-shrink 0.4s var(--ease-monitor) forwards;
+}
+@keyframes wrong-shrink {
+  from {
+    transform: scale(1);
+  }
+  to {
+    transform: scale(0.955);
+    opacity: 0.7;
+  }
+}
+
+/* ما لم يُختَر ولم يكن صواباً: يتنحّى */
+.opt-mute {
+  opacity: 0.34;
+}
+
+/*
+ * ══════════════════ أشرطة النتائج ══════════════════
+ * نتيجة الجولة تُقرأ من آخر القاعة بطول الشريط قبل أن تُقرأ برقمه.
+ * كل صفّ شريطٌ واحد: مجراه بعرض الشاشة، وحشوته بقدر نصيبه من أعلى نقاط
+ * الجولة، والاسم والرقم راكبان فوقه. والنموّ بـclip-path لا بعرض متغيّر،
+ * فلا يتمدّد القناع ولا يُعاد التخطيط.
+ */
+.bar {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-line);
+}
+/*
+ * الطول محفورٌ في العنصر نفسه، والحركة تأتي منه لا إليه: backwards تُطبّق
+ * لقطة البداية أثناء التأخير فقط. ولو لم تُشغَّل الحركة أصلاً — تبويبٌ
+ * مخفيّ، أو تقليلُ حركة — بقي الشريط على طوله الصحيح بدل أن يفرغ.
+ */
+.bar-fill {
+  position: absolute;
+  inset: 0;
+  clip-path: inset(0 0 0 var(--cut));
+  background: color-mix(in srgb, var(--bar) 22%, transparent);
+  border-inline-start: 3px solid var(--bar);
+  animation: bar-grow 0.72s var(--ease-monitor) backwards;
+}
+/* نبضات خافتة داخل الحشوة: الشريط من عالم المخطّط لا من عالم الجداول */
+.bar-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bar);
+  opacity: 0.34;
+  -webkit-mask-image: url('/trace.svg');
+  mask-image: url('/trace.svg');
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+  -webkit-mask-size: 116px 100%;
+  mask-size: 116px 100%;
+  -webkit-mask-position: right center;
+  mask-position: right center;
+}
+@keyframes bar-grow {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+}
+
+/*
+ * ══════════════════ الجليد ══════════════════
+ * التجميد لا يُقال بكلمة فقط: الزجاج يضبب، ويزحف الصقيع من الأركان
+ * بلورةً بلورة، ويتنفّس الضوء البارد فوقه.
+ */
+.frost {
+  background:
+    radial-gradient(
+      72% 55% at 50% 0%,
+      color-mix(in srgb, var(--color-frost) 34%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      58% 44% at 6% 100%,
+      color-mix(in srgb, var(--color-frost) 26%, transparent),
+      transparent 72%
+    ),
+    radial-gradient(
+      58% 44% at 94% 100%,
+      color-mix(in srgb, var(--color-frost) 22%, transparent),
+      transparent 72%
+    );
+  animation: frost-breathe 4.5s ease-in-out infinite;
+}
+@keyframes frost-breathe {
+  0%,
+  100% {
+    opacity: 0.78;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+/* البلورات تُرسم زحفاً من الركن إلى الداخل */
+/* pathLength=100 على المسار يجعل الطول موحّداً مهما تعقّدت الورقة */
+.frost-draw {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: frost-grow 1.1s var(--ease-monitor) forwards;
+}
+@keyframes frost-grow {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/*
+ * صفٌّ مجمّد: الزرقة على سطح الصفّ نفسه لا على المخطّط — فالمخطّط يحمل
+ * قراءةَ الوقت ولا يصحّ أن يكذب. وفوقه خطوطُ صقيعٍ مائلة كزجاجٍ تجمّد.
+ */
+.frosted {
+  position: relative;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-frost) 15%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-frost) 48%, transparent);
+}
+/*
+ * نسيج الصقيع: طبقتان من شُعيرات مائلة متقاطعة — كالإبر التي تنمو على
+ * الزجاج — تكثّفهما هالةٌ عند الحافّة وتخفّ نحو الوسط، كما يزحف الجليد
+ * من الإطار إلى القلب. القيم صغيرة عمداً: الصفّ يُقرأ أولاً، والصقيع
+ * يُحسّ ولا يُزاحم.
+ */
+.frosted::after {
   content: '';
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: linear-gradient(
+  border-radius: inherit;
+  opacity: 0.85;
+  background:
+    repeating-linear-gradient(
+      118deg,
+      color-mix(in srgb, var(--color-frost) 34%, transparent) 0 1px,
+      transparent 1px 6px
+    ),
+    repeating-linear-gradient(
+      62deg,
+      color-mix(in srgb, var(--color-frost) 26%, transparent) 0 1px,
+      transparent 1px 9px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-frost) 14%, transparent) 0 1px,
+      transparent 1px 14px
+    );
+  -webkit-mask-image: radial-gradient(120% 150% at 50% 50%, transparent 8%, #000 78%);
+  mask-image: radial-gradient(120% 150% at 50% 50%, transparent 8%, #000 78%);
+}
+
+/*
+ * صفٌّ مضاعَف: ذهبٌ باهت على السطح — يُقرأ من القاعة أنه مضاعِف نقاطه
+ * هذه الجولة، ولا يُخلط بالإشارة ولا بالحالات الثلاث.
+ */
+.gilded {
+  position: relative;
+  border-radius: var(--radius-card);
+  background: color-mix(in srgb, var(--color-gold) 12%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-gold) 46%, transparent);
+}
+.gilded::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
     100deg,
-    transparent 42%,
-    rgba(255, 183, 3, 0.22) 50%,
-    transparent 58%
+    transparent 30%,
+    color-mix(in srgb, var(--color-gold) 16%, transparent) 50%,
+    transparent 70%
   );
-  background-size: 220% 100%;
-  animation: gold-sweep 2.8s ease-in-out infinite;
 }
 
-/* التاج يطفو فوق المتصدر */
-@keyframes crown-bob {
-  0%, 100% { transform: translateY(0) rotate(-6deg); }
-  50% { transform: translateY(-4px) rotate(6deg); }
+/* علامة الإيقاف: حلقة تتنفّس ببطء — لا شيء يجري الآن */
+@keyframes halo {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.14);
+    opacity: 0;
+  }
 }
-.crown-bob { animation: crown-bob 1.6s ease-in-out infinite; }
+.halo::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 2px var(--color-signal);
+  animation: halo 2.6s ease-out infinite;
+}
 
-/* توهج خفيف خلف بطل الصفحة الرئيسية */
-@keyframes drift {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(3%, -4%) scale(1.08); }
+/* زرّ الفعل الخطر: يحتاج ضغطاً مستمراً، ويملأ نفسه أثناءه */
+/* يمتلئ من جهة البداية بـtransform لا بعرض متغيّر */
+.hold-fill {
+  position: absolute;
+  inset: 0;
+  transform: scaleX(var(--held, 0));
+  transform-origin: right center;
+  background: color-mix(in srgb, var(--color-danger) 26%, transparent);
 }
-.drift { animation: drift 14s ease-in-out infinite; }
+
+/*
+ * ══════════════════ لوحة المالك ══════════════════
+ *
+ * ثلاث نطاقاتٍ رأسية: رفٌّ داكن للأبواب، ولوحٌ فاتح للصفحات والتصفية،
+ * ثم المحتوى على أرضيةٍ أغمق قليلاً من البلاطات ليطفو الأبيض فوقها.
+ */
+
+/*
+ * الرفّ مصبوغٌ بحبر الإشارة نفسه: هو من عائلة اللون لا لونٌ ثالث. وألوانه
+ * صريحة لا رمزية — الرموز كلها تصف سطحاً فاتحاً، والرفّ سطحٌ مصبوغ داخل
+ * صفحةٍ فاتحة، فلو ورثها لقرأ الحبرَ الداكن على الداكن.
+ */
+.rail {
+  background: #0e7490;
+}
+.rail-item {
+  color: rgb(255 255 255 / 0.65);
+  transition:
+    color var(--t-tap),
+    background-color var(--t-tap);
+}
+.rail-item:hover {
+  color: #fff;
+  background: rgb(255 255 255 / 0.12);
+}
+.rail-item[data-on='true'] {
+  color: #fff;
+  background: rgb(255 255 255 / 0.22);
+}
+.rail-item:focus-visible {
+  outline-color: #fff;
+}
+
+/*
+ * شاهدُ الباب المختار: خيطٌ أبيض على حافّة الرفّ الخارجية ينزلق بين
+ * الأيقونات — لا لونٌ يُطفأ ويُشعل. فالعين تتبع الحركة فتعرف أين كانت
+ * وأين صارت، والتبديلُ الفوريّ يقطع هذا الخيط فيبدو كأن شيئاً آخر أُضيء.
+ */
+.rail-mark {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 69px;
+  width: 3px;
+  height: 22px;
+  border-radius: 3px;
+  background: #fff;
+  transition: transform 0.22s cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* صفُّ الشريط الجانبيّ: المختار بغسلة الإشارة وحبرها، بلا حدٍّ ولا شاهد */
+.side-row {
+  transition: background-color var(--t-tap);
+}
+.side-row:hover {
+  background: var(--color-sunk);
+}
+.side-row[data-on='true'] {
+  background: var(--color-signal-2);
+}
+
+/* ألفُ صفٍّ في صفحة: ما خرج من الشاشة لا يُخطَّط ولا يُرسم */
+.row-cv {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
+}
+
+/* نافذةٌ في وسط الشاشة، وما خلفها يُعتم فيخرج من التركيز */
+@keyframes veil-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.modal-veil {
+  animation: veil-in 0.16s linear both;
+}
+.modal-card {
+  animation: modal-in var(--t-state) var(--ease-monitor) both;
+}
+
+/*
+ * ══════════════ شريط التمرير الطافي ══════════════
+ *
+ * شريطُ المتصفّح يقتطع من عرض الصفحة سبعةَ عشر بكسلاً ويرسمها رمادياً،
+ * فيدخل في التخطيط ويظهر ولو لم يُحتَج إليه. فيُخفى ويُرسم مكانه خيطٌ
+ * يطفو فوق المحتوى في حافّة الشاشة اليسرى: لا يأخذ عرضاً، ولا يُرى إلا
+ * حين تُمرّر أو تقترب منه.
+ *
+ * والمقاسُ يُحسب في JS لا في CSS — فالنسبة بين ما يُرى وما لا يُرى لا
+ * تُعرف إلا من scrollHeight.
+ */
+.no-bar {
+  scrollbar-width: none;
+}
+.no-bar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.scroll-thumb {
+  position: absolute;
+  left: 3px;
+  width: 6px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--color-ink) 20%, transparent);
+  transition:
+    opacity 0.25s ease,
+    background-color 0.18s ease;
+  cursor: grab;
+}
+.scroll-thumb:hover,
+.scroll-thumb[data-held='true'] {
+  background: color-mix(in srgb, var(--color-signal) 75%, transparent);
+}
+.scroll-thumb[data-held='true'] {
+  cursor: grabbing;
+}
+
+/* من احترم تقليل الحركة رأى الحالة باللون والرقم، بلا جريان */
+@media (prefers-reduced-motion: reduce) {
+  .lane-drift,
+  .alarm,
+  .alarm-channel,
+  .beat,
+  .blink,
+  .rise-in,
+  .thump,
+  .float-up,
+  .rise-bar,
+  .right-nudge,
+  .opt-right,
+  .opt-right::after,
+  .opt-wrong,
+  .curtain-half,
+  .curtain-drop,
+  .curtain-flash,
+  .curtain-cut-wave,
+  .curtain-cut-head,
+  .veil-out,
+  .bar-fill,
+  .frost,
+  .frost-draw,
+  .halo::before,
+  .modal-veil,
+  .modal-card,
+  .ecg-draw {
+    animation: none !important;
+  }
+  .rail-mark {
+    transition: none;
+  }
+  .rise-in,
+  .thump {
+    opacity: 1;
+  }
+  .ecg-draw,
+  .frost-draw {
+    stroke-dashoffset: 0;
+  }
+  /* الستارة بلا انزلاق: تظهر وتختفي، ولا نبضةَ قصّ */
+  .curtain-cut {
+    display: none;
+  }
+  .curtain-set-out {
+    opacity: 0;
+    transition: opacity 0.2s linear;
+  }
+}

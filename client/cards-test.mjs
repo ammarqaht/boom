@@ -3,11 +3,11 @@ import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 
 const gamePath = join(process.cwd(), '..', 'server', 'game.js');
-const { createRoom, CARDS } = await import(pathToFileURL(gamePath).href);
+const { createRoom, CARDS, CARD_LIMIT } = await import(pathToFileURL(gamePath).href);
 
 const check = (label, ok) => console.log(`${ok ? '✅' : '❌'} ${label}`);
 
-const room = createRoom(['general']);
+const room = createRoom(['quran']);
 const a = room.addTeam('النسور');
 const b = room.addTeam('الصقور');
 const c = room.addTeam('الأسود');
@@ -24,8 +24,9 @@ function playRoundEndingWith(loser, times = []) {
   return now;
 }
 
-check('الأسعار: وقت 2 · تجميد 3 · مضاعفة 4',
-  CARDS.time.price === 2 && CARDS.freeze.price === 3 && CARDS.double.price === 4);
+check('الأسعار: وقت 10 · تجميد 14 · مضاعفة 20',
+  CARDS.time.price === 10 && CARDS.freeze.price === 14 && CARDS.double.price === 20);
+check('حدّ البطاقة مرّتان', CARD_LIMIT === 2);
 check('لا شراء في اللوبي', room.buyCard(a.id, 'time').ok === false);
 
 // الجولة الأولى: الأسود يخسر
@@ -36,29 +37,49 @@ console.log('   نقاط الجولة 1:', room.result.awards.map((x) => `${x.na
 const aPoints = a.score;
 check('النسور كسب نقاطاً', aPoints > 0);
 
+// نقطةٌ عن كل إجابة صحيحة، تُصرف عند انتهاء الجولة لا قبله
+a.score = 0;
+room.start();
+let mid = room.countdownEndsAt;
+room.tick(mid); // إلى running
+a.correct = 4; // كأنه أصاب أربعاً
+const during = a.score;
+a.timeMs = 25000;
+b.timeMs = 15000;
+c.timeMs = 0;
+mid += 100;
+room.tick(mid);
+check('الإجابات الصحيحة لم تُضف أثناء الجولة', during === 0);
+check('نقطةٌ لكل إجابة صحيحة تُضاف بعد الجولة', a.score >= 4);
+
 // شراء وقت إضافي
-check('شراء وقت إضافي', room.buyCard(a.id, 'time').ok && a.score === aPoints - 2);
-check('تسجيل استخدام البطاقة', a.usedCards.has('time'));
-check('لا يُعاد شراء نفس البطاقة', room.buyCard(a.id, 'time').ok === false);
+a.score = 20;
+const aBefore = a.score;
+check('شراء وقت إضافي', room.buyCard(a.id, 'time').ok && a.score === aBefore - CARDS.time.price);
+check('تسجيل استخدام البطاقة', a.cardUses.get('time') === 1);
+check('تُشترى مرة ثانية', room.buyCard(a.id, 'time').ok === true);
+check('لا ثالثة بعد الحدّ', room.buyCard(a.id, 'time').ok === false);
+c.score = 1;
 check('رفض الشراء لعدم كفاية النقاط', room.buyCard(c.id, 'double').ok === false);
 
 // تجميد ومضاعفة
-a.score = 10; // رصيد كافٍ لبقية المشتريات
+a.score = 40; // رصيد كافٍ لبقية المشتريات
 check('شراء تجميد على خصم', room.buyCard(a.id, 'freeze', b.id).ok && b.pendingFreezeBy === 'النسور');
 check('لا تجميد للنفس', room.buyCard(b.id, 'freeze', b.id).ok === false);
-b.score = 10;
-check('شراء مضاعفة', room.buyCard(b.id, 'double').ok && b.pendingMultiplier === 3);
+b.score = 40;
+check('شراء مضاعفة', room.buyCard(b.id, 'double').ok && b.pendingMultiplier === 2);
 
 // متجر الفريق يعكس الحالة
 const shopA = room.teamState(a.id).shop;
 check('المتجر مفتوح بين الجولات', shopA.open === true);
-check('المتجر يعلّم الوقت مستخدماً', shopA.cards.find((x) => x.id === 'time').used === true);
+check('المتجر يعلّم الوقت مستنفَداً', shopA.cards.find((x) => x.id === 'time').used === true);
+check('المتجر يعرض المتبقي', shopA.cards.find((x) => x.id === 'freeze').left === CARD_LIMIT - 1);
 check('المتجر يعرض الخصوم للتجميد', shopA.rivals.length === 2);
 
 // الجولة الثانية: تطبيق الآثار عند البدء
 const base = room.settings.startSeconds * 1000;
 room.start();
-check('وقت النسور +5 ثوانٍ عند البدء', a.timeMs === base + 5000);
+check('وقت النسور +10 ثوانٍ عند البدء (بطاقتان)', a.timeMs === base + 10000);
 check('الصقور مقفلة 5 ثوانٍ (تجميد)', b.lockedMs === 5000 && b.frozenBy === 'النسور');
 check('استُهلك وقت النسور المؤجّل', a.pendingBonusMs === 0);
 
@@ -78,9 +99,25 @@ c.timeMs = 0;
 now += 100;
 room.tick(now);
 const bAward = room.result.awards.find((x) => x.teamId === b.id);
-check('نقاط الصقور تضاعفت ×3', bAward.doubled === true && bAward.points % 3 === 0);
-console.log('   نتائج الجولة 2:', room.result.awards.map((x) => `${x.name}:${x.points}${x.doubled ? '(×3)' : ''}`).join(' · '));
+check('نقاط الصقور تضاعفت ×2', bAward.doubled === true && bAward.points % 2 === 0);
+console.log('   نتائج الجولة 2:', room.result.awards.map((x) => `${x.name}:${x.points}${x.doubled ? '(×2)' : ''}`).join(' · '));
 check('استُهلك المضاعِف', b.pendingMultiplier === 1);
+
+// المضاعفة تسقط عمّن سكن نبضه
+c.score = 0;
+c.pendingMultiplier = 2;
+room.start();
+let t3 = room.countdownEndsAt;
+room.tick(t3);
+c.correct = 3;
+a.timeMs = 30000;
+b.timeMs = 20000;
+c.timeMs = 0;
+t3 += 100;
+room.tick(t3);
+const cAward = room.result.awards.find((x) => x.teamId === c.id);
+check('المتوقّف يأخذ نقاط إجاباته', cAward.points === 3);
+check('المضاعفة تسقط عن المتوقّف', cAward.doubled === false);
 
 // الحالة العامة تعكس التجميد والمضاعفة للشاشات
 b.pendingMultiplier = 3;
@@ -93,14 +130,14 @@ b.pendingMultiplier = 1;
 b.lockedMs = 0;
 
 // فتح البطاقات من جديد — الشراء يصير متاحاً مرة أخرى
-check('البطاقات مستخدمة قبل الفتح', a.usedCards.size > 0);
+check('البطاقات مستخدمة قبل الفتح', a.cardUses.size > 0);
 room.reopenCards();
-check('فتح البطاقات أفرغ المستخدَم', [...room.teams.values()].every((t) => t.usedCards.size === 0));
-a.score = 5;
+check('فتح البطاقات أفرغ المستخدَم', [...room.teams.values()].every((t) => t.cardUses.size === 0));
+a.score = 20;
 check('يمكن الشراء بعد الفتح', room.buyCard(a.id, 'time').ok === true);
 
 // إعادة اللعبة تُعيد البطاقات
 room.resetAll();
-check('إعادة اللعبة تُتيح البطاقات', a.usedCards.size === 0 && b.pendingMultiplier === 1);
+check('إعادة اللعبة تُتيح البطاقات', a.cardUses.size === 0 && b.pendingMultiplier === 1);
 
 process.exit(0);

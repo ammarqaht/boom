@@ -1,10 +1,4 @@
-export type RoomStatus =
-  | 'lobby'
-  | 'countdown'
-  | 'running'
-  | 'paused'
-  | 'ended'
-  | 'finished';
+export type RoomStatus = 'lobby' | 'countdown' | 'running' | 'paused' | 'ended' | 'finished';
 
 /** الترتيب النهائي بعد إنهاء اللعبة */
 export interface Standing {
@@ -26,7 +20,7 @@ export interface PublicTeam {
   name: string;
   timeMs: number;
   score: number;
-  exploded: boolean;
+  flatlined: boolean;
   connected: boolean;
   answered: number;
   correct: number;
@@ -43,7 +37,9 @@ export interface Award {
   name: string;
   points: number;
   timeMs: number;
-  exploded?: boolean;
+  flatlined?: boolean;
+  /** كم من نقاطه جاء من الإجابات الصحيحة */
+  correct?: number;
   /** صاحب أعلى وقت في الجولة */
   top?: boolean;
   /** ضوعِفت نقاطه ببطاقة المضاعفة */
@@ -52,12 +48,15 @@ export interface Award {
 
 export type CardId = 'time' | 'freeze' | 'double';
 
-/** بطاقة في متجر الفريق */
+/** بطاقة في متجر اللاعب */
 export interface ShopCard {
   id: CardId;
   name: string;
   price: number;
+  /** استُنفدت مرّاتها كلها */
   used: boolean;
+  /** كم مرة بقيت منها */
+  left: number;
   affordable: boolean;
 }
 
@@ -73,11 +72,31 @@ export interface RoomResult {
   awards: Award[];
 }
 
+/**
+ * سطرٌ في سجلّ أسئلة الغرفة — للمنظّم وحده.
+ * يحمل موضع الإجابة الصحيحة، فلا يصل قناة اللاعبين أبداً.
+ */
+export interface FeedItem {
+  id: string;
+  q: string;
+  options: string[];
+  answer: number;
+  level: number;
+  shown: number;
+  right: number;
+  wrong: number;
+  reported: boolean;
+}
+
 export interface RoomState {
   code: string;
+  /** ما كتبه المنظّم: النشاط أو النادي — به تُعرف الغرفة في السجلّ */
+  name: string;
   status: RoomStatus;
   round: number;
   bankIds: string[];
+  /** مستوى الأسئلة: primary | middle | secondary | university */
+  difficulty: string;
   settings: Settings;
   result: RoomResult | null;
   history: RoomResult[];
@@ -87,7 +106,7 @@ export interface RoomState {
   teams: PublicTeam[];
 }
 
-/** سؤال بعد انتهاء الجولة — يحمل الإجابة الصحيحة واختيار الفريق */
+/** سؤال بعد انتهاء الجولة — يحمل الإجابة الصحيحة واختيار اللاعب */
 export interface ReviewItem {
   id: string;
   q: string;
@@ -109,7 +128,7 @@ export interface TeamState {
   name: string;
   timeMs: number;
   score: number;
-  exploded: boolean;
+  flatlined: boolean;
   lastResult: 'correct' | 'wrong' | null;
   status: RoomStatus;
   round: number;
@@ -118,6 +137,7 @@ export interface TeamState {
   countdownMs: number;
   standings: Standing[] | null;
   answered: number;
+  correct: number;
   roundPoints: number | null;
   question: Question | null;
   review: ReviewItem[] | null;

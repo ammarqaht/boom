@@ -2,3 +2,13 @@ node_modules/
 client/dist/
 *.log
 .DS_Store
+
+# ذاكرة النبضة — قاعدة محليّة، لا تدخل المستودع
+server/nabda.db
+server/nabda.db-wal
+server/nabda.db-shm
+
+server/banks/.backup/
+
+# أسرارٌ محليّة — المفاتيح لا تدخل المستودع
+.env
