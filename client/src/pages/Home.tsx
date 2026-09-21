@@ -82,7 +82,7 @@ export default function Home() {
                 } as React.CSSProperties
               }
             />
-            <Wordmark className="relative z-10 text-6xl sm:text-8xl" />
+            <Wordmark className="word-beat relative z-10 text-6xl sm:text-8xl" />
           </div>
 
           <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
