@@ -852,6 +852,502 @@ textarea {
 }
 
 /*
+ * ══════════════════ صفحة التعريف ══════════════════
+ *
+ * قاعدتها: لا تشرح اللعبة، العبها. وكل ما دونه هنا خادمٌ لذلك —
+ * بابُ دخولٍ في أول شاشة، وأربعة عروضٍ حيّة، وأدوارٌ يُقدَّم فيها
+ * اللاعب لأن الجوال جيبُه لا جيبُ المنظّم.
+ */
+
+/*
+ * البطل يملأ الشاشة — بـdvh لا vh.
+ *
+ * وvh على الجوال يقيس الشاشة وشريطُ المتصفّح فوقها، فيقع حقل الرمز
+ * تحت الطيّة في اللحظة الأولى من الفتح — وهي اللحظة التي جاء لها.
+ * وطرحُ ٥rem لأن النافبار فوقه: البطل والنافبار شاشةٌ واحدة.
+ */
+.hero {
+  position: relative;
+  display: flex;
+  min-height: calc(100dvh - 5rem);
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.75rem;
+  padding-block: 2rem;
+  /* قصّةُ الآيفون وشريط الهوم: الزرّ لا يُدفن تحتهما */
+  padding-bottom: max(2.5rem, env(safe-area-inset-bottom));
+}
+.hero-line {
+  margin-inline: auto;
+  max-width: 20ch;
+  text-align: center;
+  font-size: clamp(1.75rem, 7vw, 2.75rem);
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+/*
+ * بابُ الدخول.
+ *
+ * ولماذا الرمز هنا لا خلف نقلة؟ لأن الذي يفتح الرئيسية على جواله
+ * جاء ليدخل غرفة، وكل شاشةٍ بينه وبين الدخول ضريبةٌ بلا مقابل.
+ */
+.gate {
+  display: flex;
+  width: 100%;
+  max-width: 30rem;
+  margin-inline: auto;
+  gap: 0.625rem;
+}
+/* ٤rem ارتفاعاً: البريف يفرض ≥٦٤px لما يُضغط بالإبهام في عجلة */
+.gate-code {
+  height: 4rem;
+  min-width: 0;
+  flex: 1;
+  border-radius: var(--radius-chip);
+  background: var(--color-sunk);
+  box-shadow: inset 0 0 0 1px var(--color-line-2);
+  color: var(--color-ink);
+  font-size: 1.375rem;
+  font-weight: 900;
+  letter-spacing: 0.4em;
+  /* التباعد يُضاف بعد آخر محرف فيزيح النصّ يساراً — والإزاحة تردّه */
+  text-indent: 0.4em;
+  text-align: center;
+  outline: none;
+  transition: box-shadow 0.18s ease;
+}
+.gate-code::placeholder {
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-indent: 0;
+  color: var(--color-faint);
+}
+.gate-code:focus {
+  box-shadow:
+    inset 0 0 0 2px var(--color-signal),
+    0 0 28px -8px var(--color-signal);
+}
+.gate-go {
+  height: 4rem;
+  padding-inline: 1.75rem;
+  border-radius: var(--radius-chip);
+  background: var(--color-action);
+  color: var(--color-on-action);
+  font-size: 1.0625rem;
+  font-weight: 900;
+  transition:
+    filter 0.15s ease,
+    opacity 0.15s ease,
+    transform 0.12s ease;
+}
+.gate-go:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.gate-go:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.gate-note {
+  margin-inline: auto;
+  max-width: 34ch;
+  text-align: center;
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: var(--color-muted);
+}
+
+/*
+ * دعوةُ التمرير.
+ *
+ * كل ما يشرح اللعبة تحت الطيّة، والبطل يملأ الشاشة فلا يُرى تحته شيء
+ * يوحي بأن ثمّ شيئاً. فنبضةٌ تسقط في سكّة: حركةٌ صغيرة إلى أسفل تقول
+ * «هنا مزيد» بلا سهمٍ ولا كلمة «اسحب».
+ */
+.hero-cue {
+  position: absolute;
+  inset-inline: 0;
+  bottom: max(0.5rem, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  color: var(--color-faint);
+}
+.hero-cue-rail {
+  position: relative;
+  height: 2.25rem;
+  width: 1px;
+  overflow: hidden;
+  background: var(--color-line-2);
+}
+.hero-cue-dot {
+  position: absolute;
+  inset-inline: 0;
+  height: 0.875rem;
+  background: var(--color-signal);
+  animation: cue-fall 2s ease-in-out infinite;
+}
+@keyframes cue-fall {
+  0% {
+    opacity: 0;
+    transform: translateY(-0.875rem);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(2.25rem);
+  }
+}
+
+/*
+ * الكشف عند التمرير.
+ *
+ * transform وopacity وحدهما — فلا تخطيط ولا طلاء، وتبقى الصفحة عند
+ * ستّين إطاراً وهي تُمرَّر بالإبهام.
+ */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: var(--d, 0ms);
+}
+.reveal.is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* ── القاعدة الواحدة: عرضٌ حيّ وكلامٌ يعلّق عليه ── */
+.rule {
+  display: grid;
+  align-items: center;
+  gap: 1.75rem;
+  border-bottom: 1px solid var(--color-line);
+  padding-block: 3.5rem;
+}
+@media (min-width: 1024px) {
+  .rule {
+    grid-template-columns: 1fr 1fr;
+    gap: 4rem;
+    padding-block: 5rem;
+  }
+}
+.rule-n {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  color: var(--color-signal);
+}
+.rule-title {
+  margin-top: 0.5rem;
+  font-size: clamp(1.5rem, 5.5vw, 2rem);
+  font-weight: 900;
+  line-height: 1.3;
+}
+.rule-desc {
+  margin-top: 0.75rem;
+  max-width: 42ch;
+  line-height: 1.85;
+  color: var(--color-muted);
+}
+
+/* ── سطح العرض: لوحُ جهازٍ يعمل، لا بطاقةُ زينة ── */
+.scene {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: 1.25rem;
+}
+.scene-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.scene-readout {
+  font-size: clamp(2rem, 9vw, 2.75rem);
+  font-weight: 900;
+  line-height: 1;
+  color: var(--color-signal);
+}
+.scene-tag {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+.scene-name {
+  width: 3.5rem;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-ink-2);
+}
+.scene-mini {
+  width: 2.75rem;
+  flex-shrink: 0;
+  text-align: end;
+  font-size: 0.875rem;
+  font-weight: 900;
+  color: var(--color-ink-2);
+}
+.scene-verdict {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-muted);
+  transition: color 0.3s ease;
+}
+.scene-verdict.is-on {
+  color: var(--color-danger);
+}
+
+/*
+ * الزيادة والنقصان: رقمٌ يطفو من المجرى ثم يذهب.
+ *
+ * ولا يمكث إلا ثانيةً وربعاً: ما زاد على ذلك يصير زينةً تُرى في كل
+ * دورةٍ فتُملّ، والمطلوب أن يُقرأ مرّةً فيُفهم.
+ */
+.scene-jolt {
+  position: absolute;
+  inset-inline-start: 0.875rem;
+  top: 50%;
+  font-size: 1.25rem;
+  font-weight: 900;
+  animation: jolt 1.25s ease-out forwards;
+}
+.scene-jolt.is-up {
+  --dir: -1.75rem;
+  color: var(--color-safe);
+}
+.scene-jolt.is-down {
+  --dir: 1.75rem;
+  color: var(--color-danger);
+}
+@keyframes jolt {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  22% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(var(--dir));
+  }
+}
+
+/*
+ * صفوف الترتيب: الخطوة الأولى بترتيب القاعة، ثم تنتقل إلى ترتيب
+ * النتيجة. والانتقال بـtransform لا بإعادة ترتيب العقد — فالعين
+ * تتبع الصفّ وهو يصعد، ولو أُعيد بناء القائمة لوجدته مكانه فجأة.
+ */
+.rank-box {
+  --row: 3.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.rank-row {
+  display: flex;
+  height: 2.75rem;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--radius-chip);
+  background: var(--color-surface-2);
+  padding-inline: 0.875rem;
+  transition:
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.4s ease;
+  will-change: transform;
+}
+.rank-row.is-top {
+  box-shadow: inset 0 0 0 1px var(--color-signal);
+}
+.rank-pos {
+  width: 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 900;
+  color: var(--color-faint);
+}
+.rank-row.is-top .rank-pos {
+  color: var(--color-signal);
+}
+.rank-name {
+  flex: 1;
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+.rank-pts {
+  font-size: 1rem;
+  font-weight: 900;
+  color: var(--color-ink-2);
+}
+
+/* ── المكان: اللاعب أوّلاً ── */
+.seat-main {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  overflow: hidden;
+  border: 1px solid var(--color-line-2);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: 1.5rem;
+  transition:
+    background 0.2s ease,
+    transform 0.12s ease;
+}
+.seat-main::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 3px;
+  background: var(--color-signal);
+}
+.seat-main:hover {
+  background: var(--color-surface-2);
+}
+.seat-icon {
+  display: flex;
+  height: 3.25rem;
+  width: 3.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-chip);
+  background: var(--color-signal-2);
+  color: var(--color-signal);
+}
+.seat-aside {
+  margin-block: 2.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--color-faint);
+}
+.seat-side {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-chip);
+  background: var(--color-surface);
+  padding: 1rem;
+  transition:
+    background 0.2s ease,
+    transform 0.12s ease;
+}
+.seat-side:hover {
+  background: var(--color-surface-2);
+}
+.seat-side-icon {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-chip);
+  background: var(--color-surface-2);
+  color: var(--color-muted);
+}
+
+/*
+ * الافتتاحية: الجهاز يُقلع.
+ *
+ * خطٌّ يُرسم من اليمين — جهة القراءة — ثم ينبض الاسم، ثم تنكشف
+ * الصفحة. وكلّها ١٫٦ث ومرّةً في الجلسة: افتتاحيةٌ تُعاد في كل رجوعٍ
+ * للرئيسية تصير حاجزاً بين اللاعب والرمز الذي جاء يكتبه.
+ */
+.boot {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  background: var(--color-ground);
+  animation: boot-out 1.6s ease forwards;
+  pointer-events: none;
+}
+@keyframes boot-out {
+  0%,
+  64% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+.boot-trace {
+  width: min(72vw, 26rem);
+  height: 3.25rem;
+  background: var(--color-signal);
+  -webkit-mask-image: url('/trace.svg');
+  mask-image: url('/trace.svg');
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+  -webkit-mask-size: 120px 44px;
+  mask-size: 120px 44px;
+  -webkit-mask-position: right center;
+  mask-position: right center;
+  animation: boot-draw 0.85s cubic-bezier(0.3, 0.9, 0.3, 1) both;
+}
+/* الكشف من اليمين: الحدّ الأيسر ينحسر فينكشف ما وراءه */
+@keyframes boot-draw {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.boot-mark {
+  animation: boot-mark 0.6s 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes boot-mark {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/*
+ * الضغطة: رجعٌ فوريّ للإبهام.
+ *
+ * والاهتزاز لا يعمل على iOS، فلا يُبنى عليه شيء: الانكماش البصريّ هو
+ * الرجع، والاهتزاز زيادةٌ لمن ناله. وtouch-action تمنع تأخير الثلاثمئة
+ * مللي الذي ينتظره المتصفّح ليرى أهي نقرةٌ أم تكبير.
+ */
+.tap {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease;
+}
+.tap:active {
+  transform: scale(0.97);
+}
+
+/*
  * ══════════════════ بطاقات الإجابة ══════════════════
  * سطح واحد لا يتغيّر، وحدّ ملوّن باهت ثابت بالموقع: الأول سماوي والثاني
  * نيلي والثالث فيروزي والرابع توتي. الألوان للموقع لا للمعنى،
@@ -1307,6 +1803,11 @@ textarea {
   .alarm-channel,
   .beat,
   .word-beat,
+  .boot,
+  .boot-trace,
+  .boot-mark,
+  .scene-jolt,
+  .hero-cue-dot,
   .blink,
   .rise-in,
   .thump,
