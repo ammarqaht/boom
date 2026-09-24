@@ -149,10 +149,16 @@ function Board({ room }: { room: RoomState }) {
 
   return (
     <div className="flex h-full flex-col px-14">
-      {/* الترويسة على سطحٍ لا على الأرضية: أبيضُ في الفاتح وأسودُ في الغامق */}
-      <header className="-mx-14 flex h-24 shrink-0 items-center justify-between border-b-2 border-line-2 bg-surface px-14">
-        <Wordmark className="text-[40px]" />
-        <div className="flex items-center gap-3 text-[26px]">
+      {/*
+       * الترويسة على سطحٍ لا على الأرضية: أبيضُ في الفاتح وأسودُ في الغامق.
+       *
+       * ومقاسُها أُنزل: كانت ٩٦ ارتفاعاً بعلامةٍ في أربعين وشاراتٍ في ستٍّ
+       * وعشرين، فتأخذ من المجاري — وهي المقصودةُ من الشاشة — عُشرَ الطول.
+       * الترويسةُ تقول أين أنت، والمجاري تقول ما يجري: للثانية الأولوية.
+       */}
+      <header className="-mx-14 flex h-[68px] shrink-0 items-center justify-between border-b-2 border-line-2 bg-surface px-14">
+        <Wordmark className="text-[28px]" />
+        <div className="flex items-center gap-3 text-[19px]">
           <Chip label="الجولة" value={room.round} />
           <Chip label="الغرفة" value={room.code} signal />
         </div>
@@ -195,8 +201,9 @@ function Board({ room }: { room: RoomState }) {
         )}
       </div>
 
-      <footer className="flex h-20 shrink-0 items-center justify-between border-t-2 border-line-2 text-[28px] font-medium text-muted">
-        <div className="flex items-center gap-9">
+      {/* الذيلُ مفتاحُ ألوانٍ يُقرأ مرّةً ثم يُنسى — فلا يُعطى قامةَ المجرى */}
+      <footer className="flex h-[58px] shrink-0 items-center justify-between border-t-2 border-line-2 text-[19px] font-medium text-muted">
+        <div className="flex items-center gap-7">
           <Legend color="var(--color-safe)" label="نبض قوي" />
           <Legend color="var(--color-warn)" label="يضعف" />
           <Legend color="var(--color-danger)" label="على وشك السكون" />

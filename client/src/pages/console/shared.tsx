@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Scrollbar, Select } from '../../components/ui';
+import { AutoTextarea, Scrollbar, Select } from '../../components/ui';
 import { CloseIcon } from '../../components/icons';
 
 /**
@@ -725,11 +725,10 @@ export function QuestionEditor({
           )}
 
           <Label>نصّ السؤال</Label>
-          <textarea
+          <AutoTextarea
             value={draft.q}
             onChange={(event) => setDraft({ ...draft, q: event.target.value })}
-            rows={2}
-            className="mb-5 w-full resize-y rounded-chip bg-surface px-4 py-3 text-[15px] leading-relaxed font-bold shadow-[inset_0_0_0_1px_var(--color-line-2)] outline-none focus:shadow-[inset_0_0_0_1.5px_var(--color-signal)]"
+            className="mb-5 rounded-chip bg-surface px-4 py-3 text-[15px] leading-relaxed font-bold shadow-[inset_0_0_0_1px_var(--color-line-2)] outline-none focus:shadow-[inset_0_0_0_1.5px_var(--color-signal)]"
             autoFocus
           />
 
@@ -825,4 +824,372 @@ export function QuestionEditor({
 
 function Label({ children }: { children: React.ReactNode }) {
   return <span className="mb-2 block text-[12.5px] font-bold text-ink-2">{children}</span>;
+}
+
+/* ══════════════ مدى التواريخ ══════════════ */
+
+export type Range = { from: number; to: number } | null;
+
+const DAY = 24 * 60 * 60 * 1000;
+const startOfDay = (ms: number) => new Date(ms).setHours(0, 0, 0, 0);
+const endOfDay = (ms: number) => new Date(ms).setHours(23, 59, 59, 999);
+const startOfMonth = (ms: number) => {
+  const d = new Date(ms);
+  return new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+};
+
+const WEEKDAYS = ['أحد', 'إثن', 'ثلا', 'أرب', 'خمي', 'جمع', 'سبت'];
+
+const monthName = (ms: number) =>
+  new Date(ms).toLocaleDateString('ar', { month: 'long', year: 'numeric' });
+
+export const PRESETS: { id: string; label: string; days: number | null }[] = [
+  { id: 'm1', label: 'شهر', days: 30 },
+  { id: 'm3', label: '٣ أشهر', days: 90 },
+  { id: 'y1', label: 'سنة', days: 365 },
+  { id: 'all', label: 'الفترة كاملة', days: null },
+];
+
+/**
+ * مدى التواريخ — تقويمٌ واحد لا حقلان.
+ *
+ * الضغطةُ الأولى تضع البداية، والثانية النهاية؛ ومن ضغط ثالثةً بدأ مدًى
+ * جديداً. وحقلان منفصلان يُلزمان المستخدم أن يعرف أيّهما يملأ أولاً، ثم
+ * يتركانه يكتب نهايةً قبل بدايتها. أما التقويم فيُري المدى وهو يُرسم.
+ *
+ * والاختيارات الجاهزة تحته لأن أكثر الطلب «آخر شهر» لا يومٌ بعينه.
+ */
+export function DateRange({
+  value,
+  onPick,
+  preset,
+  onPreset,
+}: {
+  value: Range;
+  onPick: (range: Range) => void;
+  preset: string;
+  onPreset: (id: string) => void;
+}) {
+  const [month, setMonth] = useState(() => startOfMonth(value?.from ?? Date.now()));
+  /* نصفُ مدًى: وُضعت بدايتُه وتُنتظر نهايته */
+  const [anchor, setAnchor] = useState<number | null>(null);
+  /* لوحُ الأشهر: يُفتح بالضغط على اسم الشهر — فالقفزُ سنةً لا يُمشى شهراً شهراً */
+  const [picking, setPicking] = useState(false);
+  const [year, setYear] = useState(() => new Date(month).getFullYear());
+
+  const first = new Date(month);
+  const lead = first.getDay(); // كم خانةً فارغة قبل الأول
+  const days = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  const today = startOfDay(Date.now());
+
+  const pickDay = (ms: number) => {
+    if (anchor === null) {
+      setAnchor(ms);
+      onPick({ from: ms, to: endOfDay(ms) });
+      return;
+    }
+    const from = Math.min(anchor, ms);
+    const to = Math.max(anchor, ms);
+    setAnchor(null);
+    onPick({ from: startOfDay(from), to: endOfDay(to) });
+    onPreset('');
+  };
+
+  const inRange = (ms: number) => value !== null && ms >= value.from && ms <= value.to;
+  const isEdge = (ms: number) =>
+    value !== null && (ms === startOfDay(value.from) || ms === startOfDay(value.to));
+
+  return (
+    <div className="px-1 pt-1">
+      <div className="rounded-card bg-surface p-2 shadow-[inset_0_0_0_1px_var(--color-line)]">
+        {/*
+         * الأسهم رسمٌ لا حرف: «‹» و«›» من المحارف التي يعكسها خوارزم
+         * الاتجاه ثنائيّ الاتجاه في السياق العربي، فتُرسم مقلوبةً عمّا
+         * كُتبت. وSVG لا يعكسه شيء.
+         */}
+        <div className="mb-1.5 flex items-center justify-between gap-1">
+          <button
+            type="button"
+            aria-label="الشهر السابق"
+            onClick={() => setMonth((m) => startOfMonth(m - DAY))}
+            className="flex size-7 shrink-0 items-center justify-center rounded-chip text-faint transition hover:bg-surface-2 hover:text-ink"
+          >
+            <Chevron dir="prev" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setYear(new Date(month).getFullYear());
+              setPicking((v) => !v);
+            }}
+            aria-expanded={picking}
+            className={`min-w-0 flex-1 truncate rounded-chip px-2 py-1 text-[12.5px] font-bold transition ${
+              picking ? 'bg-signal-2 text-signal-ink' : 'text-ink-2 hover:bg-surface-2'
+            }`}
+          >
+            {monthName(month)}
+          </button>
+
+          <button
+            type="button"
+            aria-label="الشهر التالي"
+            disabled={startOfMonth(Date.now()) <= month}
+            onClick={() => setMonth((m) => startOfMonth(m + 32 * DAY))}
+            className="flex size-7 shrink-0 items-center justify-center rounded-chip text-faint transition hover:bg-surface-2 hover:text-ink disabled:opacity-30"
+          >
+            <Chevron dir="next" />
+          </button>
+        </div>
+
+        {picking ? (
+          <MonthPicker
+            year={year}
+            month={month}
+            onYear={setYear}
+            onPick={(ms) => {
+              setMonth(ms);
+              setPicking(false);
+            }}
+          />
+        ) : (
+        <>
+
+        <div className="grid grid-cols-7 gap-px">
+          {WEEKDAYS.map((w) => (
+            <span key={w} className="pb-1 text-center text-[10px] font-bold text-faint">
+              {w}
+            </span>
+          ))}
+          {Array.from({ length: lead }, (_, i) => <span key={`x${i}`} />)}
+          {Array.from({ length: days }, (_, i) => {
+            const ms = new Date(first.getFullYear(), first.getMonth(), i + 1).getTime();
+            const ahead = ms > today;
+            const on = inRange(ms);
+            const edge = isEdge(ms);
+            return (
+              <button
+                key={ms}
+                type="button"
+                disabled={ahead}
+                onClick={() => pickDay(ms)}
+                className={`tnum flex h-7 items-center justify-center rounded-chip text-[11.5px] transition ${
+                  ahead
+                    ? 'text-faint/50'
+                    : edge
+                      ? 'bg-signal-ink font-black text-white'
+                      : on
+                        ? 'bg-signal-2 font-bold text-signal-ink'
+                        : 'font-medium text-ink-2 hover:bg-surface-2'
+                }`}
+              >
+                {i + 1}
+              </button>
+            );
+          })}
+        </div>
+
+        {anchor !== null && (
+          <p className="pt-1.5 text-center text-[10.5px] font-medium text-muted">
+            اختر يوم النهاية
+          </p>
+        )}
+        </>
+        )}
+      </div>
+
+      {/* للاختيارات الجاهزة سطحٌ تقف عليه: بلا خلفيةٍ كانت نصّاً معلّقاً لا أزراراً */}
+      <div className="mt-1.5 grid grid-cols-2 gap-1">
+        {PRESETS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => {
+              setAnchor(null);
+              setPicking(false);
+              onPreset(p.id);
+              onPick(p.days === null ? null : { from: startOfDay(Date.now() - p.days * DAY), to: endOfDay(Date.now()) });
+            }}
+            className={`rounded-chip py-1.5 text-center text-[11.5px] transition ${
+              preset === p.id
+                ? 'bg-signal-ink font-bold text-white'
+                : 'bg-surface font-medium text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] hover:bg-surface-2'
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** سهمٌ مرسوم: لا يعكسه اتجاه الكتابة كما تُعكس محارف الزوايا */
+function Chevron({ dir }: { dir: 'prev' | 'next' }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {/* في العربية يجري الزمن يميناً إلى يسار: فالأقدمُ يمينٌ والأحدثُ يسار */}
+      <path d={dir === 'prev' ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6'} />
+    </svg>
+  );
+}
+
+/**
+ * لوحُ الأشهر — القفزُ بدل المشي.
+ *
+ * من أراد مارس الماضي كان يضغط السهم ستَّ مرّات. وهنا سنةٌ كاملة بين
+ * يديه، وسهمان للسنة، وزرٌّ يردّه إلى شهره الحالي من أيّ مكانٍ بلغه.
+ */
+function MonthPicker({
+  year,
+  month,
+  onYear,
+  onPick,
+}: {
+  year: number;
+  month: number;
+  onYear: (y: number) => void;
+  onPick: (ms: number) => void;
+}) {
+  const now = new Date();
+  const current = new Date(month);
+  const names = Array.from({ length: 12 }, (_, i) =>
+    new Date(2000, i, 1).toLocaleDateString('ar', { month: 'short' }),
+  );
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-1">
+        <button
+          type="button"
+          aria-label="السنة السابقة"
+          onClick={() => onYear(year - 1)}
+          className="flex size-7 shrink-0 items-center justify-center rounded-chip text-faint transition hover:bg-surface-2 hover:text-ink"
+        >
+          <Chevron dir="prev" />
+        </button>
+        <span className="tnum flex-1 text-center text-[12.5px] font-bold text-ink-2">{year}</span>
+        <button
+          type="button"
+          aria-label="السنة التالية"
+          disabled={year >= now.getFullYear()}
+          onClick={() => onYear(year + 1)}
+          className="flex size-7 shrink-0 items-center justify-center rounded-chip text-faint transition hover:bg-surface-2 hover:text-ink disabled:opacity-30"
+        >
+          <Chevron dir="next" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-1">
+        {names.map((label, i) => {
+          const ahead = year > now.getFullYear() || (year === now.getFullYear() && i > now.getMonth());
+          const on = current.getFullYear() === year && current.getMonth() === i;
+          return (
+            <button
+              key={label}
+              type="button"
+              disabled={ahead}
+              onClick={() => onPick(new Date(year, i, 1).getTime())}
+              className={`rounded-chip py-1.5 text-center text-[11.5px] transition ${
+                ahead
+                  ? 'text-faint/50'
+                  : on
+                    ? 'bg-signal-ink font-bold text-white'
+                    : 'font-medium text-ink-2 hover:bg-surface-2'
+              }`}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => onPick(new Date(now.getFullYear(), now.getMonth(), 1).getTime())}
+        className="mt-1.5 w-full rounded-chip py-1.5 text-center text-[11px] font-bold text-signal-ink transition hover:bg-signal-2"
+      >
+        الشهر الحالي
+      </button>
+    </div>
+  );
+}
+
+/* ══════════════ العرضُ على دفعات ══════════════ */
+
+export const PAGE_STEP = 60;
+
+/**
+ * تُرسم دفعةٌ ويُطلب ما بعدها.
+ *
+ * كانت صفحة الأسئلة تبني ألفاً وأربعة وخمسين صفّاً في الشجرة دفعةً واحدة:
+ * ثمانون ألفَ بكسلٍ طولاً، وتأخيرٌ محسوسٌ عند كل تبديل تصفية، والمتصفّح
+ * يحسب تخطيطاً لصفوفٍ لن تُرى. والدفعةُ ستّون — ما يملأ شاشتين — ثم يُطلب
+ * المزيد. والعدّادُ يعود إلى أوله كلّما تبدّل ما يُعرض، فلا تبقى «المزيد»
+ * تشير إلى قائمةٍ أخرى.
+ */
+export function usePaged<T>(items: T[], step = PAGE_STEP) {
+  const [limit, setLimit] = useState(step);
+  const key = items.length;
+  const seen = useRef(key);
+  useEffect(() => {
+    if (seen.current !== key) {
+      seen.current = key;
+      setLimit(step);
+    }
+  }, [key, step]);
+
+  return {
+    slice: items.length <= limit ? items : items.slice(0, limit),
+    hidden: Math.max(0, items.length - limit),
+    showMore: () => setLimit((n) => n + step),
+    showAll: () => setLimit(items.length),
+    reset: () => setLimit(step),
+  };
+}
+
+/** ذيلُ القائمة: كم بقي، وزرّان — دفعةٌ أخرى أو الكلّ */
+export function MoreRows({
+  hidden,
+  onMore,
+  onAll,
+  kind = 'question',
+}: {
+  hidden: number;
+  onMore: () => void;
+  onAll: () => void;
+  kind?: Unit;
+}) {
+  if (hidden <= 0) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2.5 border-t border-line-soft px-5 py-4">
+      <span className="text-[13px] font-medium text-muted">
+        بقي {say(hidden, kind)}
+      </span>
+      <button
+        type="button"
+        onClick={onMore}
+        className="rounded-chip bg-surface-2 px-3.5 py-1.5 text-[13px] font-bold text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] transition hover:bg-surface"
+      >
+        أظهر {Math.min(hidden, PAGE_STEP)}
+      </button>
+      <button
+        type="button"
+        onClick={onAll}
+        className="rounded-chip px-3 py-1.5 text-[13px] font-bold text-signal-ink transition hover:bg-signal-2"
+      >
+        أظهر الكلّ
+      </button>
+    </div>
+  );
 }

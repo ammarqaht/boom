@@ -258,6 +258,12 @@ export class Room {
     this.dirty = true;
     this.result = null;
     this.history = []; // نتائج كل الجولات السابقة
+    /*
+     * عدّادٌ لا يرجع: history يُفرَغ عند «البدء من جديد» لأن اللعبة الجديدة
+     * لا تعرض جولات سابقة — وسجلّ المالك لا يُفرَّغ معه. فما لُعب في هذه
+     * الغرفة يُعدّ هنا مرّةً واحدة ويبقى، وعليه تُكتب rounds في القرص.
+     */
+    this.playedRounds = 0;
     this.standings = null; // الترتيب النهائي بعد إنهاء اللعبة
     this.displayBlurred = false; // تغبيش الترتيب على شاشة العرض
   }
@@ -383,9 +389,15 @@ export class Room {
 
   start() {
     if (this.teams.size === 0) return false;
+    /*
+     * لعبةٌ أُعلن ترتيبُها لا تُستأنف بجولةٍ سادسة: الأوائل قيلوا والقاعة
+     * صفّقت. الطريق الوحيد من finished هو «البدء من جديد» — يُصفّر النقاط
+     * صراحةً ويردّ الحال إلى lobby، ثم يُضغط زرُّ البدء.
+     */
+    if (this.status === 'finished') return false;
     this.startedAt ??= Date.now();
     // البدء بعد نهاية جولة يعني جولة جديدة — بلا خطوة تجهيز منفصلة
-    if (this.status === 'ended' || this.status === 'finished') this.round++;
+    if (this.status === 'ended') this.round++;
     for (const team of this.teams.values()) {
       team.resetForRound(this.settings);
       // تطبيق البطاقات المؤجّلة عند بدء الجولة
@@ -592,6 +604,7 @@ export class Room {
 
     this.result = { round: this.round, awards };
     this.history.push(this.result);
+    this.playedRounds++;
     this.touch();
   }
 
@@ -617,7 +630,13 @@ export class Room {
     this.touch();
   }
 
-  /** إعادة ضبط كاملة: النقاط تعود صفراً */
+  /**
+   * بدءٌ من جديد: اللعبة تعود إلى أولها في الغرفة نفسها.
+   *
+   * النقاط والجولات وبطاقات اللاعبين تعود صفراً — أما playedRounds وserved
+   * فيبقيان: هما سجلُّ المالك عن هذه الغرفة، وما لُعب فيها قد لُعب. ولا
+   * تبدأ الجولة هنا: الحالة تصير lobby وينتظر زرَّ المنظّم.
+   */
   resetAll() {
     this.round = 1;
     this.status = 'lobby';
@@ -803,6 +822,7 @@ Room.prototype.snapshot = function snapshot() {
     touchedAt: this.touchedAt,
     result: this.result,
     history: this.history,
+    playedRounds: this.playedRounds,
     standings: this.standings,
     displayBlurred: this.displayBlurred,
     served: [...this.served.values()],
@@ -850,6 +870,8 @@ export function restoreRoom(snap) {
   room.touchedAt = snap.touchedAt;
   room.result = snap.result;
   room.history = snap.history ?? [];
+  /* لقطاتٌ قديمة لا تعرف العدّاد — يُبدأ بما في السجلّ فلا يضيع ما مضى */
+  room.playedRounds = snap.playedRounds ?? room.history.length;
   room.standings = snap.standings ?? null;
   room.displayBlurred = Boolean(snap.displayBlurred);
   /*

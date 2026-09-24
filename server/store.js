@@ -118,6 +118,24 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS feedback_question ON feedback (question_id);
 `);
 
+/*
+ * ترقيةٌ في مكانها: «متى قُرئ».
+ *
+ * القواعد القائمة لا تعرف العمود، وALTER TABLE لا يحتمل IF NOT EXISTS في
+ * SQLite. فيُسأل الجدولُ عن أعمدته أولاً — أرخصُ من محاولةٍ تُرمى.
+ * وما كان قبل الترقية يُحسب مقروءاً: تاريخٌ كامل يظهر فجأةً غيرَ مقروء
+ * إنذارٌ كاذب، والمالك لم يُقصّر في شيء.
+ */
+{
+  const cols = db.prepare('PRAGMA table_info(feedback)').all();
+  if (!cols.some((c) => c.name === 'read_at')) {
+    db.exec('ALTER TABLE feedback ADD COLUMN read_at INTEGER');
+    db.exec('UPDATE feedback SET read_at = created_at');
+    console.log('↑ رُقِّي جدول الملاحظات: عمود «متى قُرئ»');
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS feedback_unread ON feedback (read_at)');
+}
+
 const upsertRoom = db.prepare(`
   INSERT INTO rooms (code, name, difficulty, bank_ids, status,
                      created_at, started_at, touched_at, ended_at, rounds, players, questions)
@@ -142,7 +160,6 @@ const selectResumable = db.prepare(`
 `);
 
 const deleteState = db.prepare('DELETE FROM room_state WHERE code = ?');
-const deleteOld = db.prepare('DELETE FROM rooms WHERE created_at < ?');
 
 /*
  * يُجمع على ما في القرص لا يُستبدل به: الوارد فروقٌ منذ آخر صرف.
@@ -180,21 +197,33 @@ const insertFeedback = db.prepare(`
 
 const selectFeedback = db.prepare(`
   SELECT id, kind, question_id, question, room_code, room_name,
-         reason, note, stars, by_role, by_name, created_at
+         reason, note, stars, by_role, by_name, created_at, read_at
   FROM feedback
   WHERE (? IS NULL OR kind = ?)
   ORDER BY created_at DESC LIMIT ?
 `);
+
+const markFeedbackRead = db.prepare(
+  'UPDATE feedback SET read_at = ? WHERE read_at IS NULL AND (? IS NULL OR kind = ?)',
+);
+
+const countUnread = db.prepare(
+  "SELECT kind, COUNT(*) n FROM feedback WHERE read_at IS NULL GROUP BY kind",
+);
 
 const countByQuestion = db.prepare(`
   SELECT question_id, COUNT(*) n FROM feedback
   WHERE kind = 'report' GROUP BY question_id
 `);
 
+/*
+ * مدًى مفتوح الطرفين: النهاية غير المحدودة تُمرَّر أكبر من كل وقت، فيبقى
+ * الاستعلام واحداً محضَّراً مرّة — ولا يُبنى SQL بالسلاسل عند كل طلب.
+ */
 const selectRooms = db.prepare(`
   SELECT code, name, difficulty, bank_ids, status, created_at, started_at,
          touched_at, ended_at, rounds, players, questions
-  FROM rooms WHERE created_at >= ? ORDER BY created_at DESC
+  FROM rooms WHERE created_at >= ? AND created_at <= ? ORDER BY created_at DESC
 `);
 
 /** يكتب الغرفة وسجلّها ولقطتها في معاملةٍ واحدة — إما الاثنان أو لا شيء */
@@ -213,7 +242,12 @@ export function saveRoom(room) {
       snap.startedAt ?? null,
       snap.touchedAt,
       snap.status === 'finished' ? now : null,
-      snap.history.length,
+      /*
+       * جولاتُ الغرفة لا جولاتُ اللعبة الحالية: history يُفرَغ عند «البدء
+       * من جديد»، وسجلُّ المالك لا يُفرَّغ معه. والقديم بلا عدّاد يُقاس
+       * بطوله كما كان.
+       */
+      snap.playedRounds ?? snap.history.length,
       snap.teams.length,
       snap.served.length,
     );
@@ -328,7 +362,23 @@ export function listFeedback({ kind = null, limit = 200 } = {}) {
     byRole: r.by_role,
     byName: r.by_name,
     createdAt: r.created_at,
+    unread: r.read_at === null,
   }));
+}
+
+/** يُعلّم ما لم يُقرأ مقروءاً — صنفاً بعينه أو الكلّ */
+export function readFeedback(kind = null) {
+  return markFeedbackRead.run(Date.now(), kind, kind).changes;
+}
+
+/** كم لم يُقرأ من كل صنف — للشارات في الشريط */
+export function unreadFeedback() {
+  const out = { report: 0, comment: 0, total: 0 };
+  for (const row of countUnread.all()) {
+    if (row.kind in out) out[row.kind] = row.n;
+    out.total += row.n;
+  }
+  return out;
 }
 
 /** إحصاء سؤالٍ واحد — يُقرأ في المحرّر فتُحرّر وأنت ترى ما قاسه اللعب */
@@ -350,9 +400,17 @@ export function reportCounts() {
   return new Map(countByQuestion.all().map((r) => [r.question_id, r.n]));
 }
 
-/** سجلّ الغرف لعرضه في لوحة المالك */
-export function listRooms(days = RETENTION_DAYS) {
-  return selectRooms.all(Date.now() - days * DAY_MS).map((r) => ({
+/**
+ * سجلّ الغرف لعرضه في لوحة المالك.
+ *
+ * إما مدّةٌ بالأيام من اليوم (اللوحة الرئيسية: ستون يوماً)، وإما مدًى
+ * صريحٌ بين وقتين (صفحة الغرف: ما يختاره المالك من التقويم). و`null`
+ * في الأيام تعني السجلّ كلَّه — فالغرف لم تعد تُحذف.
+ */
+export function listRooms(days = RETENTION_DAYS, range) {
+  const from = range?.from ?? (days === null ? 0 : Date.now() - days * DAY_MS);
+  const to = range?.to ?? Number.MAX_SAFE_INTEGER;
+  return selectRooms.all(from, to).map((r) => ({
     code: r.code,
     name: r.name,
     difficulty: r.difficulty,
@@ -461,13 +519,17 @@ export function forgetEdit(id) {
   return deleteEdit.run(Number(id)).changes;
 }
 
-/** ما تجاوز مدّة الحفظ يُحذف — واللقطات تتبعه بـON DELETE CASCADE */
-export function sweepOld(days = RETENTION_DAYS) {
-  const { changes } = deleteOld.run(Date.now() - days * DAY_MS);
-  if (changes) console.log(`🧹 حُذفت ${changes} غرفة تجاوزت ${days} يوماً`);
+/**
+ * كنسُ الأرشيف — والغرفُ ليست منه.
+ *
+ * كانت الغرفة تُحذف بعد ستين يوماً فتذهب إحصاؤها معها: كم لُعب فيها، وكم
+ * لاعباً مرّ، وكم سؤالاً عُرض. وهذا سجلٌّ يُبنى عليه لا سجلٌّ يُستهلك —
+ * فبقي. أما نسخُ التحرير فأرشيفُ تراجعٍ مؤقّت، ومدّته على حالها.
+ */
+export function sweepOld() {
   const edits = deleteOldEdits.run(Date.now() - EDIT_DAYS * DAY_MS).changes;
   if (edits) console.log(`🧹 نُسيت ${edits} نسخةً محرَّرة تجاوزت ${EDIT_DAYS} يوماً`);
-  return changes;
+  return 0;
 }
 
 export function close() {

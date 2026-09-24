@@ -85,6 +85,8 @@ export type Alerts = {
   duplicates: number;
   live: number;
   lowStars: number;
+  unreadComments: number;
+  unreadReports: number;
 };
 
 type Data = {
@@ -104,6 +106,8 @@ type Data = {
     edits: number;
     weak: number;
     lowStars: number;
+    unreadComments: number;
+    unreadReports: number;
   };
   days: Day[];
   banks: BankRow[];
@@ -192,6 +196,8 @@ export default function Dashboard({
         duplicates: next.audit.duplicates,
         live: next.totals.live,
         lowStars: next.totals.lowStars,
+        unreadComments: next.totals.unreadComments ?? 0,
+        unreadReports: next.totals.unreadReports ?? 0,
       });
     });
   }, [api, reloadKey, onAlerts]);
@@ -672,14 +678,30 @@ function Duplicates({
   );
 }
 
+/*
+ * لونُ النجوم من قَدْرها لا من كونها نجوماً.
+ *
+ * كانت كلها ذهباً: خمسةٌ وواحدةٌ سواءٌ في اللون، فلا تُقرأ الصفحةُ بلمحة
+ * ولا يقع البصر على الشكوى. والتدرّجُ من الأحمر إلى الأخضر هو نفسه تدرّج
+ * الحالات في النظام — لا لوناً جديداً يُتعلَّم.
+ */
+const STAR_TONE: Record<number, string> = {
+  1: 'text-danger',
+  2: 'text-danger',
+  3: 'text-warn',
+  4: 'text-safe',
+  5: 'text-safe',
+};
+
 export function Stars({ n }: { n: number }) {
+  const tone = STAR_TONE[n] ?? 'text-faint';
   return (
     <span className="flex shrink-0 items-center gap-[1px]" aria-label={`${n} من 5`}>
       {Array.from({ length: 5 }, (_, i) => (
         <StarIcon
           key={i}
           size={13}
-          className={i < n ? 'text-gold' : 'text-line-2'}
+          className={i < n ? tone : 'text-line-2'}
           fill="currentColor"
           stroke="none"
         />

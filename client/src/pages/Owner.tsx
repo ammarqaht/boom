@@ -3,6 +3,7 @@ import { useTheme } from '../components/ui';
 import {
   CardsIcon,
   ChatIcon,
+  CheckIcon,
   ExitIcon,
   GridIcon,
   PanelIcon,
@@ -11,7 +12,7 @@ import {
   ScreenIcon,
   SearchIcon,
 } from '../components/icons';
-import { type Api, QuestionEditor, say } from './console/shared';
+import { type Api, type Range, DateRange, QuestionEditor, say } from './console/shared';
 import Dashboard, { type Alerts } from './console/Dashboard';
 import { Edits, Questions, Reports, type BankInfo, type Counts, type Sift } from './console/Banks';
 import { Comments, Rooms } from './console/RoomsAndComments';
@@ -31,7 +32,8 @@ import { Comments, Rooms } from './console/RoomsAndComments';
 const KEY_STORE = 'nabda:owner';
 
 type SectionId = 'home' | 'banks' | 'rooms' | 'comments';
-type Group = { label: string; rows: Choice[] };
+/** مجموعةٌ في الشريط: إما صفوفٌ تُنتقى، وإما عنصرٌ قائمٌ بنفسه كالتقويم */
+type Group = { label: string; rows: Choice[]; node?: React.ReactNode };
 type Choice = {
   id: string;
   label: string;
@@ -57,7 +59,7 @@ const PAGES: Record<string, { label: string; lead: string }> = {
   questions: { label: 'الأسئلة', lead: 'ما في البنوك وما قاسه اللعب — يُرتَّب ويُحرَّر' },
   reports: { label: 'البلاغات', lead: 'شكوى اللاعبين والمنظّمين — بلا هوية' },
   edits: { label: 'الأسئلة المحرَّرة', lead: 'نسخُ ما حُرِّر أو حُذف — تُحفظ ثلاثين يوماً' },
-  rooms: { label: 'الغرف', lead: 'سجلّ المسابقات في ستّين يوماً' },
+  rooms: { label: 'الغرف', lead: 'سجلّ المسابقات كلّه — وتُحدَّد الفترة من الشريط' },
   comments: { label: 'التعليقات', lead: 'ما قاله المنظّمون واللاعبون بعد اللعب' },
 };
 
@@ -94,6 +96,7 @@ const VIEWS: Record<string, { id: string; label: string }[]> = {
   ],
   comments: [
     { id: 'all', label: 'الكل' },
+    { id: 'unread', label: 'لم يُقرأ' },
     { id: 'text', label: 'فيها نصّ' },
     { id: 'low', label: 'تقييمٌ منخفض' },
     { id: 'player', label: 'من اللاعبين' },
@@ -127,6 +130,9 @@ export default function Owner() {
   const [level, setLevel] = useState(0);
   const [view, setView] = useState('all');
   const [search, setSearch] = useState('');
+  /* مدى صفحة الغرف: null = السجلّ كلّه، وهو الافتراض */
+  const [range, setRange] = useState<Range>(null);
+  const [preset, setPreset] = useState('all');
 
   const [banks, setBanks] = useState<BankInfo[]>([]);
   const [counts, setCounts] = useState<Counts>({});
@@ -187,7 +193,7 @@ export default function Owner() {
 
   const openQuestion = useCallback((id: string) => setEditing({ id }), []);
   const refresh = useCallback(() => setReloadKey((n) => n + 1), []);
-  const sift: Sift = { bank, level, view, search };
+  const sift: Sift = { bank, level, view, search, range };
 
   if (!ready) return <Gate current={key} onKey={setKey} />;
 
@@ -293,6 +299,14 @@ export default function Owner() {
           on: false,
           go: () => go('comments', undefined, 'low'),
         },
+        {
+          id: 'a6',
+          label: 'تعليقات لم تُقرأ',
+          count: alerts?.unreadComments,
+          dot: 'var(--color-signal)',
+          on: false,
+          go: () => go('comments', undefined, 'unread'),
+        },
       ],
     });
     groups.push({
@@ -313,6 +327,17 @@ export default function Owner() {
         },
         { id: 's3', label: 'سجلّ الغرف', on: false, go: () => go('rooms') },
       ],
+    });
+  }
+
+  /* الغرف وحدها لها مدًى: البنوك والتعليقات تُقرأ كاملةً بلا تأريخ */
+  if (door === 'rooms') {
+    groups.push({
+      label: 'الفترة',
+      rows: [],
+      node: (
+        <DateRange value={range} onPick={setRange} preset={preset} onPreset={setPreset} />
+      ),
     });
   }
 
@@ -405,6 +430,7 @@ export default function Owner() {
             {groups.map((group) => (
               <div key={group.label} className="pt-3">
                 <p className="px-2 pb-1.5 text-[11.5px] font-bold text-faint">{group.label}</p>
+                {group.node}
                 {group.rows.map((row) => (
                   <button
                     key={row.id}
@@ -494,6 +520,21 @@ export default function Owner() {
               className="h-10 shrink-0 rounded-chip bg-signal-ink px-4 text-[13.5px] font-bold text-white transition hover:brightness-110"
             >
               + سؤال جديد
+            </button>
+          )}
+
+          {/* لا يظهر إلا وله عمل: زرٌّ لا أثر له يُضغط مرّةً ثم يُهمَل */}
+          {door === 'comments' && (counts.unread ?? 0) > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                void api.send('POST', 'feedback/read', { kind: 'comment' }).then(refresh);
+              }}
+              className="flex h-10 shrink-0 items-center gap-2 rounded-chip bg-signal-2 px-3.5 text-[13.5px] font-bold text-signal-ink transition hover:brightness-95"
+            >
+              <CheckIcon size={14} />
+              <span className="max-sm:hidden">قراءة الكل</span>
+              <span className="tnum">{counts.unread}</span>
             </button>
           )}
 

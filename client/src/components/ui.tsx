@@ -249,21 +249,58 @@ export function Scrollbar({ box }: { box?: RefObject<HTMLElement | null> }) {
     [box],
   );
 
+  /*
+   * القياس مرّةً في كل إطار لا مرّةً في كل حدث.
+   *
+   * حدثُ scroll يقع عشرات المرّات في الثانية، وكان كلٌّ منها يقيس ويضع
+   * حالةً — فتُعاد الصورة مرّةً لكل حدث لا مرّةً لكل إطار، ويتقطّع التمرير
+   * في لوحةٍ فيها مخطّطاتٌ تتحرّك أصلاً. فتُجمع النداءات في إطارٍ واحد،
+   * ولا تُوضع الحالة إلا إن تبدّل الرقم فعلاً بعد التقريب.
+   */
+  const pending = useRef(0);
+  const last = useRef<{ top: number; size: number } | null>(null);
+
   const measure = useCallback(() => {
-    const el = node();
-    if (!el) return setBar(null);
-    const seen = view();
-    const all = el.scrollHeight;
-    if (all <= seen + 2) return setBar(null);
-    const size = Math.max(36, (seen / all) * seen);
-    setBar({ top: (el.scrollTop / (all - seen)) * (seen - size), size });
+    if (pending.current) return;
+    pending.current = requestAnimationFrame(() => {
+      pending.current = 0;
+      const el = node();
+      if (!el) {
+        last.current = null;
+        return setBar(null);
+      }
+      const seen = view();
+      const all = el.scrollHeight;
+      if (all <= seen + 2) {
+        if (last.current === null) return;
+        last.current = null;
+        return setBar(null);
+      }
+      const size = Math.round(Math.max(36, (seen / all) * seen));
+      const top = Math.round((el.scrollTop / (all - seen)) * (seen - size));
+      if (last.current && last.current.top === top && last.current.size === size) return;
+      last.current = { top, size };
+      setBar({ top, size });
+    });
   }, [node, view]);
 
-  /* يستيقظ مع التمرير ثم ينام — فلا يبقى خطٌّ معلّقٌ على شاشةٍ ساكنة */
+  useEffect(() => () => cancelAnimationFrame(pending.current), []);
+
+  /*
+   * يستيقظ مع التمرير ثم ينام — فلا يبقى خطٌّ معلّقٌ على شاشةٍ ساكنة.
+   * والإيقاظ لا يُعاد وضعه وهو مستيقظ: المؤقّت وحده يُجدَّد.
+   */
+  const up = useRef(false);
   const wake = useCallback(() => {
-    setAwake(true);
+    if (!up.current) {
+      up.current = true;
+      setAwake(true);
+    }
     clearTimeout(nap.current);
-    nap.current = setTimeout(() => setAwake(false), 1100);
+    nap.current = setTimeout(() => {
+      up.current = false;
+      setAwake(false);
+    }, 1100);
   }, []);
 
   useEffect(() => {
@@ -476,6 +513,42 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
+/**
+ * حقلُ نصٍّ يطاول محتواه.
+ *
+ * المقبضُ اليدويّ في الزاوية خيارٌ لا يريده أحد: من كتب سؤالاً من ثلاثة
+ * أسطر لا يريد أن يسحب الزاوية ليراه، ومن كتب سطراً لا يريد صندوقاً
+ * فارغاً تحته. فيُقاس الارتفاع من scrollHeight عند كل تغيّر، ويُمنع
+ * السحب. والحدُّ الأعلى يمنع أن تبتلع الصفحةَ لصقةٌ طويلة.
+ */
+export function AutoTextarea({
+  value,
+  maxRows = 10,
+  className = '',
+  ...props
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { value: string; maxRows?: number }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 24;
+    const pad = el.offsetHeight - el.clientHeight; // الحدود
+    el.style.height = `${Math.min(el.scrollHeight, line * maxRows) + pad}px`;
+  }, [value, maxRows]);
+
+  return (
+    <textarea
+      {...props}
+      ref={ref}
+      value={value}
+      rows={1}
+      className={`w-full resize-none overflow-y-auto ${className}`}
+    />
+  );
+}
+
 export function ErrorNote({ children }: { children: ReactNode }) {
   if (!children) return null;
   return (
@@ -585,8 +658,16 @@ export function Menu({ actions }: { actions: MenuAction[] }) {
     const close = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false);
     };
+    /* المفتاح الهارب يُغلق: من فتح بالخطأ لا يُجبَر على إصابة الخارج */
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
     document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    document.addEventListener('keydown', key);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', key);
+    };
   }, [open]);
 
   return (
@@ -597,14 +678,24 @@ export function Menu({ actions }: { actions: MenuAction[] }) {
         className="px-3 sm:px-4"
         aria-label="خيارات"
         title="خيارات"
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
         <MenuIcon size={17} />
         <span className="hidden sm:inline">خيارات</span>
       </Button>
 
+      {/*
+       * مقاسُ القائمة عُرفٌ لا ذوق: صفٌّ في حدود ٣٤ بكسلاً ونصٌّ ١٣٫٥ وأيقونة
+       * ١٦ وعرضٌ ٢٤٠ — هي حدود قوائم النظام وRadix وshadcn. وكانت ٢٨٨ عرضاً
+       * بصفوفٍ ٤٤ ونصٍّ ١٦، فتقرأ كأنها صفحةٌ لا قائمة، وتبتلع شاشة الجوال.
+       */}
       {open && (
-        <div className="rise-in absolute left-0 z-50 mt-2 w-72 rounded-card bg-surface p-1.5 shadow-[inset_0_0_0_1px_var(--color-line-2),0_24px_48px_-18px_rgb(0_0_0/0.55)]">
+        <div
+          role="menu"
+          className="rise-in absolute left-0 z-50 mt-1.5 w-[240px] max-w-[calc(100vw-1.5rem)] rounded-card bg-surface p-1 shadow-[inset_0_0_0_1px_var(--color-line-2),0_18px_40px_-16px_rgb(0_0_0/0.5)]"
+        >
           {actions.map((action) =>
             action.hold ? (
               <HoldButton
@@ -619,14 +710,15 @@ export function Menu({ actions }: { actions: MenuAction[] }) {
             ) : (
               <button
                 key={action.label}
+                role="menuitem"
                 onClick={() => {
                   setOpen(false);
                   action.onClick();
                 }}
-                className="flex w-full items-center gap-3 rounded-chip px-3 py-2.5 text-right font-bold text-ink-2 transition hover:bg-surface-2"
+                className="flex w-full items-center gap-2.5 rounded-chip px-2.5 py-2 text-right text-[13.5px] font-bold text-ink-2 transition hover:bg-surface-2"
               >
-                {action.icon && <span className="text-muted">{action.icon}</span>}
-                {action.label}
+                {action.icon && <span className="shrink-0 text-muted">{action.icon}</span>}
+                <span className="min-w-0 flex-1 truncate">{action.label}</span>
               </button>
             ),
           )}
@@ -644,11 +736,17 @@ export function HoldButton({
   hint,
   onConfirm,
   className = '',
+  tone = 'danger',
+  bare = false,
 }: {
   label: string;
   hint?: string;
   onConfirm: () => void;
   className?: string;
+  /** danger: صفٌّ أحمر في قائمة. action: زرٌّ أساسيّ قائمٌ بنفسه */
+  tone?: 'danger' | 'action';
+  /** بلا فاصلٍ علويّ ولا هامش — حين لا يكون آخرَ صفٍّ في قائمة */
+  bare?: boolean;
 }) {
   const [held, setHeld] = useState(0);
   const frame = useRef(0);
@@ -676,19 +774,31 @@ export function HoldButton({
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
   return (
-    <div className={`mt-1.5 border-t border-line pt-1.5 ${className}`}>
+    <div className={`${bare ? '' : 'mt-1 border-t border-line pt-1'} ${className}`}>
       <button
         onPointerDown={start}
         onPointerUp={stop}
         onPointerLeave={stop}
         onPointerCancel={stop}
         style={{ '--held': held } as CSSProperties}
-        className="relative flex w-full items-center gap-3 overflow-hidden rounded-chip px-3 py-2.5 text-right font-black text-danger transition select-none hover:bg-danger-2"
+        className={
+          tone === 'action'
+            ? 'relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-chip bg-action px-4 py-3 text-center text-[15px] leading-snug font-black text-on-action transition select-none hover:brightness-110'
+            : 'relative flex w-full items-center gap-2.5 overflow-hidden rounded-chip px-2.5 py-2 text-right text-[13.5px] leading-snug font-black text-danger transition select-none hover:bg-danger-2'
+        }
       >
         <span className="hold-fill" aria-hidden="true" />
         <span className="relative">{label} — استمر بالضغط</span>
       </button>
-      {hint && <p className="px-3 pt-1.5 pb-1 text-xs font-medium text-muted">{hint}</p>}
+      {hint && (
+        <p
+          className={`text-[11px] font-medium text-muted ${
+            tone === 'action' ? 'px-1 pt-1.5 text-center' : 'px-2.5 pt-1 pb-0.5'
+          }`}
+        >
+          {hint}
+        </p>
+      )}
     </div>
   );
 }
@@ -766,7 +876,7 @@ export function CheckOption({
     <button
       type="button"
       onClick={onToggle}
-      className={`flex items-center gap-3 rounded-chip px-3 py-2.5 text-right font-bold transition ${
+      className={`flex items-center gap-2.5 rounded-chip px-2.5 py-2.5 text-right text-[15px] font-bold transition sm:gap-3 sm:px-3 sm:text-base ${
         checked
           ? 'text-ink shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-signal)_45%,transparent)]'
           : 'text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] hover:bg-surface-2'

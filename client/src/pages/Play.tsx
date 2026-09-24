@@ -142,6 +142,8 @@ export default function Play() {
     };
     const onDrop = () => setLive(false);
 
+    /* حدث connect قد يسبق تسجيل المستمع — فتُقرأ الحال لا تُنتظر */
+    setLive(socket.connected);
     void rejoin();
     socket.on('connect', onConnect);
     socket.on('disconnect', onDrop);
@@ -540,9 +542,13 @@ function TeamScreen({
          * يُشتّت البصرَ سطرٌ جانبيّ.
          */}
         <section className="shrink-0 pt-4 pb-3 text-center" style={stateStyle(level, shown)}>
+          {/*
+           * الرقم يكبر قليلاً مع الخطر لا بالحركة وحدها: المستوى الأحمر
+           * خبرٌ يُقرأ من بُعد، والعينُ في تلك اللحظة على الخيارات لا عليه.
+           */}
           <div
-            className={`ink-state tnum text-[78px] leading-[0.85] font-black tracking-[-0.02em] ${
-              dying ? 'beat' : ''
+            className={`ink-state tnum leading-[0.85] font-black tracking-[-0.02em] transition-[font-size] duration-300 ${
+              dying ? 'beat-danger text-[86px]' : 'text-[78px]'
             }`}
           >
             {formatTime(shown)}
@@ -670,8 +676,13 @@ function RoundEnd({
   const level = dead ? 'danger' : 'safe';
   const reviewCount = state.review?.length ?? 0;
 
+  /*
+   * صفحةٌ واحدة تجري كلها: كان الرأس والتبويبان ثابتين ولا يجري إلا ما
+   * تحتهما، فيقرأ اللاعب أسئلته في نافذةٍ ضيّقة بينما نصف الشاشة مشغولٌ
+   * بأرقامٍ قرأها. فصار المجرى واحداً من أعلى اللوحة إلى آخر بطاقة.
+   */
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
       <section
         className="shrink-0 border-b border-line py-4"
         style={stateStyle(level, state.timeMs)}
@@ -710,7 +721,7 @@ function RoundEnd({
         </Tab>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-4">
+      <div>
         {tab === 'cards' ? (
           <>
             <Shop shop={state.shop} score={state.score} />
@@ -727,7 +738,7 @@ function RoundEnd({
           <ReviewList review={state.review ?? []} reported={reported} onReport={onReport} />
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -971,13 +982,23 @@ function useEndPhase(over: boolean) {
   return phase;
 }
 
+/*
+ * صوتُ السكون يُقال مرّةً في كل جولة لا مرّةً في العمر.
+ *
+ * كانت الرايةُ تُرفع عند أول توقّفٍ ولا تُنزَّل أبداً، فيسمع اللاعب الصفير
+ * في جولته الأولى ثم لا يسمعه بقيّة المسابقة — والغياب يُقرأ عطلاً. وهي
+ * تُنزَّل حين يعود النبض: بدءُ الجولة يردّ flatlined إلى false.
+ */
 function useFlatlineSound(flatlined: boolean) {
   const played = useRef(false);
   useEffect(() => {
-    if (flatlined && !played.current) {
-      played.current = true;
-      playFlatline();
-      navigator.vibrate?.([200, 80, 400]);
+    if (!flatlined) {
+      played.current = false;
+      return;
     }
+    if (played.current) return;
+    played.current = true;
+    playFlatline();
+    navigator.vibrate?.([200, 80, 400]);
   }, [flatlined]);
 }

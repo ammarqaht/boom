@@ -205,6 +205,22 @@ body {
  * وشريطُ الصفحة نفسه مُخفىً بالكامل: مكانَه خيطٌ مرسومٌ في الحافّة اليسرى
  * لا يدخل في التخطيط أصلاً — انظر Scrollbar في ui.tsx و‎.scroll-thumb أدناه.
  */
+/*
+ * تيلويند ٤ ردّ الأزرار إلى cursor: default — وهو صوابٌ في المعيار وخطأٌ
+ * في العادة: من رأى مؤشّراً لا يتغيّر ظنّ الزرّ نصّاً. فتُردّ اليد لكل ما
+ * يُضغط، وتُمنع عمّا عُطِّل — والمؤشّر خبرٌ عن القابلية لا زينة.
+ */
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+summary,
+a[href] {
+  cursor: pointer;
+}
+button:disabled,
+[role='button'][aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--color-muted) 22%, transparent) transparent;
@@ -446,6 +462,44 @@ textarea {
 }
 .beat {
   animation: beat-scale var(--beat) ease-in-out infinite;
+}
+
+/*
+ * خفقةُ الخطر — «لَبْ‑دَبْ» لا نبضةٌ واحدة.
+ *
+ * كان العدّاد يتمدّد ٤٪ في اللحظات الأخيرة: حركةٌ تُقاس ولا تُرى. وهذه
+ * اللحظةُ هي كلُّ اللعبة — خمسُ ثوانٍ يعرف فيها اللاعب أنه يوشك. فصارت
+ * خفقتين متتاليتين كخفقة القلب، تنتهيان إلى سكونٍ قبل الخفقة التالية،
+ * وتشتقّ زمنها من ‎--beat‎ نفسه الذي يجري به المخطّط — فالرقم والخطّ
+ * ينبضان معاً لا كلٌّ على هواه.
+ */
+@keyframes beat-danger {
+  0% {
+    transform: scale(1);
+  }
+  9% {
+    transform: scale(1.13);
+  }
+  18% {
+    transform: scale(1.03);
+  }
+  27% {
+    transform: scale(1.09);
+  }
+  42%,
+  100% {
+    transform: scale(1);
+  }
+}
+.beat-danger {
+  animation: beat-danger var(--beat) ease-out infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beat-danger {
+    animation: none;
+  }
 }
 
 /* مؤشّر «جارية» */

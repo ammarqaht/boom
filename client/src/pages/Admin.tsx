@@ -8,6 +8,7 @@ import {
   CheckOption,
   ErrorNote,
   Field,
+  HoldButton,
   Input,
   FormPage,
   IconButton,
@@ -25,9 +26,9 @@ import {
 import {
   ArrowIcon,
   CardsIcon,
+  CheckIcon,
   CloseIcon,
   CopyIcon,
-  ExitIcon,
   EyeIcon,
   EyeOffIcon,
   HistoryIcon,
@@ -134,6 +135,12 @@ export default function Admin() {
     };
     const onDrop = () => setLive(false);
 
+    /*
+     * مزامنةٌ عند التركيب: السوكِت يتصل عند تحميل الوحدة، فقد يقع حدث
+     * connect قبل أن يُسجَّل المستمع هنا — فتبقى الشارة تقول «انقطع
+     * الاتصال» ولوحةٌ تعمل تحتها. والحالة تُقرأ لا تُنتظر.
+     */
+    setLive(socket.connected);
     void rejoin();
     socket.on('connect', onConnect);
     socket.on('disconnect', onDrop);
@@ -417,12 +424,6 @@ function Console({
       hold: 'تنتهي اللعبة ويظهر الترتيب النهائي على كل الشاشات.',
       onClick: () => send('admin:finishGame'),
     },
-    {
-      label: 'إعادة اللعبة',
-      icon: <ExitIcon size={17} />,
-      hold: 'تُصفَّر كل النقاط والجولات. لا يمكن التراجع.',
-      onClick: () => send('admin:resetAll'),
-    },
   ];
 
   return (
@@ -431,29 +432,35 @@ function Console({
        * ترويسة نحيلة: الهوية والرمز والحال. أما أزرار الجولة وعدّادها
        * فمكانها لوحةُ الجولة — فالترويسة تُعرِّف ولا تُدير.
        */}
-      <header className="shrink-0 border-b border-line bg-surface px-4 py-3 sm:px-6">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-chip bg-signal-ink text-white">
+      <header className="shrink-0 border-b border-line bg-surface px-3 py-2 sm:px-6 sm:py-3">
+        {/*
+         * المعرّفات في مجموعةٍ تنكمش، والقائمة أختٌ لها لا عضوٌ فيها: على
+         * الجوال كان زرُّ «خيارات» يُدفع إلى سطرٍ ثانٍ وحده فيأكل ٣٦ بكسلاً
+         * من لوحةٍ تُقرأ أثناء الجولة. فصار السطر واحداً على كل عرض.
+         */}
+        <div className="flex items-center gap-x-2.5 sm:gap-x-4">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2.5 gap-y-1.5 sm:gap-x-4 sm:gap-y-2">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-chip bg-signal-ink text-white sm:size-9">
             <PulseMark size={20} />
           </span>
-          <b className="text-[16px] font-black">نبضة</b>
+          <b className="text-[15px] font-black sm:text-[16px]">نبضة</b>
 
           {/* الرمز شارةٌ لا رقمٌ عائم: يُقرأ من بعيد ويُملى على القاعة */}
           <b
             dir="ltr"
-            className="tnum rounded-chip bg-signal-2 px-3 py-1 text-[15px] font-black tracking-[0.25em] text-signal-ink"
+            className="tnum rounded-chip bg-signal-2 px-2 py-0.5 text-[13px] font-black tracking-[0.18em] text-signal-ink sm:px-3 sm:py-1 sm:text-[15px] sm:tracking-[0.25em]"
           >
             {room.code}
           </b>
           {/* الاسم يُذكّر المنظّم أيّ نشاطٍ هذا حين يفتح غرفتين معاً */}
           <span
-            className="max-w-[18ch] truncate text-[13px] font-medium text-muted"
+            className="max-w-[12ch] truncate text-[12px] font-medium text-muted sm:max-w-[18ch] sm:text-[13px]"
             title={room.name}
           >
             {room.name}
           </span>
 
-          <span className="flex items-center gap-2 text-[13px] font-bold text-muted">
+          <span className="flex items-center gap-1.5 text-[12px] font-bold text-muted sm:gap-2 sm:text-[13px]">
             <i
               className={`size-2 rounded-full ${
                 live ? 'blink bg-safe' : room.status === 'paused' ? 'blink bg-warn' : 'bg-faint'
@@ -468,13 +475,14 @@ function Console({
            * أزرارها فلا يحدث شيء ولا خبر يقول لماذا. فتُعلن الحال.
            */}
           {!online && (
-            <span className="flex items-center gap-2 rounded-chip bg-danger-2 px-2.5 py-1 text-[12.5px] font-bold text-danger">
+            <span className="flex items-center gap-1.5 rounded-chip bg-danger-2 px-2 py-0.5 text-[11.5px] font-bold text-danger sm:gap-2 sm:px-2.5 sm:py-1 sm:text-[12.5px]">
               <OfflineIcon size={14} />
               انقطع الاتصال — يُعاد الوصل
             </span>
           )}
+          </div>
 
-          <div className="ms-auto flex items-center gap-2.5">
+          <div className="flex shrink-0 items-center gap-2.5">
             {note && (
               <span className="hidden text-[13px] font-bold text-signal-ink sm:block">{note}</span>
             )}
@@ -483,8 +491,12 @@ function Console({
         </div>
       </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto grid max-w-[1560px] gap-4 px-4 py-4 sm:px-6 xl:grid-cols-[minmax(0,1fr)_432px] xl:items-start">
+      {/*
+       * overscroll-contain: التمرير لا يتسلسل إلى الصفحة تحته حين يبلغ
+       * المحتوى طرفه — فلا ترتدّ اللوحة على الجوال ولا تُسحب الصفحة كلها.
+       */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div className="mx-auto grid max-w-[1560px] gap-2.5 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4 xl:grid-cols-[minmax(0,1fr)_432px] xl:items-start">
           {/* على الجوال تتصدّر لوحة الجولة، فزرّ البدء لا يُبحث عنه بالتمرير */}
           <div className="xl:hidden">
             <RoundPanel
@@ -501,7 +513,7 @@ function Console({
             {over ? (
               <>
                 <section className="tile px-4 py-6 sm:px-6">
-                  <Standings standings={room.standings!} rounds={room.history.length} />
+                  <Standings compact standings={room.standings!} rounds={room.history.length} />
                 </section>
                 {/* رأي المنظّم كرأي اللاعب: كلاهما لعب، وأسفلَ الترتيب لا نافذةً تعترض */}
                 <div className="mx-auto w-full max-w-md">
@@ -516,10 +528,10 @@ function Console({
             ) : (
               <>
                 <div className="flex items-baseline justify-between gap-3">
-                  <b className="text-[16px] font-black">
+                  <b className="text-[15px] font-black sm:text-[16px]">
                     اللاعبون <span className="font-bold text-faint">({room.teams.length})</span>
                   </b>
-                  <span className="tnum text-[12.5px] font-medium text-faint">
+                  <span className="tnum text-[12px] font-medium text-faint sm:text-[12.5px]">
                     {room.teams.filter((t) => !t.flatlined).length} نبضة حيّة
                   </span>
                 </div>
@@ -532,7 +544,7 @@ function Console({
                 )}
 
                 {room.teams.length === 0 ? (
-                  <div className="tile flex flex-col items-center gap-3 px-4 py-10 text-center">
+                  <div className="tile flex flex-col items-center gap-2.5 px-3 py-7 text-center sm:gap-3 sm:px-4 sm:py-10">
                     <PulseMark size={26} className="text-faint" />
                     <p className="text-muted">
                       لم ينضم أحد بعد — شارك الرمز{' '}
@@ -557,8 +569,13 @@ function Console({
                   </div>
                 )}
 
-                {idle && room.teams.length > 0 && (
-                  <div className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-card border-[1.5px] border-dashed border-line-2 px-4 py-5 text-center text-[13.5px] font-medium text-muted">
+                {/*
+                 * الرمزُ دعوةٌ لا لافتة: يُنادى به قبل أن تبدأ اللعبة، فإذا
+                 * بدأت صار سطراً يزاحم صفوف اللاعبين بخبرٍ فات أوانه. ومن
+                 * أراده بعدها فهو في الترويسة وفي «روابط الغرفة».
+                 */}
+                {room.status === 'lobby' && room.teams.length > 0 && (
+                  <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 rounded-card border-[1.5px] border-dashed border-line-2 px-3 py-3.5 text-center text-[12.5px] font-medium text-muted sm:gap-x-3 sm:px-4 sm:py-5 sm:text-[13.5px]">
                     <span className="flex items-center gap-2">
                       <PulseMark size={18} className="text-signal-ink" />
                       بابُ الانضمام مفتوح — شارك الرمز
@@ -933,11 +950,27 @@ function RoundPanel({
 }) {
   const level = LEVELS.find((l) => l.id === room.difficulty)?.label ?? '—';
   const pool = banks.filter((b) => room.bankIds.includes(b.id)).reduce((n, b) => n + b.count, 0);
+  const done = room.status === 'finished';
+  const onRestart = () => onSend('admin:resetAll');
 
   return (
-    <section className="tile p-4">
-      {/* items-stretch: البلاطة والزرّ بطولٍ واحد مهما اختلف محتواهما */}
-      <div className="flex items-stretch gap-3">
+    <section className="tile p-3 sm:p-4">
+      {/*
+       * اللعبة المنتهية لا تُستأنف: بابُها الوحيد «بدء من جديد» بضغطٍ
+       * مطوّل — يُصفّر النقاط والجولات ويردّ الحال إلى انتظارٍ، ثم يظهر
+       * زرّ البدء فيُضغط عن قصد. وإحصاءُ الغرفة عند المالك لا يُصفَّر.
+       */}
+      {done ? (
+        <HoldButton
+          bare
+          tone="action"
+          label="بدء من جديد"
+          hint="تُصفَّر نقاط اللاعبين وتعود الجولة إلى الأولى — وسجلّ الغرفة يبقى كما هو."
+          onConfirm={onRestart}
+        />
+      ) : (
+      /* items-stretch: البلاطة والزرّ بطولٍ واحد مهما اختلف محتواهما */
+      <div className="flex items-stretch gap-2.5 sm:gap-3">
         {idle && (
           <Button
             size="lg"
@@ -967,15 +1000,16 @@ function RoundPanel({
           </Button>
         )}
 
-        <div className="flex w-[92px] shrink-0 flex-col items-center justify-center rounded-chip text-center shadow-[inset_0_0_0_1px_var(--color-line)]">
-          <div className="tnum text-[20px] leading-none font-black">{room.round}</div>
-          <div className="mt-1 text-[11px] font-medium text-muted">
+        <div className="flex w-[78px] shrink-0 flex-col items-center justify-center rounded-chip text-center shadow-[inset_0_0_0_1px_var(--color-line)] sm:w-[92px]">
+          <div className="tnum text-[18px] leading-none font-black sm:text-[20px]">{room.round}</div>
+          <div className="mt-1 text-[10.5px] font-medium text-muted sm:text-[11px]">
             الجولة · {room.history.length} مكتملة
           </div>
         </div>
       </div>
+      )}
 
-      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-line pt-3 text-xs font-medium text-muted">
+      <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-line pt-2.5 text-xs font-medium text-muted sm:mt-3 sm:pt-3">
         <span>
           المستوى <b className="font-black text-ink">{level}</b>
         </span>
@@ -984,8 +1018,11 @@ function RoundPanel({
         </span>
       </div>
 
-      {/* الاختصار لا يُخمَّن: من لم يُخبَر به لن يجده */}
-      <p className="mt-1.5 text-[11px] font-medium text-faint">
+      {/*
+       * الاختصار لا يُخمَّن: من لم يُخبَر به لن يجده — لكنه خبرٌ لمن له
+       * لوحةُ مفاتيح. وعلى الجوال سطرٌ يشغل ولا يُفيد، فيُطوى دون sm.
+       */}
+      <p className="mt-1.5 hidden text-[11px] font-medium text-faint sm:block">
         <b className="font-black">مسافة</b> إيقاف واستئناف · <b className="font-black">Enter</b> بدء
         الجولة
       </p>
@@ -995,10 +1032,14 @@ function RoundPanel({
 
 function Panel({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
-    <section className="tile px-[18px] py-4">
-      <h3 className="mb-3 flex items-baseline justify-between gap-3 text-[14px] font-black">
+    <section className="tile px-3 py-3 sm:px-[18px] sm:py-4">
+      <h3 className="mb-2.5 flex items-baseline justify-between gap-3 text-[13px] font-black sm:mb-3 sm:text-[14px]">
         {title}
-        {hint && <span className="tnum shrink-0 text-[12px] font-medium text-faint">{hint}</span>}
+        {hint && (
+          <span className="tnum shrink-0 text-[11.5px] font-medium text-faint sm:text-[12px]">
+            {hint}
+          </span>
+        )}
       </h3>
       {children}
     </section>
@@ -1017,18 +1058,41 @@ function LinkRow({
   hint?: string;
   onCopy: () => void;
 }) {
+  /*
+   * النسخُ فعلٌ بلا أثرٍ ظاهر: الحافظة لا تُرى، فمن ضغط لا يدري أنُسخ أم
+   * لا فيضغط ثانيةً وثالثة. فيُقال له في الزرّ نفسه — لا في ركنٍ بعيد.
+   */
+  const [done, setDone] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
   return (
     <button
       type="button"
-      onClick={onCopy}
-      className="flex w-full items-center gap-2.5 rounded-chip px-2 py-2.5 text-right transition hover:bg-surface-2"
+      onClick={() => {
+        onCopy();
+        setDone(true);
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => setDone(false), 1600);
+      }}
+      className={`flex w-full items-center gap-2 rounded-chip px-1.5 py-2.5 text-right transition sm:gap-2.5 sm:px-2 ${
+        done ? 'bg-safe-2' : 'hover:bg-surface-2'
+      }`}
     >
-      <span className="shrink-0 text-signal-ink">{icon}</span>
+      <span className={`shrink-0 ${done ? 'text-safe-ink' : 'text-signal-ink'}`}>{icon}</span>
       <span className="min-w-0 flex-1">
-        <span className="block text-[13.5px] font-bold">{label}</span>
-        {hint && <span className="block text-[11.5px] font-medium text-danger">{hint}</span>}
+        <span className="block text-[13px] font-bold sm:text-[13.5px]">
+          {done ? 'نُسخ الرابط' : label}
+        </span>
+        {hint && !done && (
+          <span className="block text-[11px] font-medium text-danger sm:text-[11.5px]">{hint}</span>
+        )}
       </span>
-      <CopyIcon size={15} className="shrink-0 text-faint" />
+      {done ? (
+        <CheckIcon size={15} className="shrink-0 text-safe-ink" />
+      ) : (
+        <CopyIcon size={15} className="shrink-0 text-faint" />
+      )}
     </button>
   );
 }
@@ -1061,7 +1125,7 @@ function TeamRow({
 
   const name = (
     <div className="min-w-0">
-      <div className="flex items-center gap-1.5 text-[17px] leading-tight font-black">
+      <div className="flex items-center gap-1.5 text-[15px] leading-tight font-black sm:text-[17px]">
         <span className="truncate">{team.name}</span>
         {frozen && <SnowflakeIcon size={14} className="shrink-0 text-frost" />}
         {team.doubled && !team.flatlined && (
@@ -1069,7 +1133,7 @@ function TeamRow({
         )}
         {!team.connected && <OfflineIcon size={13} className="shrink-0 text-faint" />}
       </div>
-      <div className="tnum text-[11px] font-medium text-muted">
+      <div className="tnum text-[10.5px] font-medium text-muted sm:text-[11px]">
         {team.correct} من {team.answered} صحيحة
       </div>
     </div>
@@ -1077,10 +1141,12 @@ function TeamRow({
 
   const time = (
     <div className="leading-none">
-      <b className={`tnum text-2xl font-black ${team.flatlined ? 'text-danger' : 'ink-state'}`}>
+      <b
+        className={`tnum text-xl font-black sm:text-2xl ${team.flatlined ? 'text-danger' : 'ink-state'}`}
+      >
         {formatTime(team.timeMs)}
       </b>
-      <span className="mt-1 block text-[11px] font-medium text-muted">
+      <span className="mt-0.5 block text-[10.5px] font-medium text-muted sm:mt-1 sm:text-[11px]">
         {team.flatlined ? 'توقف' : 'ثانية'}
       </span>
     </div>
@@ -1088,8 +1154,10 @@ function TeamRow({
 
   const score = (
     <div className="leading-none">
-      <RollingNumber value={team.score} className="tnum text-2xl font-black text-signal" />
-      <span className="mt-1 block text-[11px] font-medium text-muted">نقطة</span>
+      <RollingNumber value={team.score} className="tnum text-xl font-black text-signal sm:text-2xl" />
+      <span className="mt-0.5 block text-[10.5px] font-medium text-muted sm:mt-1 sm:text-[11px]">
+        نقطة
+      </span>
     </div>
   );
 
@@ -1113,7 +1181,7 @@ function TeamRow({
       running={running}
       flatlined={team.flatlined}
       size="sm"
-      className="relative h-[38px]"
+      className="relative h-[30px] sm:h-[38px]"
     />
   );
 
@@ -1139,16 +1207,18 @@ function TeamRow({
     <div
       data-row={team.id}
       style={stateStyle(level, team.timeMs)}
-      className={`relative overflow-hidden p-3 ${skin}`}
+      className={`relative overflow-hidden p-2.5 ${skin}`}
     >
       <span className="bg-state absolute inset-y-0 start-0 z-[1] w-1" aria-hidden="true" />
-      <div className="relative flex items-center gap-2.5 ps-1.5">
-        <span className="tnum w-4 shrink-0 text-center text-sm font-light text-faint">{rank}</span>
+      <div className="relative flex items-center gap-2 ps-1.5">
+        <span className="tnum w-3.5 shrink-0 text-center text-[13px] font-light text-faint">
+          {rank}
+        </span>
         <div className="min-w-0 flex-1">{name}</div>
         <div className="shrink-0 text-center">{time}</div>
         <div className="shrink-0 text-center">{score}</div>
       </div>
-      <div className="relative mt-2.5 flex items-center gap-2.5 ps-1.5">
+      <div className="relative mt-2 flex items-center gap-2 ps-1.5">
         <div className="min-w-0 flex-1">{lane}</div>
         {buttons}
       </div>

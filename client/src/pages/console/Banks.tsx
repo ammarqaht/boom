@@ -17,6 +17,8 @@ import {
   say,
   stamp,
   unit,
+  MoreRows,
+  usePaged,
 } from './shared';
 
 /**
@@ -37,6 +39,8 @@ export type Sift = {
   level: number;
   view: string;
   search: string;
+  /** مدى التواريخ في صفحة الغرف — null يعني السجلّ كلّه */
+  range?: { from: number; to: number } | null;
 };
 
 type Shared = {
@@ -167,6 +171,9 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
     });
   }, [mine, sift, sort]);
 
+  /* دفعةٌ تُرسم ثم تُطلب أختها — وألفُ صفٍّ لا تُبنى دفعةً واحدة */
+  const paged = usePaged(shown);
+
   if (!rows) return <Loading />;
 
   const flip = (key: string) =>
@@ -229,7 +236,7 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
           />
         ) : (
           <Grid cols={COLS} sort={sort} onSort={flip}>
-            {shown.map((row) => (
+            {paged.slice.map((row) => (
               <Row key={row.id} cols={COLS} onClick={() => onEdit(row.id)}>
                 <Cell>
                   <span className="inline-block max-w-full truncate rounded-chip bg-sunk px-2.5 py-1 text-[12.5px] font-medium text-muted">
@@ -275,6 +282,12 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
             ))}
           </Grid>
         )}
+        <MoreRows
+          hidden={paged.hidden}
+          onMore={paged.showMore}
+          onAll={paged.showAll}
+          kind="question"
+        />
       </Panel>
     </div>
   );

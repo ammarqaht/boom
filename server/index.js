@@ -185,6 +185,9 @@ app.get('/api/console/dashboard', owner, (_req, res) => {
       edits: store.listEdits().length,
       weak: health.filter((r) => r.shown >= 3 && r.rate !== null && r.rate < 30).length,
       lowStars: comments.filter((c) => c.stars && c.stars <= 2).length,
+      /* ما لم يُقرأ بعد — شارةٌ في الشريط وعلامةٌ على البطاقة */
+      unreadComments: store.unreadFeedback().comment,
+      unreadReports: store.unreadFeedback().report,
     },
     days,
     banks: [...byBank.values()].map((b) => ({
@@ -214,6 +217,21 @@ function median(list) {
 }
 
 app.get('/api/console/rooms', owner, (req, res) => {
+  /*
+   * ثلاث صيغ: مدًى صريح (from/to بالمللي)، أو days، أو all=1 للسجلّ كلّه.
+   * والمدى يُقدَّم لأنه أخصُّ — ومن أرسل الاثنين أراد ما اختاره بالتقويم.
+   */
+  const from = Number(req.query.from);
+  const to = Number(req.query.to);
+  if (Number.isFinite(from) && from > 0) {
+    return res.json(
+      store.listRooms(undefined, {
+        from,
+        to: Number.isFinite(to) && to > 0 ? to : Number.MAX_SAFE_INTEGER,
+      }),
+    );
+  }
+  if (req.query.all === '1') return res.json(store.listRooms(null));
   res.json(store.listRooms(Number(req.query.days) || undefined));
 });
 
@@ -236,6 +254,13 @@ app.get('/api/console/health', owner, (req, res) => {
 
 app.get('/api/console/feedback', owner, (req, res) => {
   res.json(store.listFeedback({ kind: req.query.kind || null, limit: 400 }));
+});
+
+/* «قراءة الكل»: صنفٌ بعينه أو الملاحظات جميعاً */
+app.post('/api/console/feedback/read', owner, (req, res) => {
+  const kind = req.body?.kind || null;
+  const changes = store.readFeedback(kind === 'report' || kind === 'comment' ? kind : null);
+  res.json({ ok: true, changed: changes, unread: store.unreadFeedback() });
 });
 
 /* ── تحرير البنوك ── */

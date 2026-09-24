@@ -648,6 +648,23 @@ export function Confetti({ count = 60 }: { count?: number }) {
     [count],
   );
 
+  /*
+   * تنصرف القصاصات بعد أن تقع.
+   *
+   * كانت ستّون قطعةً ثابتةَ الموضع تبقى في الشجرة إلى أن تُغلق الصفحة —
+   * شفّافةً لا تُرى، لكن كلٌّ منها طبقةُ تركيبٍ عند المُركِّب. فتثقل لوحةَ
+   * المنظّم بعد إعلان النتائج وهي أطولُ ما يبقى مفتوحاً. وأطولُ قطعةٍ
+   * تأخذ تأخيرَها ومدّتها، فبعدها لا يبقى ما يُعرض.
+   */
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    const longest = Math.max(...pieces.map((p) => p.delay + p.duration)) * 1000 + 200;
+    const t = setTimeout(() => setGone(true), longest);
+    return () => clearTimeout(t);
+  }, [pieces]);
+
+  if (gone || prefersReducedMotion()) return null;
+
   return (
     <div className="pointer-events-none fixed inset-0 z-30 overflow-hidden" aria-hidden="true">
       {pieces.map((p) => (
@@ -683,20 +700,37 @@ export function Standings({
   standings,
   meId,
   rounds,
+  compact = false,
 }: {
   standings: Standing[];
   /** صاحب الجهاز — يُعلَّم صفّه */
   meId?: string;
   rounds?: number;
+  /** داخل لوحةٍ لا على شاشةٍ: سقوفٌ أقصر تليق بعمودٍ بين لوحاتٍ أخرى */
+  compact?: boolean;
 }) {
   const top = Math.max(1, standings[0]?.score ?? 1);
   const [champion, ...rest] = standings;
   if (!champion) return null;
 
-  const px = (min: number, vw: number, max: number) => `clamp(${min}px, ${vw}vw, ${max}px)`;
+  /*
+   * المقاس من عرض الحاوية لا من عرض النافذة.
+   *
+   * كانت الوحدة vw، والمكوّن واحدٌ يعيش في ثلاثة أمكنة: شاشةُ العرض تملأ
+   * البروجكتر، ولوحةُ المنظّم عمودٌ في تسعمئة، وصفحةُ اللاعب هاتف. فكان
+   * المنظّم يرى اسم البطل بستّين بكسلاً في عمودٍ ضيّق — مقاسُ قاعةٍ في
+   * لوحةِ مكتب. وcqw تقيس ما حول العنصر فعلاً.
+   *
+   * والمعاملات مضروبةٌ في ١٩٢٠/١٤٠٠ لأن الحاوية على البروجكتر ١٤٠٠ لا
+   * ١٩٢٠ — فتبقى شاشةُ العرض على حالها تماماً.
+   */
+  const k = compact ? 0.68 : 1;
+  const px = (min: number, cqw: number, max: number) =>
+    `clamp(${Math.round(min * (compact ? 0.88 : 1))}px, ${(cqw * 1.371 * k).toFixed(2)}cqw, ${Math.round(max * k)}px)`;
 
   return (
-    <div className="mx-auto grid w-full max-w-[1400px]" style={{ gap: px(8, 0.9, 16) }}>
+    <div className="@container mx-auto w-full max-w-[1400px]">
+      <div className="grid" style={{ gap: px(8, 0.9, 16) }}>
       <Confetti />
 
       <header className="thump flex items-center justify-center" style={{ gap: px(10, 0.9, 20) }}>
@@ -804,6 +838,7 @@ export function Standings({
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
@@ -821,6 +856,16 @@ const REPORT_REASONS = ['الإجابة خاطئة', 'السؤال غامض', '�
  * أسفل الترتيب لا نافذةً تعترض: من أراد أن يقول قال، ومن أراد أن يمضي
  * مضى. والاعتراضُ على فرحة النتيجة يشتري تعليقاً ويخسر لحظة.
  */
+/** ردُّ الشكر على قدر النبضات — [العنوان، السطر تحته] */
+const THANKS: Record<number, [string, string]> = {
+  0: ['وصل رأيك — شكراً لك', 'كلُّ ملاحظةٍ تُقرأ، وعليها تُبنى الجولة القادمة.'],
+  1: ['سمعناك — وشكراً لصراحتك', 'أخبرتنا بما لم يعجبك، وسنُصلحه.'],
+  2: ['شكراً — الرسالة وصلت', 'نعرف أن فيها ما يُحسَّن، وملاحظتك تدلّنا على أوّله.'],
+  3: ['شكراً لك — رأيك في مكانه', 'نصفُ الطريق قُطع، وبملاحظتك نُكمل ما بقي.'],
+  4: ['يسعدنا هذا — شكراً لك', 'قريبٌ من التمام، وما ذكرتَه يُقرِّبه أكثر.'],
+  5: ['نبضةٌ كاملة — شكراً لك', 'سعدنا بلعبك معنا، ونراك في الجولة القادمة.'],
+};
+
 export function CommentCard({
   onSend,
 }: {
@@ -832,9 +877,19 @@ export function CommentCard({
   const [error, setError] = useState('');
 
   if (state === 'done') {
+    /*
+     * الشكرُ يُقاس بما قيل: «وصل رأيك» ردُّ إيصالٍ لا ردُّ إنسان. ومن أعطى
+     * خمساً يُفرَح معه، ومن أعطى واحدة لا يُهلَّل في وجهه — يُشكر على
+     * صراحته ويُوعَد بالإصلاح. ومن كتب بلا تقييم فله شكرٌ محايد.
+     */
+    const [line, sub] = THANKS[stars] ?? THANKS[0];
     return (
-      <div className="tile mt-5 p-5 text-center">
-        <p className="font-black text-safe">وصل رأيك — شكراً لك.</p>
+      <div className="tile mt-5 px-5 py-6 text-center">
+        <span className="mx-auto mb-2.5 flex size-11 items-center justify-center rounded-full bg-safe-2 text-safe-ink">
+          <PulseIcon size={22} strokeWidth={2.6} />
+        </span>
+        <p className="text-[17px] font-black text-safe-ink">{line}</p>
+        <p className="mt-1.5 text-[13px] leading-relaxed font-medium text-muted">{sub}</p>
       </div>
     );
   }

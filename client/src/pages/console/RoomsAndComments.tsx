@@ -16,6 +16,8 @@ import {
   span,
   stamp,
   unit,
+  MoreRows,
+  usePaged,
 } from './shared';
 import { Stars } from './Dashboard';
 import type { Counts, Sift } from './Banks';
@@ -72,11 +74,18 @@ const ROOM_COLS: Col[] = [
 
 export function Rooms({ api, sift, onCounts, reloadKey }: Props) {
   const [rows, setRows] = useState<Room[] | null>(null);
+  /*
+   * الغرف لم تعد تُحذف، فصفحتُها تعرض السجلّ كلَّه ما لم يُحدَّد مدًى.
+   * واللوحةُ الرئيسة تبقى على الستين — نظرةٌ على ما قرُب لا أرشيف.
+   */
+  const from = sift.range?.from;
+  const to = sift.range?.to;
 
   useEffect(() => {
     setRows(null);
-    void api.get<Room[]>('rooms').then(setRows);
-  }, [api, reloadKey]);
+    const query = from ? `rooms?from=${from}&to=${to ?? Date.now()}` : 'rooms?all=1';
+    void api.get<Room[]>(query).then(setRows);
+  }, [api, reloadKey, from, to]);
 
   const all = useMemo(() => rows ?? [], [rows]);
 
@@ -137,7 +146,11 @@ export function Rooms({ api, sift, onCounts, reloadKey }: Props) {
             ? say(all.length, 'room')
             : `${shown.length} من ${say(all.length, 'room')}`
         }
-        hint="السجلّ يحفظ ستّين يوماً، ثم يُنسى ما قبلها"
+        hint={
+          sift.range
+            ? `${day(sift.range.from)} — ${day(sift.range.to)}`
+            : 'السجلّ كامل — لا تُحذف غرفة'
+        }
         flush
       >
         {shown.length === 0 ? (
@@ -190,6 +203,7 @@ type Comment = {
   roomCode: string | null;
   roomName: string | null;
   createdAt: number;
+  unread?: boolean;
 };
 
 export function Comments({ api, sift, onCounts, reloadKey }: Props) {
@@ -210,22 +224,29 @@ export function Comments({ api, sift, onCounts, reloadKey }: Props) {
       admin: all.filter((r) => r.byRole === 'admin').length,
       text: all.filter((r) => r.note).length,
       low: all.filter((r) => (r.stars ?? 5) <= 2).length,
+      unread: all.filter((r) => r.unread).length,
     });
   }, [rows, all, onCounts]);
 
-  if (!rows) return <Loading />;
+  /* التصفية قبل الخروج المبكّر: الخطّافات لا تُستدعى خلف شرط */
+  const shown = useMemo(() => {
+    const text = sift.search.trim();
+    return all.filter((row) => {
+      if (text && !(row.note ?? '').includes(text) && !(row.roomName ?? '').includes(text)) {
+        return false;
+      }
+      if (sift.view === 'admin') return row.byRole === 'admin';
+      if (sift.view === 'player') return row.byRole === 'player';
+      if (sift.view === 'low') return (row.stars ?? 5) <= 2;
+      if (sift.view === 'text') return Boolean(row.note);
+      if (sift.view === 'unread') return Boolean(row.unread);
+      return true;
+    });
+  }, [all, sift.search, sift.view]);
 
-  const text = sift.search.trim();
-  const shown = all.filter((row) => {
-    if (text && !(row.note ?? '').includes(text) && !(row.roomName ?? '').includes(text)) {
-      return false;
-    }
-    if (sift.view === 'admin') return row.byRole === 'admin';
-    if (sift.view === 'player') return row.byRole === 'player';
-    if (sift.view === 'low') return (row.stars ?? 5) <= 2;
-    if (sift.view === 'text') return Boolean(row.note);
-    return true;
-  });
+  const paged = usePaged(shown, 36);
+
+  if (!rows) return <Loading />;
 
   const rated = all.filter((r) => r.stars);
   const average = rated.length
@@ -272,8 +293,24 @@ export function Comments({ api, sift, onCounts, reloadKey }: Props) {
         </Panel>
       ) : (
         <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(330px,1fr))]">
-          {shown.map((row) => (
-            <article key={row.id} className="tile flex flex-col p-4">
+          {paged.slice.map((row) => (
+            <article
+              key={row.id}
+              className={`tile relative flex flex-col p-4 ${
+                row.unread ? 'shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--color-signal)_45%,transparent)]' : ''
+              }`}
+            >
+              {/*
+               * نقطةٌ في الزاوية العليا اليمنى: أولُ ما تقع عليه العين في
+               * صفحةٍ عربية. ولا تُزاح البطاقةُ لها — تطفو فوق الحافّة.
+               */}
+              {row.unread && (
+                <span
+                  title="لم يُقرأ بعد"
+                  className="absolute -top-1 right-3 size-2.5 rounded-full bg-signal shadow-[0_0_0_3px_var(--color-surface)]"
+                  aria-label="لم يُقرأ بعد"
+                />
+              )}
               <div className="flex items-center gap-2.5 text-[12.5px]">
                 {row.stars ? (
                   <Stars n={row.stars} />
@@ -293,6 +330,17 @@ export function Comments({ api, sift, onCounts, reloadKey }: Props) {
               </div>
             </article>
           ))}
+        </div>
+      )}
+
+      {paged.hidden > 0 && (
+        <div className="tile">
+          <MoreRows
+            hidden={paged.hidden}
+            onMore={paged.showMore}
+            onAll={paged.showAll}
+            kind="comment"
+          />
         </div>
       )}
     </div>
