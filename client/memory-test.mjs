@@ -1,12 +1,28 @@
 // اختبار الذاكرة: تُكتب الغرفة على القرص، وتُبعث كما كانت — موقوفة
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import pg from 'pg';
 
-// قاعدةٌ مؤقّتة: الاختبار لا يلمس ذاكرة السيرفر الحقيقية
-const dir = mkdtempSync(join(tmpdir(), 'nabda-'));
-process.env.NABDA_DB = join(dir, 'test.db');
+/*
+ * قاعدةٌ للاختبار وحده، تُمسح قبل كل تشغيل.
+ *
+ * والمسح بالمخطّط كلّه لا بالجداول واحداً واحداً: الجدول الذي يُضاف غداً
+ * ينسى أحدٌ إدراجه في قائمة التفريغ، فتتسرّب صفوفُ تشغيلٍ إلى تشغيل
+ * ويمرّ اختبارٌ كان يجب أن يسقط. وstore.js يعيد بناء ما يحتاجه عند استيراده.
+ *
+ * وحارسٌ على الاسم: DATABASE_URL في الطرفية قد يكون قاعدة الإنتاج، وأمرٌ
+ * واحدٌ هنا يمحوها كلها. فلا نمسح إلا ما في اسمه «test».
+ */
+const DB_URL = process.env.NABDA_TEST_DB || 'postgres://localhost/nabda_test';
+if (!/test/i.test(new URL(DB_URL).pathname)) {
+  console.error('❌ قاعدة الاختبار يجب أن يحوي اسمُها «test» — رُفض المسح');
+  process.exit(1);
+}
+process.env.DATABASE_URL = DB_URL;
+
+const admin = new pg.Pool({ connectionString: DB_URL });
+await admin.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;');
+await admin.end();
 
 const serverDir = join(process.cwd(), '..', 'server');
 const game = await import(pathToFileURL(join(serverDir, 'game.js')).href);
@@ -48,8 +64,8 @@ const before = {
 check('عُرضت أسئلةٌ وسُجّلت على مستوى الغرفة', before.served > 0);
 
 // ══ الكتابة ═══════════════════════════════════════════════════
-store.saveRoom(room);
-const listed = store.listRooms();
+await store.saveRoom(room);
+const listed = await store.listRooms();
 check('الغرفة دخلت السجلّ', listed.length === 1 && listed[0].code === before.code);
 check(
   'السجلّ يحمل الاسم والمستوى',
@@ -65,7 +81,7 @@ game.sweepIdleRooms(Date.now() + IDLE_ROOM_MS + 1);
 check('ذهبت الغرفة من الذاكرة', getRoom(before.code) === undefined);
 
 // ══ البعث ═════════════════════════════════════════════════════
-const snaps = store.loadSnapshots(IDLE_ROOM_MS);
+const snaps = await store.loadSnapshots(IDLE_ROOM_MS);
 check('اللقطة على القرص', snaps.length === 1);
 const back = restoreRoom(snaps[0]);
 
@@ -127,8 +143,8 @@ check(
   drained.every((d) => d.bank && d.level >= 1 && d.level <= 3 && d.text.length > 0),
 );
 
-store.recordStats(drained);
-const health = store.questionHealth({ minShown: 1, limit: 500 });
+await store.recordStats(drained);
+const health = await store.questionHealth({ minShown: 1, limit: 500 });
 const byId = new Map(health.map((h) => [h.id, h]));
 check(
   'كل سؤالٍ أُجيب عنه دخل جدول الصحّة',
@@ -146,12 +162,19 @@ check('الأضعف صواباً يتصدّر القائمة', health[0].rate <=
 
 // الفروق تُجمع لا تُستبدل: نُعيد صرف الفرق نفسه فيتضاعف العدّ
 const one = scored[0];
-store.recordStats([{ id: one.id, bank: 'x', level: 2, text: '', shown: 1, correct: 1, wrong: 0 }]);
-const after = store.questionHealth({ minShown: 1, limit: 500 }).find((h) => h.id === one.id);
+await store.recordStats([
+  { id: one.id, bank: 'x', level: 2, text: '', shown: 1, correct: 1, wrong: 0 },
+]);
+const after = (await store.questionHealth({ minShown: 1, limit: 500 })).find(
+  (h) => h.id === one.id,
+);
 check('الفروق تُجمع على ما في القرص لا تُستبدل به', after.correct === 2);
 check('النصّ الفارغ لا يمحو النصّ المحفوظ', after.text.length > 0);
 
-check('حدّ العرض الأدنى يُخفي ما لا يدلّ', store.questionHealth({ minShown: 99 }).length === 0);
+check(
+  'حدّ العرض الأدنى يُخفي ما لا يدلّ',
+  (await store.questionHealth({ minShown: 99 })).length === 0,
+);
 
 // ══ سجلّ أسئلة المنظّم ════════════════════════════════════════
 const sheet = back.feedState();
@@ -187,7 +210,7 @@ check(
   back.feedState().find((r) => r.id === victim.id).reported === true,
 );
 
-store.addFeedback({
+await store.addFeedback({
   kind: 'report',
   questionId: victim.id,
   question: victim.q,
@@ -197,7 +220,7 @@ store.addFeedback({
   note: 'الصواب غير مذكور في الخيارات',
   byRole: 'admin',
 });
-const reports = store.listFeedback({ kind: 'report' });
+const reports = await store.listFeedback({ kind: 'report' });
 check('البلاغ دخل القاعة', reports.length === 1 && reports[0].questionId === victim.id);
 check('ويحمل نصّ السؤال لا معرّفه وحده', reports[0].question === victim.q);
 check(
@@ -205,8 +228,8 @@ check(
   reports[0].roomCode === back.code && reports[0].reason === 'الإجابة خاطئة',
 );
 check('ولا هويّة لصاحبه', reports[0].byName === null);
-check('عدّ البلاغات لكل سؤال', store.reportCounts().get(victim.id) === 1);
-check('تصفية الصنف تعمل', store.listFeedback({ kind: 'comment' }).length === 0);
+check('عدّ البلاغات لكل سؤال', (await store.reportCounts()).get(victim.id) === 1);
+check('تصفية الصنف تعمل', (await store.listFeedback({ kind: 'comment' })).length === 0);
 
 // ══ أرشيف التحرير: يمحو ما قِيس، ويحفظ النسخة ثلاثين يوماً ══════
 const edited = {
@@ -222,23 +245,29 @@ const edited = {
   newLevel: 2,
 };
 
-check('للسؤال إحصاءٌ قبل المحو', store.questionStat(victim.id).shown > 0);
-check('وعليه بلاغ', store.reportCounts().get(victim.id) === 1);
+check('للسؤال إحصاءٌ قبل المحو', (await store.questionStat(victim.id)).shown > 0);
+check('وعليه بلاغ', (await store.reportCounts()).get(victim.id) === 1);
 
-const wiped = store.clearQuestion(victim.id);
+const wiped = await store.clearQuestion(victim.id);
 check('المحو يُرجع ما كان', wiped.shown > 0 && wiped.reports === 1);
-check('الإحصاء ذهب', store.questionStat(victim.id) === null);
-check('والبلاغ ذهب معه', store.listFeedback({ kind: 'report' }).length === 0);
-check('ولا يظهر في جدول الصحّة', !store.questionHealth({ minShown: 1 }).some((r) => r.id === victim.id));
+check('الإحصاء ذهب', (await store.questionStat(victim.id)) === null);
+check('والبلاغ ذهب معه', (await store.listFeedback({ kind: 'report' })).length === 0);
+check(
+  'ولا يظهر في جدول الصحّة',
+  !(await store.questionHealth({ minShown: 1 })).some((r) => r.id === victim.id),
+);
 
-store.recordEdit({ ...edited, cleared: wiped });
-const edits = store.listEdits();
+await store.recordEdit({ ...edited, cleared: wiped });
+const edits = await store.listEdits();
 check('النسخة القديمة محفوظة', edits.length === 1 && edits[0].oldQ === victim.q);
 check('ومعها ما مُحي', edits[0].shown === wiped.shown && edits[0].reports === 1);
-check('والخيارات تعود مصفوفةً كما كتبت', Array.isArray(edits[0].oldOptions) && edits[0].oldOptions.length === 4);
-check('وتُقرأ بمعرّفها', store.getEdit(edits[0].id).oldQ === victim.q);
+check(
+  'والخيارات تعود مصفوفةً كما كتبت',
+  Array.isArray(edits[0].oldOptions) && edits[0].oldOptions.length === 4,
+);
+check('وتُقرأ بمعرّفها', (await store.getEdit(edits[0].id)).oldQ === victim.q);
 
-store.recordEdit({
+await store.recordEdit({
   kind: 'delete',
   bankId: 'hadith',
   oldId: 'hadith:محذوف',
@@ -247,9 +276,15 @@ store.recordEdit({
   oldLevel: 3,
   cleared: { shown: 0, correct: 0, wrong: 0, reports: 0 },
 });
-check('الحذف يُسجَّل كالتحرير', store.listEdits().filter((r) => r.kind === 'delete').length === 1);
+check(
+  'الحذف يُسجَّل كالتحرير',
+  (await store.listEdits()).filter((r) => r.kind === 'delete').length === 1,
+);
 
-check('ما نُسي لا يُقرأ', store.forgetEdit(edits[0].id) === 1 && store.listEdits().length === 1);
+check(
+  'ما نُسي لا يُقرأ',
+  (await store.forgetEdit(edits[0].id)) === 1 && (await store.listEdits()).length === 1,
+);
 
 // ══ نقاط المنظّم اليدوية: تُزاد وتُنقص ولا تنزل تحت الصفر ═══════
 const tally = createRoom(['quran'], {}, 'middle', 'غرفة النقاط');
@@ -264,10 +299,9 @@ tally.adjustScore('لا-وجود-له', 5);
 check('ولاعبٌ مجهول لا يكسر شيئاً', tally.teams.get(solo.id).score === 0);
 
 // ══ اللقطة تذهب والسجلّ يبقى ══════════════════════════════════
-store.forgetState(before.code);
-check('ما عادت تُبعث', store.loadSnapshots(IDLE_ROOM_MS).length === 0);
-check('وبقيت في السجلّ', store.listRooms().length === 1);
+await store.forgetState(before.code);
+check('ما عادت تُبعث', (await store.loadSnapshots(IDLE_ROOM_MS)).length === 0);
+check('وبقيت في السجلّ', (await store.listRooms()).length === 1);
 
-store.close();
-rmSync(dir, { recursive: true, force: true });
+await store.close();
 process.exit(0);
