@@ -36,6 +36,27 @@ app.use(express.json({ limit: '256kb' }));
 const http = createServer(app);
 const io = new Server(http, { cors: { origin: '*' } });
 
+/*
+ * معالجٌ لا متزامن في Express 4 لا يُلتقط رفضُه: الوعد يُرفض بلا مستمع،
+ * وNode الحديث يُسقط العملية كلها على ذلك — فتموت جولةٌ جارية لأن استعلاماً
+ * تأخّر. ولفُّ كل معالجٍ بيده في كل مسار عملٌ يُنسى منه واحد، فنلفُّها هنا
+ * مرّةً عند التسجيل: ما رُفض وعدُه ذهب إلى next فإلى معالج الأخطاء.
+ *
+ * وما كان طولُه أربعةً يُترك: ذاك معالج أخطاء بذاته لا معالج طلب.
+ */
+for (const verb of ['get', 'post', 'put', 'delete', 'patch']) {
+  const original = app[verb].bind(app);
+  app[verb] = (path, ...handlers) =>
+    original(
+      path,
+      ...handlers.map((fn) =>
+        typeof fn !== 'function' || fn.length >= 4
+          ? fn
+          : (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next),
+      ),
+    );
+}
+
 app.get('/api/banks', (_req, res) => res.json(listBanks()));
 app.get('/api/health', (_req, res) => res.json({ ok: true, rooms: [...allRooms()].length }));
 
@@ -93,18 +114,18 @@ function owner(req, res, next) {
   return res.status(401).json({ error: 'مفتاح غير صحيح' });
 }
 
-app.get('/api/console/summary', owner, (_req, res) => {
-  const rooms = store.listRooms();
+app.get('/api/console/summary', owner, async (_req, res) => {
+  const rooms = await store.listRooms();
   const month = Date.now() - 30 * 24 * 60 * 60 * 1000;
   const recent = rooms.filter((r) => r.createdAt >= month);
-  const comments = store.listFeedback({ kind: 'comment', limit: 1000 });
+  const comments = await store.listFeedback({ kind: 'comment', limit: 1000 });
   const rated = comments.filter((c) => c.stars);
   res.json({
     rooms: recent.length,
     players: recent.reduce((n, r) => n + r.players, 0),
     rounds: recent.reduce((n, r) => n + r.rounds, 0),
     live: [...allRooms()].filter((r) => r.status !== 'finished').length,
-    reports: store.listFeedback({ kind: 'report', limit: 1000 }).length,
+    reports: (await store.listFeedback({ kind: 'report', limit: 1000 })).length,
     comments: comments.length,
     stars: rated.length ? rated.reduce((n, c) => n + c.stars, 0) / rated.length : null,
   });
@@ -123,12 +144,19 @@ app.get('/api/console/summary', owner, (_req, res) => {
  * الجانبيّ في شاراته. ولو حسبه كلٌّ لنفسه لاختلفا يوماً — وقد اختلفا:
  * كانت الشارةُ لا تُحسب إلا واللوحةُ معروضة، فيُحرّر المالك سبعةَ أسئلة
  * وشارتُها تقول صفراً حتى يدخل صفحتها.
+ *
+ * والاستعلاماتُ الخمسة تُرسَل معاً لا واحداً بعد واحد: لا يتوقّف أحدها
+ * على جواب الآخر، فانتظارُها بالتتابع خمسُ رحلاتٍ إلى القاعدة مكان واحدة.
  */
-function ownerPulse() {
-  const health = store.questionHealth({ minShown: 1, limit: 100000 });
-  const comments = store.listFeedback({ kind: 'comment', limit: 1000 });
+async function ownerPulse() {
+  const [health, comments, unread, reports, edits] = await Promise.all([
+    store.questionHealth({ minShown: 1, limit: 100000 }),
+    store.listFeedback({ kind: 'comment', limit: 1000 }),
+    store.unreadFeedback(),
+    store.listFeedback({ kind: 'report', limit: 5000 }),
+    store.listEdits(),
+  ]);
   const checked = auditAll(allBanks());
-  const unread = store.unreadFeedback();
   return {
     health,
     comments,
@@ -139,9 +167,9 @@ function ownerPulse() {
     },
     totals: {
       live: [...allRooms()].filter((r) => r.status !== 'finished').length,
-      reports: store.listFeedback({ kind: 'report', limit: 5000 }).length,
+      reports: reports.length,
       measured: health.length,
-      edits: store.listEdits().length,
+      edits: edits.length,
       weak: health.filter((r) => r.shown >= 3 && r.rate !== null && r.rate < 30).length,
       lowStars: comments.filter((c) => c.stars && c.stars <= 2).length,
       unreadComments: unread.comment,
@@ -151,8 +179,8 @@ function ownerPulse() {
 }
 
 /** الشارات وحدها — تُقرأ بعد كل حفظٍ بلا حمل اللوحة كلّها */
-app.get('/api/console/alerts', owner, (_req, res) => {
-  const pulse = ownerPulse();
+app.get('/api/console/alerts', owner, async (_req, res) => {
+  const pulse = await ownerPulse();
   res.json({
     ...pulse.totals,
     issues: pulse.audit.errors + pulse.audit.warnings,
@@ -160,10 +188,10 @@ app.get('/api/console/alerts', owner, (_req, res) => {
   });
 });
 
-app.get('/api/console/dashboard', owner, (_req, res) => {
+app.get('/api/console/dashboard', owner, async (_req, res) => {
   const DAY = 24 * 60 * 60 * 1000;
   const now = Date.now();
-  const rooms = store.listRooms();
+  const rooms = await store.listRooms();
   const played = rooms.filter((r) => r.playedMs !== null);
 
   /* نشاطٌ يوميّ لأربعة عشر يوماً — العمود الفارغ خبرٌ كالعامر */
@@ -180,9 +208,8 @@ app.get('/api/console/dashboard', owner, (_req, res) => {
   }
 
   /* صحّة كل بنك: كم سؤالاً فيه، وكم عُرض منه، وما نسبة صوابه، وكم بلاغاً */
-  const pulse = ownerPulse();
+  const [pulse, reports] = await Promise.all([ownerPulse(), store.reportCounts()]);
   const health = pulse.health;
-  const reports = store.reportCounts();
   const byBank = new Map();
   for (const bank of allBanks()) {
     byBank.set(bank.id, {
@@ -250,7 +277,7 @@ function median(list) {
   return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
 }
 
-app.get('/api/console/rooms', owner, (req, res) => {
+app.get('/api/console/rooms', owner, async (req, res) => {
   /*
    * ثلاث صيغ: مدًى صريح (from/to بالمللي)، أو days، أو all=1 للسجلّ كلّه.
    * والمدى يُقدَّم لأنه أخصُّ — ومن أرسل الاثنين أراد ما اختاره بالتقويم.
@@ -259,19 +286,19 @@ app.get('/api/console/rooms', owner, (req, res) => {
   const to = Number(req.query.to);
   if (Number.isFinite(from) && from > 0) {
     return res.json(
-      store.listRooms(undefined, {
+      await store.listRooms(undefined, {
         from,
         to: Number.isFinite(to) && to > 0 ? to : Number.MAX_SAFE_INTEGER,
       }),
     );
   }
-  if (req.query.all === '1') return res.json(store.listRooms(null));
-  res.json(store.listRooms(Number(req.query.days) || undefined));
+  if (req.query.all === '1') return res.json(await store.listRooms(null));
+  res.json(await store.listRooms(Number(req.query.days) || undefined));
 });
 
 /** الغرفةُ الواحدة بتفاصيلها — تُقرأ قبل الحذف ليرى المالك ما سيمحو */
-app.get('/api/console/room/:code', owner, (req, res) => {
-  const room = store.roomDetail(String(req.params.code).toUpperCase());
+app.get('/api/console/room/:code', owner, async (req, res) => {
+  const room = await store.roomDetail(String(req.params.code).toUpperCase());
   if (!room) return res.status(404).json({ error: 'غرفة غير موجودة' });
   const live = getRoom(room.code);
   res.json({ ...room, live: Boolean(live) && live.status !== 'finished' });
@@ -283,23 +310,23 @@ app.get('/api/console/room/:code', owner, (req, res) => {
  * فاللاعبون فيها متّصلون، ومحوُ سجلّها من تحتهم يقطعهم بلا خبر. تُنهى
  * أولاً — وذاك شيءٌ يرونه — ثم تُحذف، وهذا لا يرونه.
  */
-app.delete('/api/console/room/:code', owner, (req, res) => {
+app.delete('/api/console/room/:code', owner, async (req, res) => {
   const code = String(req.params.code).toUpperCase();
   const live = getRoom(code);
   if (live && live.status !== 'finished') {
     return res.status(409).json({ error: 'الغرفة تعمل الآن — أنهِ المسابقة ثم احذفها' });
   }
-  const gone = store.forgetRoom(code);
+  const gone = await store.forgetRoom(code);
   if (!gone) return res.status(404).json({ error: 'غرفة غير موجودة' });
   /* من الذاكرة أيضاً، وإلا أعادتها دورةُ الحفظ بعد ثانيتين */
   dropRoom(code);
   res.json({ ok: true, room: gone });
 });
 
-app.get('/api/console/health', owner, (req, res) => {
-  const counts = store.reportCounts();
+app.get('/api/console/health', owner, async (req, res) => {
+  const counts = await store.reportCounts();
   const names = new Map(allBanks().map((b) => [b.id, b.name]));
-  const rows = store.questionHealth({
+  const rows = await store.questionHealth({
     minShown: Number(req.query.minShown) || 1,
     limit: Number(req.query.limit) || 400,
   });
@@ -313,15 +340,15 @@ app.get('/api/console/health', owner, (req, res) => {
   );
 });
 
-app.get('/api/console/feedback', owner, (req, res) => {
-  res.json(store.listFeedback({ kind: req.query.kind || null, limit: 400 }));
+app.get('/api/console/feedback', owner, async (req, res) => {
+  res.json(await store.listFeedback({ kind: req.query.kind || null, limit: 400 }));
 });
 
 /* «قراءة الكل»: صنفٌ بعينه أو الملاحظات جميعاً */
-app.post('/api/console/feedback/read', owner, (req, res) => {
+app.post('/api/console/feedback/read', owner, async (req, res) => {
   const kind = req.body?.kind || null;
-  const changes = store.readFeedback(kind === 'report' || kind === 'comment' ? kind : null);
-  res.json({ ok: true, changed: changes, unread: store.unreadFeedback() });
+  const changes = await store.readFeedback(kind === 'report' || kind === 'comment' ? kind : null);
+  res.json({ ok: true, changed: changes, unread: await store.unreadFeedback() });
 });
 
 /* ── تحرير البنوك ── */
@@ -334,15 +361,15 @@ app.post('/api/console/feedback/read', owner, (req, res) => {
  * يُرى. وجمعُها هنا مرّةٌ واحدة أرخص من تسعة نداءات يمرّ كلٌّ منها على
  * جدول الإحصاء كاملاً.
  */
-app.get('/api/console/bank/:id', owner, (req, res) => {
+app.get('/api/console/bank/:id', owner, async (req, res) => {
   const wanted = req.params.id;
   const banks = wanted === 'all' ? allBanks() : allBanks().filter((b) => b.id === wanted);
   if (banks.length === 0) return res.status(404).json({ error: 'بنك غير معروف' });
 
   const stats = new Map(
-    store.questionHealth({ minShown: 1, limit: 100000 }).map((row) => [row.id, row]),
+    (await store.questionHealth({ minShown: 1, limit: 100000 })).map((row) => [row.id, row]),
   );
-  const reports = store.reportCounts();
+  const reports = await store.reportCounts();
 
   const questions = [];
   for (const bank of banks) {
@@ -372,12 +399,12 @@ app.get('/api/console/bank/:id', owner, (req, res) => {
 });
 
 /** سؤالٌ واحد بتمامه — تفتح به صفحاتُ الصحّة والبلاغات المحرّرَ نفسه */
-app.get('/api/console/question/:id', owner, (req, res) => {
+app.get('/api/console/question/:id', owner, async (req, res) => {
   const found = findQuestion(req.params.id);
   if (!found) return res.status(404).json({ error: 'سؤال غير موجود' });
   const { bank, question } = found;
   /* ما قاسه اللعب يُقرأ في المحرّر: تُحرّر السؤال وأنت ترى لماذا تُحرّره */
-  const stat = store.questionStat(question.id);
+  const stat = await store.questionStat(question.id);
   res.json({
     id: question.id,
     bankId: bank.id,
@@ -390,7 +417,7 @@ app.get('/api/console/question/:id', owner, (req, res) => {
     correct: stat?.correct ?? 0,
     wrong: stat?.wrong ?? 0,
     rate: stat?.rate ?? null,
-    reports: store.reportCounts().get(question.id) ?? 0,
+    reports: (await store.reportCounts()).get(question.id) ?? 0,
     issues: auditQuestion(question),
   });
 });
@@ -443,7 +470,7 @@ app.post('/api/console/bank/:id/question', owner, (req, res) => {
  * وتغييرُ المستوى وحده لا يمحو شيئاً: المستوى وصفٌ للسؤال لا سؤالٌ آخر،
  * وما قِيس من صوابٍ وخطأ يصفه كما هو.
  */
-app.put('/api/console/question/:id', owner, (req, res) => {
+app.put('/api/console/question/:id', owner, async (req, res) => {
   const found = findQuestion(req.params.id);
   if (!found) return res.status(404).json({ error: 'سؤال غير موجود' });
 
@@ -459,10 +486,10 @@ app.put('/api/console/question/:id', owner, (req, res) => {
 
   let cleared = null;
   if (changed) {
-    cleared = store.clearQuestion(before.id);
+    cleared = await store.clearQuestion(before.id);
     /* المعرّف بصمةُ النصّ، فتحريرُ النصّ يلده جديداً — ونقرؤه من المحفوظ */
     const after = findQuestion(before.id) ? before.id : null;
-    store.recordEdit({
+    await store.recordEdit({
       kind: 'edit',
       bankId: found.bank.id,
       oldId: before.id,
@@ -487,7 +514,7 @@ function newIdOf(bankId, text) {
 }
 
 /** الحذف كالتحرير: يمحو ما قِيس، ويُحفظ في الأرشيف ليُرجَع إن نُدم عليه */
-app.delete('/api/console/question/:id', owner, (req, res) => {
+app.delete('/api/console/question/:id', owner, async (req, res) => {
   const found = findQuestion(req.params.id);
   if (!found) return res.status(404).json({ error: 'سؤال غير موجود' });
   if (found.bank.questions.length <= 1) {
@@ -498,8 +525,8 @@ app.delete('/api/console/question/:id', owner, (req, res) => {
     found.bank.id,
     found.bank.questions.filter((q) => q.id !== req.params.id),
   );
-  const cleared = store.clearQuestion(before.id);
-  store.recordEdit({
+  const cleared = await store.clearQuestion(before.id);
+  await store.recordEdit({
     kind: 'delete',
     bankId: found.bank.id,
     oldId: before.id,
@@ -514,10 +541,10 @@ app.delete('/api/console/question/:id', owner, (req, res) => {
 
 /* ── الأسئلة المحرَّرة: أرشيفُ ثلاثين يوماً ── */
 
-app.get('/api/console/edits', owner, (_req, res) => {
+app.get('/api/console/edits', owner, async (_req, res) => {
   const names = new Map(allBanks().map((b) => [b.id, b.name]));
   res.json(
-    store.listEdits().map((row) => ({
+    (await store.listEdits()).map((row) => ({
       ...row,
       bankName: names.get(row.bank) ?? row.bank,
       /* أُرجِع فعلاً؟ يُقرأ من البنك لا من الأرشيف — والبنك هو الحقيقة */
@@ -533,8 +560,8 @@ app.get('/api/console/edits', owner, (_req, res) => {
  * إن كانت حذفاً. وإحصاؤها لا يعود — فقد مُحي حين حُرِّرت، وإرجاعُ النصّ
  * لا يُرجع ما قيس عليه. تبدأ من جديد.
  */
-app.post('/api/console/edit/:id/restore', owner, (req, res) => {
-  const edit = store.getEdit(req.params.id);
+app.post('/api/console/edit/:id/restore', owner, async (req, res) => {
+  const edit = await store.getEdit(req.params.id);
   if (!edit) return res.status(404).json({ error: 'لا نسخة بهذا الرقم' });
 
   const bank = allBanks().find((b) => b.id === edit.bank);
@@ -548,7 +575,7 @@ app.post('/api/console/edit/:id/restore', owner, (req, res) => {
       : [...bank.questions, old];
 
   saveBank(bank.id, questions);
-  store.forgetEdit(edit.id);
+  await store.forgetEdit(edit.id);
   res.json({ ok: true });
 });
 
@@ -579,7 +606,7 @@ const meta = (html, key, value) =>
  * وعنوانُ الصورة لا بدّ أن يكون مطلقاً، والنطاقُ لا يُعرف وقت البناء —
  * فيُقرأ من ترويسة الطلب. ورابطُ الغرفة يأخذ بطاقته باسمها.
  */
-function serve(req, res) {
+async function serve(req, res) {
   const proto = String(req.headers['x-forwarded-proto'] || req.protocol).split(',')[0];
   const origin = `${proto}://${req.headers.host}`;
   const code = String(req.query.code || '').toUpperCase();
@@ -592,15 +619,16 @@ function serve(req, res) {
   let path = req.path;
 
   if (req.path === '/play' && /^[A-Z0-9]{4,6}$/.test(code)) {
-    const room = getRoom(code) ?? store.roomDetail(code);
+    /*
+     * الحيّةُ من الذاكرة، والمنقضيةُ من القاعدة — والثانيةُ وعدٌ يُنتظر.
+     * ولو نُسي انتظارُه لخرجت البطاقة تدعو إلى غرفة «undefined».
+     */
+    const room = getRoom(code) ?? (await store.roomDetail(code));
     if (room) {
       const name = esc(room.name);
       card = '/og-play.png';
       path = `/play?code=${code}`;
-      html = html.replace(
-        '<title>نبضة</title>',
-        `<title>انضمّ إلى «${name}» — نبضة</title>`,
-      );
+      html = html.replace('<title>نبضة</title>', `<title>انضمّ إلى «${name}» — نبضة</title>`);
       html = meta(html, 'title', `انضمّ إلى «${name}» — نبضة`);
       html = meta(html, 'description', `رمز الغرفة ${code} · افتح الرابط واكتب اسم فريقك`);
       html = meta(html, 'image:alt', `دعوةٌ للانضمام إلى مسابقة ${name}`);
@@ -640,16 +668,30 @@ app.use(
   }),
 );
 
-app.get('*', (req, res) => {
+app.get('*', (req, res, next) => {
   res.setHeader('Cache-Control', 'no-cache');
-  serve(req, res);
+  /* الصفحةُ تُقرأ من القاعدة الآن، فسقوطُها يُسلَّم لمعالج الأخطاء لا للعدم */
+  serve(req, res).catch(next);
+});
+
+/*
+ * آخرُ ما يُسجَّل: ما سقط من معالجٍ — أو رُفض وعدُه — ينتهي هنا.
+ *
+ * ولا يُعاد نصُّ الخطأ إلى الطالب: رسائل القاعدة تحمل أسماء جداولها
+ * وأعمدتها، وهي خريطةٌ لمن يبحث عن ثغرة. السجلُّ للمالك والرقمُ للطالب.
+ */
+// eslint-disable-next-line no-unused-vars
+app.use((err, _req, res, _next) => {
+  console.error('✖ خطأٌ في طلب:', err?.message ?? err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'تعذّر تنفيذ الطلب' });
 });
 
 /*
  * بعثُ ما كان: الغرف التي لم تخمل تعود كما تركها السيرفر — لكن موقوفة.
  * وتقع قبل أي اتصال، فأول لاعبٍ يفتح صفحته يجد غرفته مكانها.
  */
-const revived = store.loadSnapshots(IDLE_ROOM_MS);
+const revived = await store.loadSnapshots(IDLE_ROOM_MS);
 for (const snap of revived) {
   try {
     restoreRoom(snap);
@@ -658,7 +700,7 @@ for (const snap of revived) {
   }
 }
 if (revived.length) console.log(`↺ عادت ${revived.length} غرفة من القرص — كلّها موقوفة`);
-store.sweepOld();
+await store.sweepOld();
 
 const channel = (code) => `room:${code}`;
 /*
@@ -667,6 +709,25 @@ const channel = (code) => `room:${code}`;
  * من الشبكة قبل أن يجيب.
  */
 const adminChannel = (code) => `admin:${code}`;
+
+/**
+ * يحفظ رأياً ويقول: أَحُفِظ؟
+ *
+ * والكتابة صارت تعبر الشبكة فقد تتعذّر، والمتّصل ينتظر رداً. فلو تركنا
+ * الاستثناء يصعد من معالجٍ لا متزامن لسقط بلا مستمع فأسقط العملية —
+ * وجولةُ قاعةٍ كاملة تموت لأن تعليقاً لم يُكتب. ونردّ بالفشل صريحاً:
+ * صمتٌ يظنّه صاحبه نجاحاً أسوأ من خبرٍ سيّئ.
+ */
+async function keepFeedback(entry, reply) {
+  try {
+    await store.addFeedback(entry);
+    return true;
+  } catch (err) {
+    console.warn('⚠ تعذّر حفظ الرأي:', err.message);
+    reply?.({ ok: false, error: 'تعذّر الحفظ — حاول مرّة أخرى' });
+    return false;
+  }
+}
 
 /** آخر نسخةٍ من سجلّ الأسئلة أُرسلت لكل غرفة — فلا يُعاد إرسال ما لم يتغيّر */
 const feedSent = new Map();
@@ -883,23 +944,28 @@ io.on('connection', (socket) => {
    * بلاغٌ على سؤال. لا يُسقط السؤال عن أحد ولا يُوقف شيئاً — إشارةٌ تُسجَّل
    * ويراها المالك لاحقاً. وبلا هويّة: المهمّ السؤال لا من رآه.
    */
-  socket.on('admin:report', ({ questionId, reason, note } = {}, reply) => {
+  socket.on('admin:report', async ({ questionId, reason, note } = {}, reply) => {
     const room = asAdmin();
     if (!room) return reply?.({ ok: false, error: 'غير مصرح' });
     const record = room.served.get(questionId);
     if (!record) return reply?.({ ok: false, error: 'هذا السؤال لم يُعرض في هذه الغرفة' });
-    store.addFeedback({
-      kind: 'report',
-      questionId,
-      question: record.q,
-      roomCode: room.code,
-      roomName: room.name,
-      reason: String(reason || '').slice(0, 40),
-      note: String(note || '')
-        .trim()
-        .slice(0, 300),
-      byRole: 'admin',
-    });
+    const saved = await keepFeedback(
+      {
+        kind: 'report',
+        questionId,
+        question: record.q,
+        roomCode: room.code,
+        roomName: room.name,
+        reason: String(reason || '').slice(0, 40),
+        note: String(note || '')
+          .trim()
+          .slice(0, 300),
+        byRole: 'admin',
+      },
+      reply,
+    );
+    /* لا يُعلَن نجاحٌ لم يقع: keepFeedback ردّ بالفشل، ونحن نصمت هنا */
+    if (!saved) return;
     room.markReported(questionId);
     pushFeed(room);
     reply?.({ ok: true });
@@ -912,23 +978,28 @@ io.on('connection', (socket) => {
    * فلا معرّف سؤالٍ بيده يُبلّغ عنه وهو يلعب. والوقت يجري، وشغلُه بالتبليغ
    * يسرق من نبضه.
    */
-  socket.on('team:report', ({ questionId, reason, note } = {}, reply) => {
+  socket.on('team:report', async ({ questionId, reason, note } = {}, reply) => {
     if (ctx?.role !== 'team') return reply?.({ ok: false, error: 'غير مصرح' });
     const room = getRoom(ctx.code);
     const record = room?.served.get(questionId);
     if (!record) return reply?.({ ok: false, error: 'هذا السؤال لم يُعرض في هذه الغرفة' });
-    store.addFeedback({
-      kind: 'report',
-      questionId,
-      question: record.q,
-      roomCode: room.code,
-      roomName: room.name,
-      reason: String(reason || '').slice(0, 40),
-      note: String(note || '')
-        .trim()
-        .slice(0, 300),
-      byRole: 'player', // بلا اسم: المهمّ السؤال لا من رآه
-    });
+    const saved = await keepFeedback(
+      {
+        kind: 'report',
+        questionId,
+        question: record.q,
+        roomCode: room.code,
+        roomName: room.name,
+        reason: String(reason || '').slice(0, 40),
+        note: String(note || '')
+          .trim()
+          .slice(0, 300),
+        byRole: 'player', // بلا اسم: المهمّ السؤال لا من رآه
+      },
+      reply,
+    );
+    /* لا يُعلَن نجاحٌ لم يقع: keepFeedback ردّ بالفشل، ونحن نصمت هنا */
+    if (!saved) return;
     /*
      * ولا يُعلَّم السؤال في سجلّ المنظّم ولا يُبثّ إليه.
      *
@@ -946,7 +1017,7 @@ io.on('connection', (socket) => {
    * ويُقبل من المنظّم ومن اللاعب: كلاهما لعب، وكلاهما رأيُه يُبنى عليه.
    * وواحدٌ لكل جلسة، فلا يُغرق أحدٌ الجدول بضغطات.
    */
-  socket.on('feedback:comment', ({ stars, text } = {}, reply) => {
+  socket.on('feedback:comment', async ({ stars, text } = {}, reply) => {
     if (!ctx) return reply?.({ ok: false, error: 'غير مصرح' });
     if (ctx.commented) return reply?.({ ok: false, error: 'وصلنا رأيك — شكراً لك' });
     const room = getRoom(ctx.code);
@@ -960,15 +1031,20 @@ io.on('connection', (socket) => {
     if (!rated && !clean) return reply?.({ ok: false, error: 'اختر تقييماً أو اكتب رأيك' });
 
     const team = ctx.role === 'team' ? room.teams.get(ctx.teamId) : null;
-    store.addFeedback({
-      kind: 'comment',
-      roomCode: room.code,
-      roomName: room.name,
-      note: clean || null,
-      stars: rated ? rating : null,
-      byRole: ctx.role === 'team' ? 'player' : 'admin',
-      byName: team?.name ?? null, // الفريق باسمه، والمنظّم باسم غرفته
-    });
+    const saved = await keepFeedback(
+      {
+        kind: 'comment',
+        roomCode: room.code,
+        roomName: room.name,
+        note: clean || null,
+        stars: rated ? rating : null,
+        byRole: ctx.role === 'team' ? 'player' : 'admin',
+        byName: team?.name ?? null, // الفريق باسمه، والمنظّم باسم غرفته
+      },
+      reply,
+    );
+    /* لا يُعلَن نجاحٌ لم يقع: keepFeedback ردّ بالفشل، ونحن نصمت هنا */
+    if (!saved) return;
     ctx.commented = true;
     reply?.({ ok: true });
   });
@@ -1023,13 +1099,13 @@ setInterval(() => {
  * كل غرفةٍ جولتُها جارية — فالوقت ينزل في كل نبضة بلا «تبدّل حالة»، ولو
  * انتظرنا أول إجابة لعاد الفريق إلى وقتٍ أقدم من وقت جاره فظلمناه.
  */
-function flush() {
+async function flush() {
   // الإحصاء أولاً: فروقٌ تجمّعت في الذاكرة تُصرف دفعةً واحدة لكل الغرف
   const stats = [];
   for (const room of allRooms()) stats.push(...room.drainStats());
   if (stats.length) {
     try {
-      store.recordStats(stats);
+      await store.recordStats(stats);
     } catch (err) {
       console.warn(`⚠ تعذّر حفظ إحصاء ${stats.length} سؤالاً: ${err.message}`);
     }
@@ -1039,41 +1115,88 @@ function flush() {
     if (!room.dirty && room.status !== 'running') continue;
     room.dirty = false;
     try {
-      store.saveRoom(room);
+      await store.saveRoom(room);
     } catch (err) {
       room.dirty = true; // نُعيد المحاولة في الدورة القادمة
       console.warn(`⚠ تعذّر حفظ الغرفة ${room.code}: ${err.message}`);
     }
   }
 }
-setInterval(flush, SAVE_MS);
+/*
+ * دورةٌ واحدة في وقتٍ واحد.
+ *
+ * الكتابة صارت تعبر الشبكة، فقد تتجاوز المهلة. ولو بدأت الدورةُ التالية
+ * فوق سابقتها لتزاحمتا على المجمّع وكتبتا الغرفةَ نفسها مرّتين بترتيبٍ
+ * غير مضمون — والراية أرخص من قفل.
+ */
+let flushing = false;
+setInterval(async () => {
+  if (flushing) return;
+  flushing = true;
+  try {
+    await flush();
+  } catch (err) {
+    console.warn('⚠ تعذّرت دورة الحفظ:', err.message);
+  } finally {
+    flushing = false;
+  }
+}, SAVE_MS);
 
 setInterval(
-  () => {
+  async () => {
     // اللقطة تذهب مع الغرفة الخاملة، والسجلّ يبقى ستين يوماً
     for (const code of sweepIdleRooms()) {
-      store.forgetState(code);
+      try {
+        await store.forgetState(code);
+      } catch (err) {
+        console.warn(`⚠ تعذّر نسيان لقطة ${code}: ${err.message}`);
+      }
       feedSent.delete(code);
     }
   },
   10 * 60 * 1000,
 );
 
-setInterval(() => store.sweepOld(), 24 * 60 * 60 * 1000);
+setInterval(
+  () => void store.sweepOld().catch((err) => console.warn('⚠ تعذّر الكنس:', err.message)),
+  24 * 60 * 60 * 1000,
+);
 
 /* إغلاقٌ مقصود: نكتب آخر ما عندنا قبل أن نمضي */
+/*
+ * الخروج ينتظر آخر كتابة.
+ *
+ * وكانت الثلاثة متزامنة فمضت على ترتيبها. وصارت وعوداً: لو خرجنا بلا
+ * انتظارٍ لقتلنا العمليةَ والكتابةُ في الطريق، فضاعت آخر دقيقةٍ من الجولة
+ * في كل نشر — وهو ضياعٌ صامت، لا أثر له في سجلٍّ ولا شاشة.
+ *
+ * ومهلةٌ قصوى فوق ذلك: قاعدةٌ لا تستجيب تُعلّق الخروج إلى الأبد، والمنصّة
+ * تقتل ما لم يخرج في مهلتها قتلاً — فالخروج بأكثر ما أمكن أولى من انتظارٍ
+ * لا ينتهي.
+ */
+let leaving = false;
 for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.on(signal, () => {
-    flush();
-    store.close();
+  process.on(signal, async () => {
+    if (leaving) return;
+    leaving = true;
+    const deadline = new Promise((resolve) => setTimeout(resolve, 8000).unref());
+    const drain = async () => {
+      await flush();
+      await store.close();
+    };
+    try {
+      await Promise.race([drain(), deadline]);
+    } catch (err) {
+      console.warn('⚠ تعذّر الحفظ عند الخروج:', err.message);
+    }
     process.exit(0);
   });
 }
 
-http.listen(PORT, () => {
+http.listen(PORT, async () => {
   console.log(`💓 نبضة تعمل على http://localhost:${PORT}`);
   console.log(`   الإعدادات الافتراضية:`, DEFAULT_SETTINGS);
-  console.log(`   الذاكرة: ${store.listRooms().length} غرفة في السجلّ`);
+  console.log(`   الذاكرة: ${(await store.listRooms()).length} غرفة في السجلّ`);
   announce(envResult);
   if (usingFallback()) {
     console.log(`   🔑 مفتاح لوحة المالك (مؤقّت — اكتب NABDA_OWNER_KEY في .env ليثبت):`);
