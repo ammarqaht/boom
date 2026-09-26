@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   type Api,
   type Col,
@@ -7,6 +7,7 @@ import {
   Empty,
   Grid,
   Loading,
+  Modal,
   Panel,
   Row,
   Stat,
@@ -17,8 +18,10 @@ import {
   stamp,
   unit,
   MoreRows,
+  useFeed,
   usePaged,
 } from './shared';
+import { TrashIcon } from '../../components/icons';
 import { Stars } from './Dashboard';
 import type { Counts, Sift } from './Banks';
 
@@ -70,22 +73,23 @@ const ROOM_COLS: Col[] = [
   { label: 'أسئلة', w: '0.7fr', align: 'center' },
   { label: 'المدّة', w: '0.9fr' },
   { label: 'الحال', w: '0.9fr' },
+  { label: '', w: '46px', align: 'center' },
 ];
 
 export function Rooms({ api, sift, onCounts, reloadKey }: Props) {
-  const [rows, setRows] = useState<Room[] | null>(null);
+  const [doomed, setDoomed] = useState<Room | null>(null);
   /*
-   * الغرف لم تعد تُحذف، فصفحتُها تعرض السجلّ كلَّه ما لم يُحدَّد مدًى.
+   * الغرف لا تنقضي بمدّة، فصفحتُها تعرض السجلّ كلَّه ما لم يُحدَّد مدًى.
    * واللوحةُ الرئيسة تبقى على الستين — نظرةٌ على ما قرُب لا أرشيف.
    */
   const from = sift.range?.from;
   const to = sift.range?.to;
 
-  useEffect(() => {
-    setRows(null);
-    const query = from ? `rooms?from=${from}&to=${to ?? Date.now()}` : 'rooms?all=1';
-    void api.get<Room[]>(query).then(setRows);
-  }, [api, reloadKey, from, to]);
+  const load = useCallback(
+    () => api.get<Room[]>(from ? `rooms?from=${from}&to=${to ?? Date.now()}` : 'rooms?all=1'),
+    [api, from, to],
+  );
+  const [rows, setRows] = useFeed(load, reloadKey);
 
   const all = useMemo(() => rows ?? [], [rows]);
 
@@ -149,7 +153,7 @@ export function Rooms({ api, sift, onCounts, reloadKey }: Props) {
         hint={
           sift.range
             ? `${day(sift.range.from)} — ${day(sift.range.to)}`
-            : 'السجلّ كامل — لا تُحذف غرفة'
+            : 'السجلّ كامل — ولا تُحذف غرفةٌ إلا بيدك'
         }
         flush
       >
@@ -183,12 +187,163 @@ export function Rooms({ api, sift, onCounts, reloadKey }: Props) {
                     {STATUS[room.status]?.label ?? room.status}
                   </Badge>
                 </Cell>
+                <Cell align="center">
+                  <button
+                    type="button"
+                    onClick={() => setDoomed(room)}
+                    title={`حذف غرفة ${room.name}`}
+                    aria-label={`حذف غرفة ${room.name}`}
+                    className="inline-flex size-8 items-center justify-center rounded-chip text-faint transition hover:bg-danger-2 hover:text-danger"
+                  >
+                    <TrashIcon size={15} />
+                  </button>
+                </Cell>
               </Row>
             ))}
           </Grid>
         )}
       </Panel>
+
+      {doomed && (
+        <DeleteRoom
+          api={api}
+          room={doomed}
+          onClose={() => setDoomed(null)}
+          onDone={() => {
+            setRows((prev) => (prev ?? []).filter((r) => r.code !== doomed.code));
+            setDoomed(null);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/* ══════════════ حذف الغرفة ══════════════ */
+
+type Detail = Room & { comments: number; reports: number; live: boolean };
+
+/** سطرُ تفصيلٍ في بطاقة المراجعة — عنوانٌ فوق قيمة */
+function Fact({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <span className="block text-[12px] font-bold text-faint">{label}</span>
+      <span className="mt-0.5 block truncate text-[14px] font-black text-ink">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * الحذفُ لا رجعة فيه، فيُقرأ قبل أن يقع.
+ *
+ * تعرض النافذة الغرفة كما هي، ثم تفصل صراحةً: ما يُمحى وما يبقى. وإحصاءُ
+ * الأسئلة يبقى لأنه مجموعُ الغرف كلّها ولا يُعرف نصيبُ غرفةٍ منه ليُطرح —
+ * وقولُ ذلك أصدق من ترك المالك يظنّ أنه محا أثرها من البنك.
+ */
+function DeleteRoom({
+  api,
+  room,
+  onClose,
+  onDone,
+}: {
+  api: Api;
+  room: Room;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [detail, setDetail] = useState<Detail | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void api.get<Detail>(`room/${room.code}`).then(setDetail);
+  }, [api, room.code]);
+
+  const remove = async () => {
+    setBusy(true);
+    setError(null);
+    const res = await api.send<{ error?: string }>('DELETE', `room/${room.code}`);
+    setBusy(false);
+    if (!res.ok) return setError(res.data?.error ?? 'تعذّر الحذف');
+    onDone();
+  };
+
+  /* الحيّةُ لا تُحذف. والحال المحليّة تكفي حتى تصل التفاصيل من الخادم */
+  const live = detail?.live ?? room.status !== 'finished';
+
+  return (
+    <Modal
+      title="حذف الغرفة"
+      hint={`${room.name} · ${room.code}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={remove}
+            disabled={busy || live}
+            title={live ? 'الغرفة تعمل الآن — أنهِ المسابقة ثم احذفها' : undefined}
+            className="h-10 rounded-chip bg-danger px-4 text-[14px] font-black text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy ? 'يُحذف…' : 'احذف نهائياً'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-chip px-4 text-[14px] font-bold text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] transition hover:bg-surface-2"
+          >
+            إلغاء
+          </button>
+          {error && <span className="text-[13px] font-bold text-danger">{error}</span>}
+        </>
+      }
+    >
+      <div className="grid gap-4">
+        <div className="grid grid-cols-2 gap-x-5 gap-y-3.5 rounded-card bg-surface-2 px-5 py-4 shadow-[inset_0_0_0_1px_var(--color-line)] sm:grid-cols-4">
+          <Fact label="الرمز" value={<span className="tnum tracking-[0.12em]">{room.code}</span>} />
+          <Fact label="التاريخ" value={stamp(room.createdAt)} />
+          <Fact label="المستوى" value={DIFFICULTY[room.difficulty] ?? room.difficulty} />
+          <Fact label="الحال" value={STATUS[room.status]?.label ?? room.status} />
+          <Fact label="اللاعبون" value={say(room.players, 'player')} />
+          <Fact label="الجولات" value={say(room.rounds, 'round')} />
+          <Fact label="الأسئلة" value={room.questions} />
+          <Fact label="المدّة" value={span(room.playedMs)} />
+        </div>
+
+        {live ? (
+          <p className="rounded-card bg-warn-2 px-5 py-4 text-[14px] leading-relaxed font-bold text-warn-ink">
+            الغرفة تعمل الآن ولاعبوها متّصلون. أنهِ المسابقة من شاشة المنظّم ثم احذفها — ولو مُحي
+            سجلُّها من تحتهم لانقطعوا بلا خبر.
+          </p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-card px-5 py-4 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_25%,transparent)]">
+              <b className="block text-[13px] font-black text-danger">يُمحى نهائياً</b>
+              <ul className="mt-2 grid gap-1.5 text-[13px] leading-relaxed font-medium text-ink-2">
+                <li>سجلُّ الغرفة — لاعبوها وجولاتها ومدّتها</li>
+                <li>لقطتُها المحفوظة، فلا تُستأنف بعدها</li>
+                {/* «ما كُتب فيها» يستقيم مع أيّ عدد — ولا يُجبرنا على مطابقة الفعل */}
+                <li>
+                  {detail
+                    ? `ما كُتب فيها: ${say(detail.comments, 'comment')} و${say(detail.reports, 'report')}`
+                    : 'ما كُتب فيها من تعليقاتٍ وبلاغات'}
+                </li>
+              </ul>
+            </div>
+            <div className="rounded-card px-5 py-4 shadow-[inset_0_0_0_1px_var(--color-line)]">
+              <b className="block text-[13px] font-black text-muted">يبقى كما هو</b>
+              <ul className="mt-2 grid gap-1.5 text-[13px] leading-relaxed font-medium text-muted">
+                <li>إحصاءُ الأسئلة: عُرض وصحّ وخطأ</li>
+                <li>الأسئلةُ نفسها في بنوكها</li>
+              </ul>
+              <p className="mt-2.5 text-[12px] leading-relaxed font-medium text-faint">
+                لأن الإحصاء مجموعُ الغرف كلّها، ولا يُعرف نصيبُ غرفةٍ منه ليُطرح.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -207,12 +362,8 @@ type Comment = {
 };
 
 export function Comments({ api, sift, onCounts, reloadKey }: Props) {
-  const [rows, setRows] = useState<Comment[] | null>(null);
-
-  useEffect(() => {
-    setRows(null);
-    void api.get<Comment[]>('feedback?kind=comment').then(setRows);
-  }, [api, reloadKey]);
+  const load = useCallback(() => api.get<Comment[]>('feedback?kind=comment'), [api]);
+  const [rows] = useFeed(load, reloadKey);
 
   const all = useMemo(() => rows ?? [], [rows]);
 

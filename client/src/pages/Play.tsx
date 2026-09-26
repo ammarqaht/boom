@@ -320,7 +320,7 @@ function TopBar({
             {/* المضاعفة فعّالة: يراها صاحبها في ترويسته كما تراها القاعة على شريطه */}
             {state.shop.pending.double && (
               <span className="shrink-0 rounded-chip px-1.5 py-px text-[11px] font-black text-gold shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-gold)_55%,transparent)]">
-                ×٣
+                ×٢
               </span>
             )}
           </div>
@@ -770,7 +770,7 @@ function StandBy({
     .filter((r) => r.award)
     .reverse();
 
-  const ready = [state.shop.pending.time && 'وقت إضافي', state.shop.pending.double && 'مضاعفة ×٣']
+  const ready = [state.shop.pending.time && 'وقت إضافي', state.shop.pending.double && 'مضاعفة ×٢']
     .filter(Boolean)
     .join(' + ');
 

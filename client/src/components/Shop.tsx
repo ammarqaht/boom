@@ -163,7 +163,7 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
             {' '}
             · جاهز للجولة القادمة:{' '}
             <b className="text-signal">
-              {[shop.pending.time && 'وقت إضافي', shop.pending.double && 'مضاعفة ×٣']
+              {[shop.pending.time && 'وقت إضافي', shop.pending.double && 'مضاعفة ×٢']
                 .filter(Boolean)
                 .join(' + ')}
             </b>

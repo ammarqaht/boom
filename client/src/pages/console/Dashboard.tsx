@@ -172,35 +172,18 @@ export default function Dashboard({
   reloadKey,
   onOpenQuestion,
   onGo,
-  onAlerts,
 }: {
   api: Api;
   reloadKey: number;
   onOpenQuestion: (id: string) => void;
   onGo: (section: string, page?: string, view?: string) => void;
-  onAlerts: (alerts: Alerts) => void;
 }) {
   const [data, setData] = useState<Data | null>(null);
   const [dups, setDups] = useState(false);
 
   useEffect(() => {
-    void api.get<Data>('dashboard').then((next) => {
-      setData(next);
-      if (!next) return;
-      onAlerts({
-        reports: next.totals.reports,
-        measured: next.totals.measured,
-        edits: next.totals.edits,
-        weak: next.totals.weak,
-        issues: next.audit.errors + next.audit.warnings,
-        duplicates: next.audit.duplicates,
-        live: next.totals.live,
-        lowStars: next.totals.lowStars,
-        unreadComments: next.totals.unreadComments ?? 0,
-        unreadReports: next.totals.unreadReports ?? 0,
-      });
-    });
-  }, [api, reloadKey, onAlerts]);
+    void api.get<Data>('dashboard').then(setData);
+  }, [api, reloadKey]);
 
   if (!data) return <Loading />;
   const { totals, audit } = data;

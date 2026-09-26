@@ -407,10 +407,9 @@ export function reportCounts() {
  * صريحٌ بين وقتين (صفحة الغرف: ما يختاره المالك من التقويم). و`null`
  * في الأيام تعني السجلّ كلَّه — فالغرف لم تعد تُحذف.
  */
-export function listRooms(days = RETENTION_DAYS, range) {
-  const from = range?.from ?? (days === null ? 0 : Date.now() - days * DAY_MS);
-  const to = range?.to ?? Number.MAX_SAFE_INTEGER;
-  return selectRooms.all(from, to).map((r) => ({
+/** صفُّ الغرفة كما تقرؤه اللوحة — صيغةٌ واحدة للقائمة وللغرفة الواحدة */
+function shapeRoom(r) {
+  return {
     code: r.code,
     name: r.name,
     difficulty: r.difficulty,
@@ -427,7 +426,60 @@ export function listRooms(days = RETENTION_DAYS, range) {
      * آخر حركةٍ قبل أن تخمل. وغرفةٌ لم تبدأ لا مدّة لها، والشرطةُ أصدق من صفر.
      */
     playedMs: r.started_at ? Math.max(0, (r.ended_at ?? r.touched_at) - r.started_at) : null,
-  }));
+  };
+}
+
+export function listRooms(days = RETENTION_DAYS, range) {
+  const from = range?.from ?? (days === null ? 0 : Date.now() - days * DAY_MS);
+  const to = range?.to ?? Number.MAX_SAFE_INTEGER;
+  return selectRooms.all(from, to).map(shapeRoom);
+}
+
+/* ══════════════ حذف الغرفة ══════════════ */
+
+const selectRoom = db.prepare(`
+  SELECT code, name, difficulty, bank_ids, status, created_at, started_at,
+         touched_at, ended_at, rounds, players, questions
+  FROM rooms WHERE code = ?
+`);
+
+const countRoomFeedback = db.prepare(
+  'SELECT kind, COUNT(*) n FROM feedback WHERE room_code = ? GROUP BY kind',
+);
+
+const deleteRoomFeedback = db.prepare('DELETE FROM feedback WHERE room_code = ?');
+const deleteRoomRow = db.prepare('DELETE FROM rooms WHERE code = ?');
+
+/** الغرفةُ الواحدة بسجلّها وما كُتب فيها — تُقرأ قبل الحذف ليرى المالك ما يمحو */
+export function roomDetail(code) {
+  const row = selectRoom.get(code);
+  if (!row) return null;
+  const tally = { comment: 0, report: 0 };
+  for (const r of countRoomFeedback.all(code)) tally[r.kind] = r.n;
+  return { ...shapeRoom(row), comments: tally.comment, reports: tally.report };
+}
+
+/**
+ * يمحو الغرفة ومعها ما لا يقوم بعدها: لقطتُها وما كُتب فيها.
+ *
+ * وإحصاءُ الأسئلة لا يُمسّ. فهو مجموعُ ما عُرض في الغرف كلّها، ولا يُعرف
+ * نصيبُ غرفةٍ منه ليُطرح — لا نخزّن مَن عرض ماذا، عمداً، لأن السؤال يُقاس
+ * بنصّه لا بمن رآه. فحذفُ الغرفة يمحو سجلَّها، لا ما تعلّمه البنك منها.
+ */
+export function forgetRoom(code) {
+  const before = roomDetail(code);
+  if (!before) return null;
+  db.exec('BEGIN');
+  try {
+    deleteRoomFeedback.run(code);
+    deleteState.run(code); // صريحاً وإن كفى CASCADE — النيّة تُقرأ هنا
+    deleteRoomRow.run(code);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  return before;
 }
 
 /* ══════════════ أرشيف التحرير ══════════════ */

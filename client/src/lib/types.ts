@@ -28,7 +28,7 @@ export interface PublicTeam {
   locked: boolean;
   /** المتبقي من التجميد بالمللي — لعدّاد الشاشات */
   lockedMs: number;
-  /** مضاعفة ×3 فعّالة هذه الجولة — بطاقة ذهبية */
+  /** مضاعفة ×2 فعّالة هذه الجولة — بطاقة ذهبية */
   doubled: boolean;
 }
 

@@ -171,6 +171,18 @@ export default function Owner() {
     void api.get<unknown>('summary').then((data) => data && setReady(true));
   }, [key, api]);
 
+  /*
+   * الشاراتُ تُجلب هنا لا في اللوحة.
+   *
+   * كانت اللوحةُ هي من يرسلها، فلا تتحدّث إلا وهي معروضة: يُحرّر المالك
+   * سبعةَ أسئلة وشارتُها تقول صفراً حتى يدخل صفحتها. وهنا تُقرأ بعد كل
+   * حفظٍ أياً كانت الصفحة المفتوحة.
+   */
+  useEffect(() => {
+    if (!ready) return;
+    void api.get<Alerts>('alerts').then((data) => data && setAlerts(data));
+  }, [api, ready, reloadKey]);
+
   useEffect(() => {
     if (!ready) return;
     void fetch('/api/banks')
@@ -557,7 +569,6 @@ export default function Owner() {
                 reloadKey={reloadKey}
                 onOpenQuestion={openQuestion}
                 onGo={(s, p, v) => go(s as SectionId, p, v)}
-                onAlerts={setAlerts}
               />
             )}
 

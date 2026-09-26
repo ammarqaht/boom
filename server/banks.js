@@ -136,6 +136,26 @@ function backup(file) {
   }
 }
 
+/*
+ * أرقامُ السؤال عربية دائماً.
+ *
+ * بنك «نبضة» كلُّه بالأرقام العربية — ألفٌ وأربعةٌ وخمسون سؤالاً، لا
+ * واحدَ فيها بالرقم اللاتينيّ. فلو دخل سؤالٌ بـ1445 بين إخوته ٧٨٦ لظهر
+ * الفرقُ على الشاشة سطراً أعرجَ بخطّين مختلفين.
+ *
+ * ويُستثنى الرقمُ الملتصق بحرفٍ لاتينيّ: «MP3» رمزٌ لا عدد، وتعريبُ رقمه
+ * يُفسده.
+ */
+const EASTERN = '٠١٢٣٤٥٦٧٨٩';
+
+export function arabizeDigits(text) {
+  return String(text).replace(/[0-9]+/g, (run, at, whole) => {
+    const around = (whole[at - 1] ?? '') + (whole[at + run.length] ?? '');
+    if (/[A-Za-z]/.test(around)) return run;
+    return run.replace(/[0-9]/g, (d) => EASTERN[Number(d)]);
+  });
+}
+
 /**
  * يكتب البنك ويعيد قراءته فوراً.
  *
@@ -152,8 +172,8 @@ export function saveBank(bankId, questions) {
     id: bank.id,
     name: bank.name,
     questions: questions.map((q) => ({
-      q: String(q.q).trim(),
-      options: q.options.map((option) => String(option).trim()),
+      q: arabizeDigits(String(q.q).trim()),
+      options: q.options.map((option) => arabizeDigits(String(option).trim())),
       answer: 0, // الصواب أوّل الخيارات دائماً
       level: Number(q.level) || 2,
     })),

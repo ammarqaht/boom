@@ -549,6 +549,23 @@ export function Modal({
 
 /* ══════════════ محرّر السؤال ══════════════ */
 
+/*
+ * أرقامُ السؤال عربية دائماً — وتُعرَّب وأنت تكتب لا عند الحفظ، فما تراه
+ * في المحرّر هو ما يراه اللاعب. وتوأمُها في server/banks.js يحرس الباب
+ * نفسه من جهة الخادم.
+ *
+ * ويُستثنى الرقمُ الملتصق بحرفٍ لاتينيّ: «MP3» رمزٌ لا عدد.
+ */
+const EASTERN = '٠١٢٣٤٥٦٧٨٩';
+
+export function arabizeDigits(text: string) {
+  return text.replace(/[0-9]+/g, (run, at: number, whole: string) => {
+    const around = (whole[at - 1] ?? '') + (whole[at + run.length] ?? '');
+    if (/[A-Za-z]/.test(around)) return run;
+    return run.replace(/[0-9]/g, (d) => EASTERN[Number(d)]);
+  });
+}
+
 type Draft = { q: string; options: string[]; level: number };
 
 const LEVEL_SKIN: Record<number, string> = {
@@ -576,6 +593,7 @@ export function QuestionEditor({
   const [draft, setDraft] = useState<Draft>({ q: '', options: ['', '', '', ''], level: 2 });
   const [target, setTarget] = useState(bankId ?? '');
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -590,22 +608,45 @@ export function QuestionEditor({
     });
   }, [api, questionId]);
 
-  /* الفحص وأنت تكتب: تحذيرٌ قبل الحفظ لا بعده */
+  /*
+   * الفحص وأنت تكتب: تحذيرٌ قبل الحفظ لا بعده — ولا قبل أن يكون ثَمّ ما
+   * يُفحص.
+   *
+   * فالمسودّة تُولد فارغة ثم يصلها السؤال، فكان الفحصُ يسبق الوصول ويصيح
+   * «السؤال فارغ» و«خيارٌ فارغ» و«خطأٌ يطابق الصواب» — ثلاثُ ملاحظاتٍ
+   * حمراء تومض أقلَّ من ثانية ثم تختفي، وليست منك ولا عن سؤالك.
+   *
+   * فلا يبدأ الفحص إلا بعد وصول السؤال، أو بعد أن تكتب في سؤالٍ جديد.
+   */
+  const live = questionId ? Boolean(loaded) : touched;
+
   useEffect(() => {
+    if (!live) return;
     const timer = setTimeout(() => {
       void api
         .send<{ issues: Issue[] }>('POST', 'check', { ...draft, answer: 0 })
         .then((res) => setIssues(res.data?.issues ?? []));
     }, 250);
     return () => clearTimeout(timer);
-  }, [draft, api]);
+  }, [draft, api, live]);
 
   const errors = issues.filter((i) => i.severity === 'error');
   const warns = issues.filter((i) => i.severity === 'warn');
-  const blocked = errors.length > 0;
+  /*
+   * المنعُ لا ينتظر جواب الخادم: الفراغُ يُعرف هنا، فلا يُحفظ سؤالٌ ناقص
+   * في اللحظة التي لم تصل فيها الملاحظاتُ بعد.
+   */
+  const bare = !draft.q.trim() || draft.options.some((option) => !option.trim());
+  const blocked = errors.length > 0 || bare;
   const textChanged = Boolean(
     loaded && (loaded.q !== draft.q || loaded.options.join(' ') !== draft.options.join(' ')),
   );
+
+  /* كلُّ تحريرٍ يمرّ من هنا: به يُعرف أن المالك بدأ، فيبدأ الفحص معه */
+  const edit = (next: Draft) => {
+    setTouched(true);
+    setDraft(next);
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -727,7 +768,7 @@ export function QuestionEditor({
           <Label>نصّ السؤال</Label>
           <AutoTextarea
             value={draft.q}
-            onChange={(event) => setDraft({ ...draft, q: event.target.value })}
+            onChange={(event) => edit({ ...draft, q: arabizeDigits(event.target.value) })}
             className="mb-5 rounded-chip bg-surface px-4 py-3 text-[15px] leading-relaxed font-bold shadow-[inset_0_0_0_1px_var(--color-line-2)] outline-none focus:shadow-[inset_0_0_0_1.5px_var(--color-signal)]"
             autoFocus
           />
@@ -754,8 +795,8 @@ export function QuestionEditor({
                   value={option}
                   onChange={(event) => {
                     const options = [...draft.options];
-                    options[i] = event.target.value;
-                    setDraft({ ...draft, options });
+                    options[i] = arabizeDigits(event.target.value);
+                    edit({ ...draft, options });
                   }}
                   placeholder={i === 0 ? 'الإجابة الصحيحة' : `خطأ ${i}`}
                   className={`min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-faint ${
@@ -772,7 +813,7 @@ export function QuestionEditor({
               <button
                 key={n}
                 type="button"
-                onClick={() => setDraft({ ...draft, level: n })}
+                onClick={() => edit({ ...draft, level: n })}
                 className={`flex h-9 items-center gap-2 rounded-chip px-5 text-[13.5px] font-bold transition ${
                   draft.level === n
                     ? LEVEL_SKIN[n]
@@ -1138,6 +1179,33 @@ export const PAGE_STEP = 60;
  * المزيد. والعدّادُ يعود إلى أوله كلّما تبدّل ما يُعرض، فلا تبقى «المزيد»
  * تشير إلى قائمةٍ أخرى.
  */
+/**
+ * جلبُ قائمةٍ يُعاد بلا تفريغ.
+ *
+ * التفريغُ قبل الجلب يُسقط الصفوف كلَّها ويضع «يُحمَّل» مكانها، فينكمش
+ * ارتفاعُ الصفحة، وحين تعود الصفوف لا يجد المتصفّح ما يُرسي عليه موضعك.
+ * فيحفظ المالكُ سؤالاً في آخر الألف فيُلقى في أوّلها.
+ *
+ * فلا يُفرَّغ إلا أوّل مرّة — وما بعدها تُبدَّل الصفوف في مكانها صامتةً.
+ */
+export function useFeed<T>(load: () => Promise<T | null>, reloadKey: number) {
+  const [rows, setRows] = useState<T | null>(null);
+  const first = useRef(true);
+
+  useEffect(() => {
+    if (first.current) setRows(null);
+    first.current = false;
+    let alive = true;
+    void load().then((data) => alive && setRows(data));
+    /* ردُّ طلبٍ سابق لا يكتب فوق أحدث منه */
+    return () => {
+      alive = false;
+    };
+  }, [load, reloadKey]);
+
+  return [rows, setRows] as const;
+}
+
 export function usePaged<T>(items: T[], step = PAGE_STEP) {
   const [limit, setLimit] = useState(step);
   const key = items.length;

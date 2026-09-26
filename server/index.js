@@ -1,7 +1,8 @@
 import envResult, { announce, watchEnv } from './env.js'; // أوّلَ شيء: ما بعده يقرأ process.env
 import { createServer } from 'node:http';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { join, dirname } from 'node:path';
+import { readFileSync, statSync } from 'node:fs';
+import { join, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server } from 'socket.io';
@@ -12,6 +13,7 @@ import {
   restoreRoom,
   getRoom,
   allRooms,
+  dropRoom,
   sweepIdleRooms,
   normalizeDifficulty,
   DEFAULT_SETTINGS,
@@ -114,6 +116,50 @@ app.get('/api/console/summary', owner, (_req, res) => {
  * ولا تُجمَع في المتصفّح من أربعة نداءات: كلٌّ منها يمرّ على آلاف الصفوف،
  * وجمعُها هنا مرّةٌ واحدة على بياناتٍ في الذاكرة أرخص من أربع رحلات.
  */
+/**
+ * ما يحتاج نظرَ المالك — رقمٌ لكل شارة.
+ *
+ * يُحسب هنا مرّةً ويُقرأ من مسارين: اللوحةُ تعرضه في بطاقاتها، والشريطُ
+ * الجانبيّ في شاراته. ولو حسبه كلٌّ لنفسه لاختلفا يوماً — وقد اختلفا:
+ * كانت الشارةُ لا تُحسب إلا واللوحةُ معروضة، فيُحرّر المالك سبعةَ أسئلة
+ * وشارتُها تقول صفراً حتى يدخل صفحتها.
+ */
+function ownerPulse() {
+  const health = store.questionHealth({ minShown: 1, limit: 100000 });
+  const comments = store.listFeedback({ kind: 'comment', limit: 1000 });
+  const checked = auditAll(allBanks());
+  const unread = store.unreadFeedback();
+  return {
+    health,
+    comments,
+    audit: {
+      errors: checked.errors,
+      warnings: checked.warnings,
+      duplicates: checked.duplicates.length,
+    },
+    totals: {
+      live: [...allRooms()].filter((r) => r.status !== 'finished').length,
+      reports: store.listFeedback({ kind: 'report', limit: 5000 }).length,
+      measured: health.length,
+      edits: store.listEdits().length,
+      weak: health.filter((r) => r.shown >= 3 && r.rate !== null && r.rate < 30).length,
+      lowStars: comments.filter((c) => c.stars && c.stars <= 2).length,
+      unreadComments: unread.comment,
+      unreadReports: unread.report,
+    },
+  };
+}
+
+/** الشارات وحدها — تُقرأ بعد كل حفظٍ بلا حمل اللوحة كلّها */
+app.get('/api/console/alerts', owner, (_req, res) => {
+  const pulse = ownerPulse();
+  res.json({
+    ...pulse.totals,
+    issues: pulse.audit.errors + pulse.audit.warnings,
+    duplicates: pulse.audit.duplicates,
+  });
+});
+
 app.get('/api/console/dashboard', owner, (_req, res) => {
   const DAY = 24 * 60 * 60 * 1000;
   const now = Date.now();
@@ -134,7 +180,8 @@ app.get('/api/console/dashboard', owner, (_req, res) => {
   }
 
   /* صحّة كل بنك: كم سؤالاً فيه، وكم عُرض منه، وما نسبة صوابه، وكم بلاغاً */
-  const health = store.questionHealth({ minShown: 1, limit: 100000 });
+  const pulse = ownerPulse();
+  const health = pulse.health;
   const reports = store.reportCounts();
   const byBank = new Map();
   for (const bank of allBanks()) {
@@ -158,36 +205,23 @@ app.get('/api/console/dashboard', owner, (_req, res) => {
     bank.reports += reports.get(row.id) ?? 0;
   }
 
-  const comments = store.listFeedback({ kind: 'comment', limit: 1000 });
+  const comments = pulse.comments;
   const rated = comments.filter((c) => c.stars);
-  /* فحصُ البنوك كلها: ما يقوله «npm test» يُقال هنا بلا طرفيّة */
-  const checked = auditAll(allBanks());
 
   res.json({
-    audit: {
-      errors: checked.errors,
-      warnings: checked.warnings,
-      duplicates: checked.duplicates.length,
-    },
+    /* فحصُ البنوك كلها: ما يقوله «npm test» يُقال هنا بلا طرفيّة */
+    audit: pulse.audit,
     totals: {
       rooms: rooms.length,
       players: rooms.reduce((n, r) => n + r.players, 0),
       rounds: rooms.reduce((n, r) => n + r.rounds, 0),
       questions: rooms.reduce((n, r) => n + r.questions, 0),
-      live: [...allRooms()].filter((r) => r.status !== 'finished').length,
       bank: allBanks().reduce((n, b) => n + b.questions.length, 0),
-      reports: store.listFeedback({ kind: 'report', limit: 5000 }).length,
       comments: comments.length,
       stars: rated.length ? rated.reduce((n, c) => n + c.stars, 0) / rated.length : null,
       medianPlayedMs: median(played.map((r) => r.playedMs)),
-      /* ما يحتاج نظرَ المالك: أسئلةٌ يكسر فيها اللاعبون، وتقييمٌ منخفض */
-      measured: health.length,
-      edits: store.listEdits().length,
-      weak: health.filter((r) => r.shown >= 3 && r.rate !== null && r.rate < 30).length,
-      lowStars: comments.filter((c) => c.stars && c.stars <= 2).length,
-      /* ما لم يُقرأ بعد — شارةٌ في الشريط وعلامةٌ على البطاقة */
-      unreadComments: store.unreadFeedback().comment,
-      unreadReports: store.unreadFeedback().report,
+      /* الشاراتُ نفسها التي يقرؤها الشريط — من الحساب نفسه */
+      ...pulse.totals,
     },
     days,
     banks: [...byBank.values()].map((b) => ({
@@ -233,6 +267,33 @@ app.get('/api/console/rooms', owner, (req, res) => {
   }
   if (req.query.all === '1') return res.json(store.listRooms(null));
   res.json(store.listRooms(Number(req.query.days) || undefined));
+});
+
+/** الغرفةُ الواحدة بتفاصيلها — تُقرأ قبل الحذف ليرى المالك ما سيمحو */
+app.get('/api/console/room/:code', owner, (req, res) => {
+  const room = store.roomDetail(String(req.params.code).toUpperCase());
+  if (!room) return res.status(404).json({ error: 'غرفة غير موجودة' });
+  const live = getRoom(room.code);
+  res.json({ ...room, live: Boolean(live) && live.status !== 'finished' });
+});
+
+/*
+ * حذفُ الغرفة — ولا تُحذف غرفةٌ تعمل الآن.
+ *
+ * فاللاعبون فيها متّصلون، ومحوُ سجلّها من تحتهم يقطعهم بلا خبر. تُنهى
+ * أولاً — وذاك شيءٌ يرونه — ثم تُحذف، وهذا لا يرونه.
+ */
+app.delete('/api/console/room/:code', owner, (req, res) => {
+  const code = String(req.params.code).toUpperCase();
+  const live = getRoom(code);
+  if (live && live.status !== 'finished') {
+    return res.status(409).json({ error: 'الغرفة تعمل الآن — أنهِ المسابقة ثم احذفها' });
+  }
+  const gone = store.forgetRoom(code);
+  if (!gone) return res.status(404).json({ error: 'غرفة غير موجودة' });
+  /* من الذاكرة أيضاً، وإلا أعادتها دورةُ الحفظ بعد ثانيتين */
+  dropRoom(code);
+  res.json({ ok: true, room: gone });
 });
 
 app.get('/api/console/health', owner, (req, res) => {
@@ -492,8 +553,97 @@ app.post('/api/console/edit/:id/restore', owner, (req, res) => {
 });
 
 // الواجهة المبنية — يخدمها نفس السيرفر حتى يكون النشر بعملية واحدة
-app.use(express.static(join(root, 'client', 'dist')));
-app.get('*', (_req, res) => res.sendFile(join(root, 'client', 'dist', 'index.html')));
+/* ══════════════ بطاقةُ الرابط ══════════════ */
+
+const INDEX = join(root, 'client', 'dist', 'index.html');
+let shell = { at: 0, html: '' };
+
+/** الصفحةُ من القرص، وتُعاد قراءتها إن تغيّرت — فالبناء يحدث والخادم يعمل */
+function page() {
+  const at = statSync(INDEX).mtimeMs;
+  if (at !== shell.at) shell = { at, html: readFileSync(INDEX, 'utf8') };
+  return shell.html;
+}
+
+const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+/* اسمُ الغرفة يكتبه المنظّم، ويُدسّ في HTML — فلا يدخل إلا مهروباً */
+const esc = (text) => String(text).replace(/[&<>"']/g, (c) => ESCAPES[c]);
+
+const meta = (html, key, value) =>
+  html.replace(new RegExp(`(property="og:${key}" content=")[^"]*`), `$1${value}`);
+
+/**
+ * تُركَّب البطاقة عند الطلب لا عند البناء.
+ *
+ * فزاحفُ واتساب وتويتر لا يشغّل JS: ما ليس في HTML المُرسَل لا يُرى.
+ * وعنوانُ الصورة لا بدّ أن يكون مطلقاً، والنطاقُ لا يُعرف وقت البناء —
+ * فيُقرأ من ترويسة الطلب. ورابطُ الغرفة يأخذ بطاقته باسمها.
+ */
+function serve(req, res) {
+  const proto = String(req.headers['x-forwarded-proto'] || req.protocol).split(',')[0];
+  const origin = `${proto}://${req.headers.host}`;
+  const code = String(req.query.code || '').toUpperCase();
+  let html = page();
+  let card = '/og.png';
+  /*
+   * الرمزُ وحده يُعاد في og:url. ورابطُ المنظّم يحمل المفتاح في استعلامه،
+   * ولو أُعيد العنوان كاملاً لنُشر المفتاح في بطاقةٍ تُقرأ من كل مكان.
+   */
+  let path = req.path;
+
+  if (req.path === '/play' && /^[A-Z0-9]{4,6}$/.test(code)) {
+    const room = getRoom(code) ?? store.roomDetail(code);
+    if (room) {
+      const name = esc(room.name);
+      card = '/og-play.png';
+      path = `/play?code=${code}`;
+      html = html.replace(
+        '<title>نبضة</title>',
+        `<title>انضمّ إلى «${name}» — نبضة</title>`,
+      );
+      html = meta(html, 'title', `انضمّ إلى «${name}» — نبضة`);
+      html = meta(html, 'description', `رمز الغرفة ${code} · افتح الرابط واكتب اسم فريقك`);
+      html = meta(html, 'image:alt', `دعوةٌ للانضمام إلى مسابقة ${name}`);
+    }
+  }
+
+  html = meta(html, 'image', origin + card).replace(
+    'property="og:url" content="/"',
+    `property="og:url" content="${origin}${path}"`,
+  );
+  res.type('html').send(html);
+}
+
+/*
+ * الخبز والتخزين.
+ *
+ * ملفاتُ assets مبصومةٌ بمحتواها: اسمُها يتغيّر إن تغيّر بايتٌ فيها، فلا
+ * ضير أن تُخزَّن سنة. أما index.html فاسمُه ثابتٌ وهو الذي يدلّ عليها —
+ * فلو خُزِّن بقي المتصفّح يطلب حزمةَ الأمس وإن بُنيت اليوم، ويرى المالك
+ * عللاً أُصلحت. فيُطلب التحقّق منه في كل مرّة، والـETag يمنع إعادة
+ * الإرسال إن لم يتبدّل.
+ *
+ * وما بينهما — الأيقونات والخطوط وصور النشر — ساعةٌ تكفي.
+ */
+const YEAR = 60 * 60 * 24 * 365;
+
+app.use(
+  express.static(join(root, 'client', 'dist'), {
+    index: false, // ليمرّ الجذرُ على بانية البطاقة بدل أن يُرسَل ملفاً خاماً
+    setHeaders(res, file) {
+      const stamped = file.includes(`${sep}assets${sep}`);
+      res.setHeader(
+        'Cache-Control',
+        stamped ? `public, max-age=${YEAR}, immutable` : 'public, max-age=3600',
+      );
+    },
+  }),
+);
+
+app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  serve(req, res);
+});
 
 /*
  * بعثُ ما كان: الغرف التي لم تخمل تعود كما تركها السيرفر — لكن موقوفة.

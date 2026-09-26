@@ -18,6 +18,7 @@ import {
   stamp,
   unit,
   MoreRows,
+  useFeed,
   usePaged,
 } from './shared';
 
@@ -89,7 +90,6 @@ const COLS: Col[] = [
 ];
 
 export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
-  const [rows, setRows] = useState<Q[] | null>(null);
   const [sort, setSort] = useState<{ key: string; dir: 1 | -1 }>({ key: 'bank', dir: 1 });
 
   /*
@@ -97,15 +97,11 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
    * فتبديلُ البنك أو المستوى يقع في الإطار نفسه، ولا تومض القائمة ولا
    * تعود من أولها.
    */
-  const load = useCallback(async () => {
-    const data = await api.get<{ questions: Q[] }>('bank/all');
-    setRows(data?.questions ?? []);
-  }, [api]);
-
-  useEffect(() => {
-    setRows(null);
-    void load();
-  }, [load, reloadKey]);
+  const load = useCallback(
+    async () => (await api.get<{ questions: Q[] }>('bank/all'))?.questions ?? [],
+    [api],
+  );
+  const [rows] = useFeed(load, reloadKey);
 
   /* الأعداد تصف البنك المختار: ما يُقرأ في الشريط هو ما يُعدّ في المتن */
   const mine = useMemo(
@@ -308,12 +304,8 @@ type Report = {
 };
 
 export function Reports({ api, sift, banks, onEdit, onCounts, reloadKey }: Shared) {
-  const [rows, setRows] = useState<Report[] | null>(null);
-
-  useEffect(() => {
-    setRows(null);
-    void api.get<Report[]>('feedback?kind=report').then(setRows);
-  }, [api, reloadKey]);
+  const load = useCallback(() => api.get<Report[]>('feedback?kind=report'), [api]);
+  const [rows] = useFeed(load, reloadKey);
 
   const bankOf = useCallback(
     (id: string | null) => banks.find((b) => id?.startsWith(`${b.id}:`))?.name ?? '—',
@@ -463,14 +455,10 @@ export function Edits({
   reloadKey,
   onChanged,
 }: Omit<Shared, 'onEdit'> & { onChanged: () => void }) {
-  const [rows, setRows] = useState<Edit[] | null>(null);
+  const load = useCallback(() => api.get<Edit[]>('edits'), [api]);
+  const [rows] = useFeed(load, reloadKey);
   const [busy, setBusy] = useState<number | null>(null);
   const [ask, setAsk] = useState<number | null>(null);
-
-  useEffect(() => {
-    setRows(null);
-    void api.get<Edit[]>('edits').then(setRows);
-  }, [api, reloadKey]);
 
   const mine = useMemo(
     () => (rows ?? []).filter((r) => !sift.bank || r.bank === sift.bank),

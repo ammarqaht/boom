@@ -24,8 +24,8 @@ function playRoundEndingWith(loser, times = []) {
   return now;
 }
 
-check('الأسعار: وقت 10 · تجميد 14 · مضاعفة 20',
-  CARDS.time.price === 10 && CARDS.freeze.price === 14 && CARDS.double.price === 20);
+check('الأسعار: وقت 10 · تجميد 14 · مضاعفة 15',
+  CARDS.time.price === 10 && CARDS.freeze.price === 14 && CARDS.double.price === 15);
 check('حدّ البطاقة مرّتان', CARD_LIMIT === 2);
 check('لا شراء في اللوبي', room.buyCard(a.id, 'time').ok === false);
 
