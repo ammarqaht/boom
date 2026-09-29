@@ -157,6 +157,23 @@ async function ownerPulse() {
     store.listEdits(),
   ]);
   const checked = auditAll(allBanks());
+
+  /*
+   * توزيعُ البلاغات والأرشيف على البنوك.
+   *
+   * لأن الشريط الجانبيّ يبقى فيه بنكٌ مختار وأنت تتنقّل بين صفحاتِ البنوك،
+   * فعددُ البلاغات وعددُ المحرَّرة إلى جانب كل صفحة يجب أن يصفا البنك المختار
+   * لا مجموعَ البنوك — وإلا قال الشريطُ «البلاغات ٧» والصفحةُ لا تعرض إلا
+   * بلاغَ هذا البنك. والبلاغ ينتمي لبنكٍ ببادئة معرّف سؤاله «bankId:…».
+   */
+  const reportsByBank = {};
+  for (const r of reports) {
+    const bankId = r.questionId ? String(r.questionId).split(':')[0] : null;
+    if (bankId) reportsByBank[bankId] = (reportsByBank[bankId] ?? 0) + 1;
+  }
+  const editsByBank = {};
+  for (const e of edits) editsByBank[e.bank] = (editsByBank[e.bank] ?? 0) + 1;
+
   return {
     health,
     comments,
@@ -174,6 +191,8 @@ async function ownerPulse() {
       lowStars: comments.filter((c) => c.stars && c.stars <= 2).length,
       unreadComments: unread.comment,
       unreadReports: unread.report,
+      reportsByBank,
+      editsByBank,
     },
   };
 }
@@ -479,10 +498,58 @@ app.put('/api/console/question/:id', owner, async (req, res) => {
   if (issues.some((i) => i.severity === 'error')) return res.status(400).json({ issues });
 
   const before = found.question;
-  const changed = question.q !== before.q || question.options.join(' ') !== before.options.join(' ');
+  const fromBank = found.bank;
 
-  const next = found.bank.questions.map((q) => (q.id === req.params.id ? question : q));
-  saveBank(found.bank.id, next);
+  /* بنكُ الوجهة: إن لم يُرسَل أو كان مجهولاً بقي السؤال في مكانه */
+  const wantBank = typeof req.body?.bank === 'string' ? req.body.bank : fromBank.id;
+  const toBank = allBanks().find((b) => b.id === wantBank) ?? fromBank;
+
+  const changed = question.q !== before.q || question.options.join(' ') !== before.options.join(' ');
+  const moving = toBank.id !== fromBank.id;
+
+  /* لا يُترك البنكُ الأصل فارغاً بنقلِ آخر سؤالٍ فيه */
+  if (moving && fromBank.questions.length <= 1) {
+    return res.status(400).json({ error: 'لا يُترك البنك فارغاً' });
+  }
+  /* ولا يُنقل سؤالٌ إلى بنكٍ فيه نصُّه ذاته — فيلتبس معرّفاه */
+  if (moving && toBank.questions.some((q) => q.q === question.q)) {
+    return res.status(400).json({ error: 'في البنك الهدف سؤالٌ بالنصّ نفسه' });
+  }
+
+  const next = moving
+    ? fromBank.questions.filter((q) => q.id !== req.params.id)
+    : fromBank.questions.map((q) => (q.id === req.params.id ? question : q));
+  saveBank(fromBank.id, next);
+
+  /*
+   * نقلٌ إلى بنكٍ آخر: يُنزَع من الأصل ويُضاف إلى الهدف. فإن لم يتغيّر نصُّه
+   * فهو السؤالُ نفسه أُعيد تصنيفُه — تُنقل إحصاؤه وبلاغاته معه إلى معرّفه
+   * الجديد. وإن غُيّر نصُّه مع النقل فهو سؤالٌ جديدٌ يُمحى إحصاؤه ويُؤرشَف.
+   */
+  if (moving) {
+    const toFresh = allBanks().find((b) => b.id === toBank.id);
+    saveBank(toBank.id, [...toFresh.questions, question]);
+    const newId = newIdOf(toBank.id, question.q);
+    if (!changed) {
+      if (newId) await store.moveQuestionStats(before.id, newId, toBank.id);
+      return res.json({ ok: true, issues, statsReset: false, moved: true });
+    }
+    const clearedMove = await store.clearQuestion(before.id);
+    await store.recordEdit({
+      kind: 'edit',
+      bankId: fromBank.id,
+      oldId: before.id,
+      newId,
+      oldQ: before.q,
+      oldOptions: before.options,
+      oldLevel: before.level,
+      newQ: question.q,
+      newOptions: question.options,
+      newLevel: question.level,
+      cleared: clearedMove,
+    });
+    return res.json({ ok: true, issues, statsReset: true, moved: true, cleared: clearedMove });
+  }
 
   let cleared = null;
   if (changed) {
@@ -491,9 +558,9 @@ app.put('/api/console/question/:id', owner, async (req, res) => {
     const after = findQuestion(before.id) ? before.id : null;
     await store.recordEdit({
       kind: 'edit',
-      bankId: found.bank.id,
+      bankId: fromBank.id,
       oldId: before.id,
-      newId: after ?? newIdOf(found.bank.id, question.q),
+      newId: after ?? newIdOf(fromBank.id, question.q),
       oldQ: before.q,
       oldOptions: before.options,
       oldLevel: before.level,
@@ -576,6 +643,19 @@ app.post('/api/console/edit/:id/restore', owner, async (req, res) => {
 
   saveBank(bank.id, questions);
   await store.forgetEdit(edit.id);
+  res.json({ ok: true });
+});
+
+/**
+ * حذفُ سجلٍّ من الأرشيف — نسيانٌ مبكّر قبل تمام الثلاثين يوماً.
+ *
+ * السجلُّ نسخةٌ للتراجع لا غير، فحذفُه لا يمسّ البنك ولا يُرجع شيئاً: إنما
+ * يُخلي الأرشيف ممّا لم يعد المالكُ يريد الاحتفاظ به. ومن حذف سجلّ حذفٍ فقد
+ * تخلّى عن بابِ إرجاعه.
+ */
+app.delete('/api/console/edit/:id', owner, async (req, res) => {
+  const gone = await store.forgetEdit(req.params.id);
+  if (!gone) return res.status(404).json({ error: 'لا نسخة بهذا الرقم' });
   res.json({ ok: true });
 });
 

@@ -458,7 +458,8 @@ export function Edits({
   const load = useCallback(() => api.get<Edit[]>('edits'), [api]);
   const [rows] = useFeed(load, reloadKey);
   const [busy, setBusy] = useState<number | null>(null);
-  const [ask, setAsk] = useState<number | null>(null);
+  /* سؤالٌ واحدٌ مفتوحٌ للتأكيد: إرجاعٌ أو حذف — لا يجتمعان في صفٍّ واحد */
+  const [ask, setAsk] = useState<{ id: number; mode: 'restore' | 'delete' } | null>(null);
 
   const mine = useMemo(
     () => (rows ?? []).filter((r) => !sift.bank || r.bank === sift.bank),
@@ -487,6 +488,15 @@ export function Edits({
   const restore = async (id: number) => {
     setBusy(id);
     const res = await api.send('POST', `edit/${id}/restore`);
+    setBusy(null);
+    setAsk(null);
+    if (res.ok) onChanged();
+  };
+
+  /* حذفُ السجلّ من الأرشيف — لا يمسّ البنك، إنما يُخلي نسخةَ التراجع */
+  const forget = async (id: number) => {
+    setBusy(id);
+    const res = await api.send('DELETE', `edit/${id}`);
     setBusy(null);
     setAsk(null);
     if (res.ok) onChanged();
@@ -532,8 +542,8 @@ export function Edits({
               <Badge>{row.bankName}</Badge>
               <span className="tnum text-[12.5px] font-medium text-faint">{stamp(row.at)}</span>
               <span className="flex-1" />
-              {row.restorable ? (
-                ask === row.id ? (
+              {ask?.id === row.id ? (
+                ask.mode === 'restore' ? (
                   <>
                     <span className="text-[12.5px] font-medium text-muted">
                       {row.kind === 'delete'
@@ -557,16 +567,49 @@ export function Edits({
                     </button>
                   </>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setAsk(row.id)}
-                    className="h-8 rounded-chip px-3.5 text-[12.5px] font-bold text-signal-ink shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-signal)_30%,transparent)] transition hover:bg-signal-2"
-                  >
-                    إرجاع القديم
-                  </button>
+                  <>
+                    <span className="text-[12.5px] font-medium text-danger">
+                      يُحذف السجلّ نهائياً — ولا يُرجَع القديم بعده —
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void forget(row.id)}
+                      disabled={busy === row.id}
+                      className="h-8 rounded-chip bg-danger px-4 text-[12.5px] font-bold text-white transition hover:brightness-110"
+                    >
+                      {busy === row.id ? 'يُحذف…' : 'احذف السجلّ'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAsk(null)}
+                      className="h-8 rounded-chip px-3 text-[12.5px] font-bold text-muted transition hover:text-ink"
+                    >
+                      تراجع
+                    </button>
+                  </>
                 )
               ) : (
-                <Badge tone="signal">أُرجع القديم</Badge>
+                <>
+                  {row.restorable ? (
+                    <button
+                      type="button"
+                      onClick={() => setAsk({ id: row.id, mode: 'restore' })}
+                      className="h-8 rounded-chip px-3.5 text-[12.5px] font-bold text-signal-ink shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-signal)_30%,transparent)] transition hover:bg-signal-2"
+                    >
+                      إرجاع القديم
+                    </button>
+                  ) : (
+                    <Badge tone="signal">أُرجع القديم</Badge>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setAsk({ id: row.id, mode: 'delete' })}
+                    title="حذف هذا السجلّ من الأرشيف"
+                    className="h-8 rounded-chip px-3 text-[12.5px] font-bold text-danger transition hover:bg-danger-2"
+                  >
+                    حذف السجلّ
+                  </button>
+                </>
               )}
             </div>
 

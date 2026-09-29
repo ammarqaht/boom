@@ -652,7 +652,7 @@ export function QuestionEditor({
     setBusy(true);
     setError('');
     const res = questionId
-      ? await api.send('PUT', `question/${questionId}`, draft)
+      ? await api.send('PUT', `question/${questionId}`, { ...draft, bank: target })
       : await api.send('POST', `bank/${target}/question`, draft);
     setBusy(false);
     if (!res.ok) return setError('لم يُحفظ — راجع الملاحظات أعلاه');
@@ -670,7 +670,9 @@ export function QuestionEditor({
     onClose();
   };
 
-  const bankName = loaded?.bankName ?? banks.find((b) => b.id === target)?.name;
+  const bankName = banks.find((b) => b.id === target)?.name ?? loaded?.bankName;
+  /* نقلٌ إلى بنكٍ آخر: البنك المختار يخالف بنك السؤال المحمَّل */
+  const moved = Boolean(loaded && target !== loaded.bankId);
 
   return (
     <Modal
@@ -753,15 +755,23 @@ export function QuestionEditor({
             </div>
           )}
 
-          {!questionId && banks.length > 0 && (
+          {banks.length > 0 && (
             <>
-              <Label>البنك</Label>
+              <Label>{questionId ? 'البنك — بدّله لنقل السؤال إلى بنكٍ آخر' : 'البنك'}</Label>
               <Select
                 value={target}
                 onChange={setTarget}
                 choices={banks.map((b) => ({ value: b.id, label: b.name, hint: String(b.count) }))}
-                className="mb-5"
+                className={moved ? 'mb-3' : 'mb-5'}
               />
+              {moved && (
+                <p className="mb-5 rounded-chip bg-signal-2 px-3.5 py-2.5 text-[13px] leading-relaxed font-medium text-signal-ink">
+                  يُنقل من «{loaded?.bankName}» إلى «{banks.find((b) => b.id === target)?.name}»
+                  {textChanged
+                    ? ' — ويُمحى إحصاؤه لأن نصّه تغيّر أيضاً.'
+                    : ' — وينتقل معه إحصاؤه وبلاغاته، فالنصّ لم يتغيّر.'}
+                </p>
+              )}
             </>
           )}
 

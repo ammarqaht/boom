@@ -603,6 +603,27 @@ export async function clearQuestion(id) {
   };
 }
 
+/**
+ * نقلُ إحصاءِ سؤالٍ وبلاغاتِه إلى معرّفٍ جديد.
+ *
+ * حين يُنقل السؤالُ من بنكٍ إلى آخر بلا تغييرِ نصّه فهو السؤالُ نفسه أُعيد
+ * تصنيفُه: معرّفُه يتبدّل لأن بادئتَه بنكُه، لكن ما قِيس عليه لا يزال صادقاً.
+ * فيُعاد ترقيمُ إحصائه وبلاغاته لا محوُها. وإن كان في الوجهة إحصاءٌ بالمعرّف
+ * ذاته (نادر) تُرك على حاله ولم يُدهَس.
+ */
+export async function moveQuestionStats(oldId, newId, bankId) {
+  if (oldId === newId) return;
+  await q(
+    `UPDATE question_stats SET question_id = $1, bank_id = $2 WHERE question_id = $3
+       AND NOT EXISTS (SELECT 1 FROM question_stats WHERE question_id = $1)`,
+    [newId, bankId, oldId],
+  );
+  await q("UPDATE feedback SET question_id = $1 WHERE question_id = $2 AND kind = 'report'", [
+    newId,
+    oldId,
+  ]);
+}
+
 /** يُسجّل تحريراً أو حذفاً في الأرشيف */
 export async function recordEdit(entry) {
   await q(INSERT_EDIT, [

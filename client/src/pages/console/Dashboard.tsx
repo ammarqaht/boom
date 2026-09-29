@@ -87,6 +87,9 @@ export type Alerts = {
   lowStars: number;
   unreadComments: number;
   unreadReports: number;
+  /* توزيعُ البلاغات والمحرَّرة على البنوك — لأعدادِ صفحات الشريط المقيّدة بالبنك */
+  reportsByBank?: Record<string, number>;
+  editsByBank?: Record<string, number>;
 };
 
 type Data = {

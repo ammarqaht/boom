@@ -183,12 +183,19 @@ export default function Owner() {
     void api.get<Alerts>('alerts').then((data) => data && setAlerts(data));
   }, [api, ready, reloadKey]);
 
+  /*
+   * أعدادُ البنوك تُقرأ بعد كل حفظٍ لا مرّةً عند الدخول.
+   *
+   * كانت تُجلب عند الجهوز وحده، فيضيف المالك سؤالاً أو يحذفه أو ينقله بين
+   * بنكين وأعدادُ الشريط — كلُّ بنكٍ ومجموعُها والعنوانُ فوقها — على حالها
+   * حتى يُعاد تحميل الصفحة. فرُبطت بـreloadKey كالشارات، فتتبع التغيير.
+   */
   useEffect(() => {
     if (!ready) return;
     void fetch('/api/banks')
       .then((r) => r.json())
       .then(setBanks);
-  }, [ready]);
+  }, [ready, reloadKey]);
 
   const route = door === 'banks' ? page : door;
   const heading = PAGES[route] ?? PAGES.home;
@@ -219,15 +226,25 @@ export default function Owner() {
         id: item.id,
         label: item.label,
         on: page === item.id,
+        /*
+         * عددٌ واحدٌ للصفحة لا يتبدّل معناه بين نشِطةٍ وخاملة.
+         *
+         * كان يعرض counts.all وهي نشِطة (مقيّدةٌ بالبنك) وalerts وهي خاملة
+         * (مجموعُ البنوك)، فيقفز الرقمُ حين تدخل الصفحة. وكلُّها الآن مقيّدةٌ
+         * بالبنك المختار: الأسئلةُ من عدّ البنك، والبلاغاتُ والمحرَّرةُ من
+         * توزيعهما على البنوك — فيطابق الرقمُ ما تعرضه الصفحة بعينها.
+         */
         count:
-          page === item.id && counts.all !== undefined
-            ? counts.all
-            : item.id === 'questions'
+          item.id === 'questions'
+            ? bank
+              ? banks.find((b) => b.id === bank)?.count
+              : total
+            : item.id === 'reports'
               ? bank
-                ? banks.find((b) => b.id === bank)?.count
-                : total
-              : item.id === 'reports'
-                ? alerts?.reports
+                ? (alerts?.reportsByBank?.[bank] ?? 0)
+                : alerts?.reports
+              : bank
+                ? (alerts?.editsByBank?.[bank] ?? 0)
                 : alerts?.edits,
         go: () => {
           setPage(item.id);
