@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useTheme } from '../components/ui';
+import { useSearchParams } from 'react-router-dom';
+import { HoldButton, toast, useTheme } from '../components/ui';
 import {
   CardsIcon,
   ChatIcon,
@@ -8,7 +9,6 @@ import {
   GridIcon,
   PanelIcon,
   PulseIcon,
-  RefreshIcon,
   ScreenIcon,
   SearchIcon,
 } from '../components/icons';
@@ -134,12 +134,24 @@ export default function Owner() {
   const [key, setKey] = useState(() => localStorage.getItem(KEY_STORE) ?? '');
   const [ready, setReady] = useState(false);
 
-  const [door, setDoor] = useState<SectionId>('home');
-  const [page, setPage] = useState('questions');
-  const [bank, setBank] = useState('');
-  const [level, setLevel] = useState(0);
-  const [view, setView] = useState('all');
-  const [search, setSearch] = useState('');
+  /*
+   * موضعُك في الرابط لا في الذاكرة وحدها.
+   *
+   * كانت الحالُ كلّها useState مجرّدة، فكلُّ تحديثٍ للصفحة يردّك إلى
+   * «النظرة العامة» — وأنت في الأسئلة المحرَّرة ببنكٍ ومرشّحٍ اخترتهما.
+   * وفي الرابط لا في localStorage: لأن زرَّ الرجوع يعمل عندها، ولأن
+   * الموضع يُنسخ ويُرسل.
+   */
+  const [params, setParams] = useSearchParams();
+
+  const [door, setDoor] = useState<SectionId>(
+    () => (params.get('d') as SectionId) || 'home',
+  );
+  const [page, setPage] = useState(() => params.get('p') || 'questions');
+  const [bank, setBank] = useState(() => params.get('b') || '');
+  const [level, setLevel] = useState(() => Number(params.get('l')) || 0);
+  const [view, setView] = useState(() => params.get('v') || 'all');
+  const [search, setSearch] = useState(() => params.get('q') || '');
   /* مدى صفحة الغرف: null = السجلّ كلّه، وهو الافتراض */
   const [range, setRange] = useState<Range>(null);
   const [preset, setPreset] = useState('all');
@@ -207,6 +219,24 @@ export default function Owner() {
       .then(setBanks);
   }, [ready, reloadKey]);
 
+  /*
+   * الكتابةُ بـreplace لا push: تبديلُ مرشّحٍ ليس نقلةً في التاريخ، ولو
+   * كُتبت لصار زرُّ الرجوع يتراجع حرفاً حرفاً في حقل البحث. والمقارنةُ
+   * قبل الكتابة تمنع دورةً لا تنتهي.
+   */
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (door !== 'home') next.set('d', door);
+    if (door === 'banks' && page !== 'questions') next.set('p', page);
+    if (bank) next.set('b', bank);
+    if (level) next.set('l', String(level));
+    if (view !== 'all') next.set('v', view);
+    if (search) next.set('q', search);
+    if (next.toString() !== window.location.search.replace(/^\?/, '')) {
+      setParams(next, { replace: true });
+    }
+  }, [door, page, bank, level, view, search, setParams]);
+
   const route = door === 'banks' ? page : door;
   const heading = PAGES[route] ?? PAGES.home;
 
@@ -223,6 +253,35 @@ export default function Owner() {
   const openQuestion = useCallback((id: string) => setEditing({ id }), []);
   const refresh = useCallback(() => setReloadKey((n) => n + 1), []);
   const sift: Sift = { bank, level, view, search, range };
+
+  /* محوُ سجلّ المحرَّرة كلّه — الأرشيف أجمع لا ما يعرضه المرشّح */
+  const wipeEdits = async () => {
+    const res = await api.send<{ gone?: number }>('DELETE', 'edits');
+    if (!res.ok) return toast('تعذّر محو السجلّ', 'danger');
+    toast(`مُحي السجلّ — ${say(res.data?.gone ?? 0, 'question')}`, 'safe');
+    refresh();
+  };
+
+  /*
+   * استيرادُ الناقص من ملفّات المستودع — الآمنُ وحده هنا.
+   *
+   * و«استبدالاً» يبقى في صفحة البنوك بضغطه المطوّل: هو يمحو ما حُرِّر من
+   * اللوحة، وزرٌّ بهذا الأثر لا يُوضع في ترويسةٍ تُضغط مروراً.
+   */
+  const [importing, setImporting] = useState(false);
+  const bringBanks = async () => {
+    setImporting(true);
+    const res = await api.send<{ error?: string; banks?: { action: string }[] }>(
+      'POST',
+      'banks/import',
+      { replace: false },
+    );
+    setImporting(false);
+    if (!res.ok) return toast(res.data?.error ?? 'تعذّر الاستيراد', 'danger');
+    const added = (res.data?.banks ?? []).filter((row) => row.action === 'added').length;
+    toast(added ? `أُدخل ${say(added, 'bank')} من الملفّات` : 'لا بنكَ ناقصاً', added ? 'safe' : 'signal');
+    refresh();
+  };
 
   if (!ready) return <Gate current={key} onKey={setKey} />;
 
@@ -564,7 +623,7 @@ export default function Owner() {
             </label>
           )}
 
-          {door === 'banks' && (
+          {door === 'banks' && page !== 'shelf' && (
             <button
               type="button"
               onClick={() => setEditing({ id: null, bankId: bank || banks[0]?.id })}
@@ -572,6 +631,33 @@ export default function Owner() {
             >
               + سؤال جديد
             </button>
+          )}
+
+          {/* استيرادُ الناقص: مكانُه مع صفحة البنوك، وأثرُه خبرٌ عابر */}
+          {door === 'banks' && page === 'shelf' && (
+            <button
+              type="button"
+              disabled={importing}
+              onClick={() => void bringBanks()}
+              title="يُدخل بنكاً له ملفٌّ في المستودع وليس في القاعدة — ولا يمسّ بنكاً قائماً"
+              className="h-10 shrink-0 rounded-chip bg-signal-ink px-4 text-[13.5px] font-bold text-white transition hover:brightness-110 disabled:opacity-50"
+            >
+              {importing ? 'يُستورد…' : 'استيراد البنوك'}
+            </button>
+          )}
+
+          {/*
+            محوُ السجلّ كلّه بضغطٍ مطوّل — كحذف البنك.
+            ولا يظهر إلا وفي السجلّ ما يُمحى.
+          */}
+          {door === 'banks' && page === 'edits' && (alerts?.edits ?? 0) > 0 && (
+            <HoldButton
+              bare
+              tone="chip"
+              className="shrink-0"
+              label={`احذف السجلّ كلّه (${alerts?.edits})`}
+              onConfirm={() => void wipeEdits()}
+            />
           )}
 
           {/* لا يظهر إلا وله عمل: زرٌّ لا أثر له يُضغط مرّةً ثم يُهمَل */}
@@ -588,16 +674,6 @@ export default function Owner() {
               <span className="tnum">{counts.unread}</span>
             </button>
           )}
-
-          <button
-            type="button"
-            onClick={refresh}
-            title="حدّث"
-            className="flex h-10 shrink-0 items-center gap-2 rounded-chip px-3.5 text-[13.5px] font-bold text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] transition hover:bg-surface-2"
-          >
-            <RefreshIcon size={14} />
-            <span className="max-sm:hidden">تحديث</span>
-          </button>
         </header>
 
         <main className="min-h-0 flex-1 px-6 py-6">

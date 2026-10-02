@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AutoTextarea, Scrollbar, Select } from '../../components/ui';
-import { CloseIcon } from '../../components/icons';
+import { CloseIcon, TrashIcon } from '../../components/icons';
 
 /**
  * قطعُ لوحة المالك — ومحرّرُ السؤال الواحد.
@@ -722,12 +722,15 @@ export function QuestionEditor({
                 </button>
               </>
             ) : (
+              /* أيقونةٌ في طرف الذيل: الحذفُ ليس ندّاً لـ«احفظ» فلا يُكتب بحجمه */
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="h-10 rounded-chip px-4 text-[14px] font-bold text-danger shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_28%,transparent)] transition hover:bg-danger-2"
+                title="حذف السؤال"
+                aria-label="حذف السؤال"
+                className="flex size-10 shrink-0 items-center justify-center rounded-chip text-danger shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_28%,transparent)] transition hover:bg-danger-2"
               >
-                حذف السؤال
+                <TrashIcon size={16} />
               </button>
             ))}
         </>

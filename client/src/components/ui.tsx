@@ -738,13 +738,16 @@ export function HoldButton({
   className = '',
   tone = 'danger',
   bare = false,
+  glyph,
 }: {
   label: string;
   hint?: string;
   onConfirm: () => void;
   className?: string;
-  /** danger: صفٌّ أحمر في قائمة. action: زرٌّ أساسيّ قائمٌ بنفسه */
-  tone?: 'danger' | 'action';
+  /** danger: صفٌّ في قائمة. action: زرٌّ أساسيّ. chip: قرصُ ترويسة. icon: رمزٌ وحده */
+  tone?: 'danger' | 'action' | 'chip' | 'icon';
+  /** رمزٌ مكان النصّ — لبطاقةٍ ضيّقة لا تحتمل جملة. واللفظُ يبقى في title */
+  glyph?: ReactNode;
   /** بلا فاصلٍ علويّ ولا هامش — حين لا يكون آخرَ صفٍّ في قائمة */
   bare?: boolean;
 }) {
@@ -780,15 +783,24 @@ export function HoldButton({
         onPointerUp={stop}
         onPointerLeave={stop}
         onPointerCancel={stop}
+        title={glyph ? `${label} — استمر بالضغط` : undefined}
+        aria-label={glyph ? label : undefined}
         style={{ '--held': held } as CSSProperties}
         className={
-          tone === 'action'
+          tone === 'icon'
+            ? 'relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-chip text-danger shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_25%,transparent)] transition select-none hover:bg-danger-2'
+            : tone === 'action'
             ? 'relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-chip bg-action px-4 py-3 text-center text-[15px] leading-snug font-black text-on-action transition select-none hover:brightness-110'
-            : 'relative flex w-full items-center gap-2.5 overflow-hidden rounded-chip px-2.5 py-2 text-right text-[13.5px] leading-snug font-black text-danger transition select-none hover:bg-danger-2'
+            : tone === 'chip'
+              ? 'relative flex h-10 shrink-0 items-center gap-2 overflow-hidden rounded-chip px-3.5 text-[13.5px] font-bold whitespace-nowrap text-danger shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_30%,transparent)] transition select-none hover:bg-danger-2'
+              : 'relative flex w-full items-center gap-2.5 overflow-hidden rounded-chip px-2.5 py-2 text-right text-[13.5px] leading-snug font-black text-danger transition select-none hover:bg-danger-2'
         }
       >
         <span className="hold-fill" aria-hidden="true" />
-        <span className="relative">{label} — استمر بالضغط</span>
+        {/* القرصُ والرمزُ في موضعٍ ضيّق: الشرحُ في title لا في سطرٍ يكسر الصفّ */}
+        <span className="relative flex items-center gap-2">
+          {glyph ?? (tone === 'chip' ? label : `${label} — استمر بالضغط`)}
+        </span>
       </button>
       {hint && (
         <p
@@ -799,6 +811,68 @@ export function HoldButton({
           {hint}
         </p>
       )}
+    </div>
+  );
+}
+
+/* ════════════ خبرٌ عابر ════════════ */
+
+type Note = { id: number; text: string; tone: 'signal' | 'safe' | 'danger' };
+
+const NOTE_SKIN: Record<Note['tone'], string> = {
+  signal: 'bg-signal text-on-signal',
+  safe: 'bg-safe text-ground',
+  danger: 'bg-danger text-white',
+};
+
+let noteSeq = 0;
+const listeners = new Set<(note: Note) => void>();
+
+/**
+ * توستٌ أعلى الشاشة — خبرٌ يمضي.
+ *
+ * ولماذا أعلى الشاشة لا في موضع الفعل؟ لأن الفعل قد يقع في لوحٍ طويل
+ * يُمرَّر: يشتري اللاعب بطاقةً وهو في أسفل المتجر، فيقع أثرُها في سطرٍ
+ * خرج من نظره. والأعلى ثابتٌ يُرى على كل حال.
+ *
+ * ووحدةٌ عامّة لا حالٌ في كل صفحة: يُنادى من أي موضعٍ بلا تمرير دوالّ
+ * عبر ثلاث طبقات.
+ */
+export function toast(text: string, tone: Note['tone'] = 'signal') {
+  const note = { id: ++noteSeq, text, tone };
+  for (const listen of listeners) listen(note);
+}
+
+/** مرفأُ التوست — يُركَّب مرّةً في الصفحة، ويستقبل كل نداء */
+export function Toasts() {
+  const [notes, setNotes] = useState<Note[]>([]);
+
+  useEffect(() => {
+    const add = (note: Note) => {
+      setNotes((list) => [...list.slice(-2), note]);
+      window.setTimeout(() => setNotes((list) => list.filter((n) => n.id !== note.id)), 2600);
+    };
+    listeners.add(add);
+    return () => {
+      listeners.delete(add);
+    };
+  }, []);
+
+  if (notes.length === 0) return null;
+
+  return (
+    <div
+      aria-live="polite"
+      className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-4 pt-4"
+    >
+      {notes.map((note) => (
+        <span
+          key={note.id}
+          className={`toast-note max-w-full truncate rounded-chip px-4 py-2.5 text-[13.5px] font-black ${NOTE_SKIN[note.tone]}`}
+        >
+          {note.text}
+        </span>
+      ))}
     </div>
   );
 }

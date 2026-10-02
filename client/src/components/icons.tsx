@@ -128,6 +128,53 @@ export const MultiplyIcon = ({ size = 20, ...props }: IconProps) => (
   </svg>
 );
 
+/*
+ * ══════ أيقونات البطاقات: الرمزُ يقول ما تفعله البطاقة ══════
+ *
+ * الرملُ وحده يقول «وقتٌ يمضي» لا «وقتٌ يُزاد» — وهما ضدّان. والصليبُ
+ * وحده علامةُ ضربٍ بلا مضروب. فصار لكلٍّ رمزٌ يحمل أثرَها: ساعةٌ وزيادة،
+ * و«×٢» صريحة. وندفةُ الثلج على حالها — فالتجميد يُقرأ منها بلا شرح.
+ */
+
+/** وقت إضافي: ساعةٌ وعلامةُ زيادة في ركنها */
+export const TimePlusIcon = ({ size = 20, ...props }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    {...props}
+  >
+    <path d="M19.4 13.6a8.5 8.5 0 1 0-5.8 5.8" />
+    <path d="M10.5 6.2v4.6l3 1.9" />
+    <path d="M18.8 15.6v5.2M16.2 18.2h5.2" />
+  </svg>
+);
+
+/** مضاعفة: «×٢» — الرمزُ هو المعنى، لا صليبٌ يُؤوَّل */
+export const DoubleIcon = ({ size = 20, ...props }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2.2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    {...props}
+  >
+    <path d="M3.4 8.4l6.2 7.2M9.6 8.4l-6.2 7.2" />
+    <path d="M13.9 9.1c0-1.3 1.1-2.3 2.5-2.3s2.6 1 2.6 2.3c0 2.5-5.1 4-5.1 7.4h5.4" />
+  </svg>
+);
+
 export const CardsIcon = (p: IconProps) => (
   <Icon {...p}><rect x="3" y="6" width="12" height="15" rx="2" transform="rotate(-8 9 13)" /><rect x="9" y="4" width="12" height="15" rx="2" transform="rotate(6 15 11)" /></Icon>
 );

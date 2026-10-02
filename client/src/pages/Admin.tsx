@@ -31,10 +31,9 @@ import {
   CopyIcon,
   EyeIcon,
   EyeOffIcon,
+  DoubleIcon,
   HistoryIcon,
-  HourglassIcon,
   MinusIcon,
-  MultiplyIcon,
   OfflineIcon,
   PauseIcon,
   PlayIcon,
@@ -43,6 +42,7 @@ import {
   RestartIcon,
   ScreenIcon,
   SnowflakeIcon,
+  TimePlusIcon,
   TrophyIcon,
   UsersIcon,
 } from '../components/icons';
@@ -1064,10 +1064,10 @@ function RoundPanel({
 }
 
 /* أيقونةُ كل بطاقة — أسماؤها تأتي من السيرفر، وهذه صورتُها وحدها */
-const CARD_ICON: Record<CardId, typeof HourglassIcon> = {
-  time: HourglassIcon,
+const CARD_ICON: Record<CardId, typeof TimePlusIcon> = {
+  time: TimePlusIcon,
   freeze: SnowflakeIcon,
-  double: MultiplyIcon,
+  double: DoubleIcon,
 };
 
 /**
@@ -1097,7 +1097,14 @@ function CardsPanel({
             className="flex items-center gap-2 border-b border-line-soft py-2 last:border-0"
           >
             <b className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{team.name}</b>
-            <div className="flex shrink-0 items-center gap-1">
+            {/*
+              القرصُ يقول اسمَ البطاقة لا رمزَها وحده.
+              كان رمزاً ورقماً في قرصٍ بارتفاع ٢٤px، فيُسأل المنظّم «كم بقي
+              له من المضاعفة؟» فيحتاج أن يمرّ بالفأرة ليقرأ التلميح — وهو
+              واقفٌ في قاعة. فصار الاسم مكتوباً والعددُ إلى جانبه.
+              والاسمُ يُخفى دون ٦٤٠px وحدها حيث لا يسع الصفَّ.
+            */}
+            <div className="flex shrink-0 items-center gap-1.5">
               {cards.map((card) => {
                 const left = team.cardsLeft?.[card.id] ?? card.limit;
                 const Glyph = CARD_ICON[card.id];
@@ -1105,14 +1112,15 @@ function CardsPanel({
                   <span
                     key={card.id}
                     title={`${card.name} — بقيت ${left} من ${card.limit}`}
-                    className={`tnum flex items-center gap-1 rounded-chip px-2 py-1 text-[11.5px] font-bold ${
+                    className={`flex h-8 items-center gap-1.5 rounded-chip px-2.5 text-[12px] font-bold ${
                       left === 0
                         ? 'text-faint opacity-55 shadow-[inset_0_0_0_1px_var(--color-line)]'
                         : 'text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line-2)]'
                     }`}
                   >
-                    <Glyph size={12} />
-                    {left}
+                    <Glyph size={14} />
+                    <span className="max-sm:hidden">{card.name}</span>
+                    <b className="tnum font-black">{left}</b>
                   </span>
                 );
               })}

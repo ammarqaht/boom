@@ -978,11 +978,17 @@ function ReportRow({
 
   if (!open) {
     return (
+      /*
+       * إطارٌ خفيفٌ حوله لا خطٌّ فوقه وحده.
+       *
+       * كان سطراً بلا حدٍّ تحت سطور الخيارات، فيُقرأ خياراً خامساً بلون
+       * باهت. والإطارُ يقول: هذا زرٌّ من جنسٍ آخر.
+       */
       <button
         type="button"
         onClick={() => setOpen(true)}
         /* أخفّ من الأحمر الصريح: دعوةٌ لا إنذار — واللاعب لتوّه خرج من جولة */
-        className="mt-3 w-full border-t border-line pt-2.5 text-right text-xs font-bold text-muted transition hover:text-danger"
+        className="mt-3 w-full rounded-chip px-3 py-2 text-right text-xs font-bold text-muted shadow-[inset_0_0_0_1px_var(--color-line-2)] transition hover:bg-danger-2 hover:text-danger"
       >
         في هذا السؤال خطأ؟ بلّغ عنه
       </button>

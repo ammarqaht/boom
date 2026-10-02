@@ -378,15 +378,23 @@ export default function Home() {
       <main className="mx-auto w-full max-w-6xl flex-1">
         {/* ══ البطل: الاسم يقطع مخطّطاً يجري، وتحته بابُ الدخول ══ */}
         <section className="hero">
-          <div className="lane lane-bare relative flex h-40 items-center justify-center sm:h-52">
+          {/*
+            المجرى يملأ عرض النافذة لا عرض الحاوية.
+            الحاويةُ ‎max-w-6xl‎ تلزم النصَّ لأنه يُقرأ، ولا تلزم المِرقاب:
+            كان الخطُّ يقف على بُعد مئتي بكسلٍ من كل حافّةٍ في الحاسب فيبدو
+            لوحاً مقصوصاً وسط فراغ. و‎hero-rail‎ يُفلته إلى الحافّتين ويُذيب
+            طرفيه.
+          */}
+          <div className="hero-rail relative flex h-44 items-center justify-center sm:h-60">
             <span
               className="lane-run lane-drift opacity-90"
               style={
                 {
                   '--state': 'var(--color-signal)',
                   '--tile': '300px',
-                  '--amp': '120px',
+                  '--amp': '128px',
                   '--drift': '3.6s',
+                  '--trace': "url('/trace.svg')",
                 } as CSSProperties
               }
             />

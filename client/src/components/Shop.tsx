@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import type { CardId, Shop as ShopData } from '../lib/types';
 import { ask } from '../lib/socket';
-import { Button } from './ui';
-import { CheckIcon, HourglassIcon, MultiplyIcon, SnowflakeIcon } from './icons';
+import { Button, toast } from './ui';
+import { CheckIcon, DoubleIcon, SnowflakeIcon, TimePlusIcon } from './icons';
 
-const CARD_META: Record<CardId, { Icon: typeof HourglassIcon; effect: string }> = {
-  time: { Icon: HourglassIcon, effect: 'تبدأ الجولة القادمة بعشر ثوانٍ زيادة' },
+const CARD_META: Record<CardId, { Icon: typeof TimePlusIcon; effect: string }> = {
+  time: { Icon: TimePlusIcon, effect: 'تبدأ الجولة القادمة بعشر ثوانٍ زيادة' },
   freeze: {
     Icon: SnowflakeIcon,
     effect: 'تقفل لاعباً عن الإجابة خمس ثوانٍ في بداية الجولة',
   },
-  double: { Icon: MultiplyIcon, effect: 'نقاط جولتك القادمة ×٢ — تسقط إن توقف نبضك' },
+  double: { Icon: DoubleIcon, effect: 'نقاط جولتك القادمة ×٢ — تسقط إن توقف نبضك' },
 };
 
 /*
@@ -45,13 +45,28 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
     setTimeout(() => setNote(''), 2500);
   };
 
+  /*
+   * الشراء يُخبَر عنه بتوستٍ أعلى الشاشة.
+   *
+   * لأن أثرَه مؤجَّل: الوقتُ يُضاف في الجولة القادمة والمضاعفةُ تُحسب في
+   * آخرها. فلو لم يُقل شيءٌ ظنّ اللاعبُ أن الضغطة لم تقع — وفي المتجر
+   * الطويل قد ينزل سطرُ البطاقة خارج نظره عند الضغط.
+   */
   const buy = async (card: CardId, targetId?: string) => {
+    const meta = shop.cards.find((c) => c.id === card);
+    const victim = targetId ? shop.rivals.find((r) => r.id === targetId)?.name : null;
     setBusy(card);
     const res = await ask('team:buyCard', { card, targetId });
     setBusy(null);
     setPickTarget(false);
     setTarget(null);
-    if (!res.ok) flash(res.error);
+    if (!res.ok) return flash(res.error);
+    toast(
+      victim
+        ? `جمّدتَ ${victim} — خمس ثوانٍ في بداية الجولة`
+        : `اشتريتَ «${meta?.name ?? 'البطاقة'}» — تُطبَّق في الجولة القادمة`,
+      'safe',
+    );
   };
 
   return (
@@ -78,7 +93,8 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
                 <div className="flex items-baseline gap-2">
                   <span className="font-black">{card.name}</span>
                   {!card.used && (
-                    <span className="shrink-0 text-[11px] font-bold text-muted">
+                    /* بلونِ الإشارة: رصيدٌ باقٍ لا تعليقٌ خافت — يُقرأ قبل الشراء */
+                    <span className="shrink-0 text-[11px] font-bold text-signal">
                       {/* العربية تعدّ الاثنين بصيغتهما لا برقمٍ وجمع */}
                       {card.left === 1
                         ? 'مرّة واحدة متبقية'
@@ -105,13 +121,13 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
                   variant={card.affordable ? 'primary' : 'ghost'}
                   className="tnum shrink-0"
                 >
-                  {busy === card.id
-                    ? 'جارٍ…'
-                    : !card.affordable
-                      ? `${card.price} ${pointsWord(card.price)}`
-                      : card.id === 'freeze'
-                        ? 'اختر هدفاً'
-                        : `${card.price} ${pointsWord(card.price)}`}
+                  {/*
+                    الثمنُ على الأزرار الثلاثة سواء.
+                    كان زرُّ التجميد يقول «اختر هدفاً» فيبقى ثمنُه مجهولاً حتى
+                    يُضغط — ويُقارَن اللاعبُ بين ثلاثٍ أثمانُ اثنتين ظاهرةٌ
+                    والثالثةِ خفيّة. واختيارُ الهدف خطوةٌ تالية تُقال في لوحها.
+                  */}
+                  {busy === card.id ? 'جارٍ…' : `${card.price} ${pointsWord(card.price)}`}
                 </Button>
               )}
             </div>

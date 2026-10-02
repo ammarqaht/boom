@@ -221,7 +221,13 @@ export function Rooms({ api, sift, onCounts, reloadKey }: Props) {
 
 /* ══════════════ حذف الغرفة ══════════════ */
 
-type Detail = Room & { comments: number; reports: number; live: boolean };
+type Detail = Room & {
+  comments: number;
+  reports: number;
+  live: boolean;
+  /** نصيبُ هذه الغرفة من إحصاء الأسئلة — يُطرح عند الحذف */
+  stats: { questions: number; shown: number };
+};
 
 /** سطرُ تفصيلٍ في بطاقة المراجعة — عنوانٌ فوق قيمة */
 function Fact({ label, value }: { label: string; value: React.ReactNode }) {
@@ -328,16 +334,25 @@ function DeleteRoom({
                     ? `ما كُتب فيها: ${say(detail.comments, 'comment')} و${say(detail.reports, 'report')}`
                     : 'ما كُتب فيها من تعليقاتٍ وبلاغات'}
                 </li>
+                {/* نصيبُها من الإحصاء يُطرح الآن — فيُقال عددُه قبل أن يقع */}
+                <li>
+                  {detail
+                    ? detail.stats.questions > 0
+                      ? `نصيبُها من إحصاء الأسئلة: ${say(detail.stats.questions, 'question')} و${detail.stats.shown} عرضة`
+                      : 'لا نصيبَ لها في إحصاء الأسئلة'
+                    : 'نصيبُها من إحصاء الأسئلة'}
+                </li>
               </ul>
             </div>
             <div className="rounded-card px-5 py-4 shadow-[inset_0_0_0_1px_var(--color-line)]">
               <b className="block text-[13px] font-black text-muted">يبقى كما هو</b>
               <ul className="mt-2 grid gap-1.5 text-[13px] leading-relaxed font-medium text-muted">
-                <li>إحصاءُ الأسئلة: عُرض وصحّ وخطأ</li>
                 <li>الأسئلةُ نفسها في بنوكها</li>
+                <li>ما قاسته الغرفُ الأخرى على تلك الأسئلة</li>
               </ul>
               <p className="mt-2.5 text-[12px] leading-relaxed font-medium text-faint">
-                لأن الإحصاء مجموعُ الغرف كلّها، ولا يُعرف نصيبُ غرفةٍ منه ليُطرح.
+                الإحصاء مجموعُ الغرف، ونصيبُ كلِّ غرفةٍ منه مسجَّلٌ على حدة — فيُطرح نصيبُها
+                وحده ويبقى الباقي. وغرفةٌ لُعبت قبل أن يُسجَّل التفصيل لا يُطرح عنها شيء.
               </p>
             </div>
           </div>

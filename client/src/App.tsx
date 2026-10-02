@@ -5,7 +5,7 @@ import Play from './pages/Play';
 import Display from './pages/Display';
 import Admin from './pages/Admin';
 import Owner from './pages/Owner';
-import { Scrollbar } from './components/ui';
+import { Scrollbar, Toasts } from './components/ui';
 
 /** كل انتقال أو تحديث يبدأ من أعلى الصفحة */
 function ScrollToTop() {
@@ -22,6 +22,8 @@ export default function App() {
       <ScrollToTop />
       {/* شريطُ الصفحة: يطفو في الحافّة اليسرى ولا يقتطع عرضاً */}
       <Scrollbar />
+      {/* خبرٌ عابرٌ أعلى الشاشة — مرفأٌ واحدٌ تناديه كلُّ صفحة */}
+      <Toasts />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/play" element={<Play />} />

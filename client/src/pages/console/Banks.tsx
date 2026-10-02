@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, HoldButton } from '../../components/ui';
+import { HoldButton } from '../../components/ui';
+import { TrashIcon } from '../../components/icons';
 import {
   type Api,
   type Col,
@@ -72,12 +73,17 @@ type Q = {
 };
 
 /**
- * «ضعيف الصواب» تعريفٌ واحد في اللوحة كلها: دون ثلاثين بالمئة بعد ثلاث
- * عرضاتٍ فأكثر. وعبارةٌ واحدةٌ تعني شيئين في شاشةٍ واحدة تُفسد الثقة في
- * الرقمين معاً.
+ * «ضعيف الصواب»: دون ثلاثين بالمئة — ولو من عرضةٍ واحدة.
+ *
+ * كان يشترط ثلاث عرضاتٍ فأكثر، وكانت النسبةُ تُخفى دونها أيضاً. فيعرض
+ * المالكُ سؤالاً مرّتين فيُخطأ فيهما، ويقرأ في عموده شرطةً — والرقمُ
+ * محسوبٌ عنده لكنه محجوب. وأسوأُ منه أن الترتيبَ كان يُرتِّب بالرقم
+ * المحجوب: تضغط «النسبة» فتتبعثر الصفوفُ بلا سببٍ يُرى.
+ *
+ * فرُفع الشرط: ما قيس يُعرض كما هو، وقلّةُ العرضات تُقرأ من عمود «عُرض».
  */
 const isWeak = (row: { rate: number | null; shown: number }) =>
-  row.rate !== null && row.rate < 30 && row.shown >= 3;
+  row.rate !== null && row.rate < 30;
 
 const COLS: Col[] = [
   { key: 'bank', label: 'البنك', w: '0.95fr' },
@@ -118,7 +124,7 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
       lvl1: mine.filter((r) => r.level === 1).length,
       lvl2: mine.filter((r) => r.level === 2).length,
       lvl3: mine.filter((r) => r.level === 3).length,
-      measured: mine.filter((r) => r.shown >= 3).length,
+      measured: mine.filter((r) => r.shown > 0).length,
       unseen: mine.filter((r) => r.shown === 0).length,
       weak: mine.filter(isWeak).length,
       reported: mine.filter((r) => r.reports > 0).length,
@@ -131,7 +137,7 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
     const keep = mine.filter((row) => {
       if (sift.level && row.level !== sift.level) return false;
       if (text && !row.q.includes(text) && !row.options.some((o) => o.includes(text))) return false;
-      if (sift.view === 'measured') return row.shown >= 3;
+      if (sift.view === 'measured') return row.shown > 0;
       if (sift.view === 'unseen') return row.shown === 0;
       if (sift.view === 'weak') return isWeak(row);
       if (sift.view === 'reported') return row.reports > 0;
@@ -159,6 +165,17 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
     };
     /* الترتيب لا يُبعثر المتساوين: الأصل هو ترتيب البنك، وإليه تعود */
     return [...keep].sort((a, b) => {
+      /*
+       * ما لم يُقس يُذيَّل في الاتجاهين.
+       *
+       * سؤالٌ عُرض ولم يُجَب نسبتُه «لا شيء» لا «صفر»، فلو رُتِّب بينها
+       * بقيمةٍ وهمية تصدّر الفرزَ التصاعديّ ودفن الأضعفَ تحته — وهو الذي
+       * فُرز من أجله. فيُنحّى إلى الذيل كيفما فُرز.
+       */
+      if (sort.key === 'rate' && (a.rate === null || b.rate === null)) {
+        if (a.rate === b.rate) return 0;
+        return a.rate === null ? 1 : -1;
+      }
       const x = pick(a);
       const y = pick(b);
       if (x === y) return 0;
@@ -180,10 +197,10 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
         : { key, dir: key === 'q' || key === 'bank' ? 1 : -1 },
     );
 
-  const measured = mine.filter((r) => r.shown >= 3).length;
+  const measured = mine.filter((r) => r.shown > 0).length;
   const weak = mine.filter(isWeak).length;
   const reported = mine.filter((r) => r.reports > 0).length;
-  const rated = mine.filter((r) => r.rate !== null && r.shown >= 3).map((r) => r.rate as number);
+  const rated = mine.filter((r) => r.rate !== null).map((r) => r.rate as number);
   const middle = rated.length
     ? [...rated].sort((a, b) => a - b)[Math.floor(rated.length / 2)]
     : null;
@@ -207,7 +224,7 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
           label="ضعيفة الصواب"
           value={weak}
           tone={weak > 0 ? 'warn' : undefined}
-          hint="دون 30% بعد ثلاث عرضات"
+          hint="دون 30% صواباً — ولو من عرضة"
         />
         <Stat
           label="مُبلَّغ عنها"
@@ -266,7 +283,7 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
                   {row.wrong || '—'}
                 </Cell>
                 <Cell align="center">
-                  <Rate value={row.shown >= 3 ? row.rate : null} plain />
+                  <Rate value={row.rate} plain />
                 </Cell>
                 <Cell align="center">
                   {row.reports > 0 ? (
@@ -554,12 +571,6 @@ export function Shelf({
   if (!rows) return <Loading />;
 
   const total = banks.reduce((n, b) => n + b.count, 0);
-  const cols: Col[] = [
-    { label: 'البنك', w: 'minmax(0,1.4fr)' },
-    { label: 'المعرّف', w: 'minmax(0,1fr)' },
-    { label: 'الأسئلة', w: '90px', align: 'center' },
-    { label: '', w: '190px', align: 'end' },
-  ];
 
   return (
     <div className="grid gap-4">
@@ -580,60 +591,75 @@ export function Shelf({
         </p>
       )}
 
+      {/*
+        بطاقاتٌ متجاورة لا جدول.
+        البنوك أحد عشر بأربعة حقول، والجدولُ يفرض عليها عرضاً أدنى ٧٢٠px
+        فيُمرَّر أفقياً على اللوح الضيّق — وثلاثةُ أرباع عرضه كانت تذهب في
+        زرِّ حذفٍ بجملةٍ طويلة تُقَصّ. والبطاقةُ تملأ العرض بما يُقرأ، وتصفُّ
+        نفسها بعرض الشاشة.
+      */}
       <Panel
         title="البنوك"
-        hint="الحذف بضغطٍ مطوّل — ويُحفظ البنك بأسئلته فيُرجَع. ولا يُحذف آخر بنك، ولا بنكٌ تستعمله غرفةٌ قائمة."
-        flush
+        hint="الحذف بضغطٍ مطوّل على أيقونة السلّة — ويُحفظ البنك بأسئلته فيُرجَع. ولا يُحذف آخر بنك، ولا بنكٌ تستعمله غرفةٌ قائمة."
       >
-        <Grid cols={cols} min={720}>
+        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {banks.map((bank) => (
-            <Row key={bank.id} cols={cols} tall>
-              <Cell className="font-bold">{bank.name}</Cell>
-              <Cell className="font-mono text-[12.5px] text-muted" align="start">
-                <span dir="ltr">{bank.id}</span>
-              </Cell>
-              <Cell align="center" className="tnum font-bold">
-                {bank.count}
-              </Cell>
-              <Cell align="end">
-                {banks.length <= 1 ? (
-                  <Badge>آخرُ بنك — لا يُحذف</Badge>
-                ) : busy === bank.id ? (
-                  <span className="text-[12.5px] font-bold text-muted">يُحذف…</span>
-                ) : (
-                  <HoldButton
-                    bare
-                    label={`احذف «${bank.name}»`}
-                    hint={`${say(bank.count, 'question')} تُحفظ ثلاثين يوماً`}
-                    onConfirm={() => void remove(bank)}
-                  />
-                )}
-              </Cell>
-            </Row>
+            <article
+              key={bank.id}
+              className="flex items-center gap-3 rounded-card bg-surface-2 px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--color-line)]"
+            >
+              <div className="min-w-0 flex-1">
+                <b className="block truncate text-[14.5px] font-black">{bank.name}</b>
+                <span
+                  dir="ltr"
+                  className="mt-0.5 block truncate text-right font-mono text-[12px] text-faint"
+                >
+                  {bank.id}
+                </span>
+              </div>
+
+              <div className="shrink-0 text-center">
+                <b className="tnum block text-[19px] leading-none font-black text-signal-ink">
+                  {bank.count}
+                </b>
+                <span className="mt-1 block text-[11.5px] font-medium text-muted">
+                  {unit(bank.count, 'question')}
+                </span>
+              </div>
+
+              {banks.length <= 1 ? (
+                <Badge>آخرُ بنك</Badge>
+              ) : busy === bank.id ? (
+                <span className="shrink-0 text-[12px] font-bold text-muted">يُحذف…</span>
+              ) : (
+                <HoldButton
+                  bare
+                  tone="icon"
+                  glyph={<TrashIcon size={15} />}
+                  label={`احذف «${bank.name}» — ${say(bank.count, 'question')} تُحفظ ثلاثين يوماً`}
+                  onConfirm={() => void remove(bank)}
+                />
+              )}
+            </article>
           ))}
-        </Grid>
+        </div>
       </Panel>
 
+      {/*
+        واستيرادُ الناقص صعد إلى الترويسة، فلم يبقَ هنا إلا الاستبدال.
+        ولا يصعد معه: هو يمحو ما حُرِّر من اللوحة، وزرٌّ بهذا الأثر لا
+        يُوضع حيث تقع عليه الضغطةُ مروراً — ويبقى بضغطه المطوّل.
+      */}
       <Panel
         title="ملفّات المستودع"
-        hint="البنوك تعيش في القاعدة فلا يمحوها نشر، وملفّات server/banks نسخةٌ تُستورد منها"
+        hint="البنوك تعيش في القاعدة فلا يمحوها نشر، وملفّات server/banks نسخةٌ تُستورد منها — و«استيراد البنوك» في الترويسة يُدخل الناقص منها"
       >
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Button
-            variant="ghost"
-            disabled={busy !== null}
-            title="يُدخل بنكاً له ملفٌّ وليس في القاعدة — ولا يمسّ بنكاً قائماً"
-            onClick={() => void bring(false)}
-          >
-            {busy === 'import-missing' ? 'جارٍ…' : 'استورد الناقص'}
-          </Button>
-          <HoldButton
-            bare
-            label="استبدل من الملفّات"
-            hint="يمحو ما حُرِّر من اللوحة في البنوك التي لها ملفّات"
-            onConfirm={() => void bring(true)}
-          />
-        </div>
+        <HoldButton
+          bare
+          label="استبدل من الملفّات"
+          hint="يمحو ما حُرِّر من اللوحة في البنوك التي لها ملفّات، ويردّها إلى نصّ المستودع"
+          onConfirm={() => void bring(true)}
+        />
       </Panel>
 
       {rows.length > 0 && (
@@ -699,8 +725,6 @@ export function Edits({
   const [busy, setBusy] = useState<number | null>(null);
   /* سؤالٌ واحدٌ مفتوحٌ للتأكيد: إرجاعٌ أو حذف — لا يجتمعان في صفٍّ واحد */
   const [ask, setAsk] = useState<{ id: number; mode: 'restore' | 'delete' } | null>(null);
-  /* محوُ السجلّ كلّه — عملٌ خارج الصفوف فله حالُه */
-  const [wiping, setWiping] = useState(false);
 
   const mine = useMemo(
     () => (rows ?? []).filter((r) => !sift.bank || r.bank === sift.bank),
@@ -743,24 +767,15 @@ export function Edits({
     if (res.ok) onChanged();
   };
 
-  /**
-   * محوُ السجلّ كلّه — بضغطٍ مطوّل كحذف البنك.
+  /*
+   * ومحوُ السجلّ كلّه في الترويسة العليا لا هنا.
    *
-   * ويمحو الأرشيف أجمع لا المعروضَ وحده: المرشّح يضيّق النظر لا السجلّ،
-   * فلو محا المعروضَ ظنّ المالكُ أنه أخلى الأرشيف وفيه بقيّةٌ من بنكٍ آخر.
-   * فيُقال له العددُ في الزرّ قبل أن يضغط.
+   * لأنه فعلُ الصفحة لا فعلُ سطرٍ فيها، ومكانُ أفعال الصفحة ترويستُها —
+   * حيث «+ سؤال جديد» و«قراءة الكل». وكان لوحاً في القاع يُبلغ إليه
+   * بتمرير مئة سجلّ.
    */
-  const forgetAll = async () => {
-    setWiping(true);
-    const res = await api.send('DELETE', 'edits');
-    setWiping(false);
-    if (res.ok) onChanged();
-  };
-
   const deleted = mine.filter((r) => r.kind === 'delete').length;
   const wiped = mine.reduce((n, r) => n + r.shown, 0);
-  /* محذوفٌ لم يُرجَع بعد: هؤلاء وحدهم من يُغلق بابُهم بالمحو */
-  const lost = rows.filter((r) => r.kind === 'delete' && r.restorable).length;
 
   return (
     <div className="grid gap-4">
@@ -858,13 +873,15 @@ export function Edits({
                   ) : (
                     <Badge tone="signal">أُرجع القديم</Badge>
                   )}
+                  {/* أيقونةٌ لا جملة: الصفُّ يحمل شارتين وتاريخاً وزرَّ إرجاع */}
                   <button
                     type="button"
                     onClick={() => setAsk({ id: row.id, mode: 'delete' })}
                     title="حذف هذا السجلّ من الأرشيف"
-                    className="h-8 rounded-chip px-3 text-[12.5px] font-bold text-danger transition hover:bg-danger-2"
+                    aria-label="حذف هذا السجلّ من الأرشيف"
+                    className="flex size-8 shrink-0 items-center justify-center rounded-chip text-danger transition hover:bg-danger-2"
                   >
-                    حذف السجلّ
+                    <TrashIcon size={15} />
                   </button>
                 </>
               )}
@@ -900,27 +917,6 @@ export function Edits({
         ))
       )}
 
-      {rows.length > 0 && (
-        <Panel
-          title="محوُ السجلّ"
-          hint="يُخلي الأرشيف أجمع — نسخَ البنوك جميعاً لا ما يعرضه المرشّح. ولا يمسّ بنكاً ولا سؤالاً قائماً، إنما تذهب نسخُ التراجع."
-        >
-          {wiping ? (
-            <p className="text-[13.5px] font-bold text-muted">يُمحى…</p>
-          ) : (
-            <HoldButton
-              bare
-              label="احذف السجلّ كلّه"
-              hint={
-                lost > 0
-                  ? `${say(rows.length, 'question')} تذهب — ويُغلق بابُ إرجاع ${say(lost, 'question')} محذوفة`
-                  : `${say(rows.length, 'question')} تذهب — لا رجعة بعده`
-              }
-              onConfirm={() => void forgetAll()}
-            />
-          )}
-        </Panel>
-      )}
     </div>
   );
 }

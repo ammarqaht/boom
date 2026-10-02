@@ -52,22 +52,29 @@
 @theme static {
   --font-sans: 'Thmanyah', system-ui, sans-serif;
 
-  /* الأسطح — من الأغور إلى الأعلى */
-  --color-ground: #060b12;
-  --color-sunk: #04080e;
-  --color-surface: #0b131c;
-  --color-surface-2: #101c27;
+  /*
+   * الأسطح — من الأغور إلى الأعلى.
+   *
+   * وكانت الأرضية ‎#060b12‎: سوادٌ يكاد يكون مطلقاً، فتصير الشاشةُ ثقباً
+   * لا سطحَ جهاز. والمِرقابُ الحقيقيّ ليس أسود، إنما أزرقٌ عميقٌ يُرى فيه
+   * الزجاج. فرُفعت درجةً — ويبقى ‎sunk‎ أغورَ منها، فعليه يُقرأ ما انقضى
+   * من المجرى.
+   */
+  --color-ground: #0f1821;
+  --color-sunk: #080e15;
+  --color-surface: #16212c;
+  --color-surface-2: #1d2a36;
 
   /* الخطوط: فاصلُ صفٍّ، ثم حدٌّ، ثم ظاهر */
-  --color-line-soft: #0f1a24;
-  --color-line: #16232f;
-  --color-line-2: #22394c;
+  --color-line-soft: #182430;
+  --color-line: #22303d;
+  --color-line-2: #2e4458;
 
-  /* الحبر */
+  /* الحبر — و‎faint‎ يرتفع مع أرضيّته وإلا ذاب فيها */
   --color-ink: #e4f0f8;
   --color-ink-2: #aec2d0;
-  --color-muted: #7c94a6;
-  --color-faint: #33475a;
+  --color-muted: #8ba2b3;
+  --color-faint: #4a6075;
 
   /* لون الهوية الوحيد */
   --color-signal: #4ad5ff;
@@ -184,6 +191,43 @@ body {
   color: var(--color-ink);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
+}
+
+/*
+ * وهجٌ باردٌ في الأعلى — عمقٌ بلا لون.
+ *
+ * السطحُ المصمت يُقرأ ورقاً مقصوصاً مهما حسُنت درجتُه. وهالةٌ واسعةٌ من
+ * لون الإشارة في أعلى الشاشة تعطيه عمقَ زجاجٍ مضاء من خلفه — بثلاثة
+ * بالمئة لا تزيد، فلا تُزاحم شيئاً يُقرأ ولا تصبغ الأبيض.
+ *
+ * وثابتةٌ لا تجري مع التمرير: ضوءٌ على الجهاز لا طبقةٌ في المحتوى. وفي
+ * الوضع الفاتح لا شيء — الورقةُ لا تُضاء من خلفها.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      120% 70% at 50% -10%,
+      color-mix(in srgb, var(--color-signal) 7%, transparent),
+      transparent 62%
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--color-signal) 2.5%, transparent),
+      transparent 38%
+    );
+}
+[data-theme='light'] body::before {
+  display: none;
+}
+/* والمحتوى فوق الهالة لا تحتها */
+#root {
+  position: relative;
+  z-index: 1;
 }
 
 /* أسطح المتصفح ترث النظام: لا شيء يبقى بالإعداد الافتراضي */
@@ -931,6 +975,39 @@ textarea {
   /* قصّةُ الآيفون وشريط الهوم: الزرّ لا يُدفن تحتهما */
   padding-bottom: max(2.5rem, env(safe-area-inset-bottom));
 }
+/*
+ * مجرى البطل يملأ عرض الشاشة.
+ *
+ * كان محبوساً في ‎max-w-6xl‎ مع بقيّة المحتوى، فيقف الخطُّ على بعد مئتي
+ * بكسلٍ من كل حافّةٍ في الحاسب ويبدو مقصوصاً: والمِرقاب يمتدّ بعرض الجهاز
+ * لا بعرض فقرة. فيُفلَت من الحاوية بهامشٍ سالبٍ يبلغ حافّة النافذة —
+ * ‎50vw‎ من منتصفه في كل جهة — وتُطرح نصفُ عرض شريط التمرير فلا يفيض.
+ *
+ * والنصُّ وحقلُ الرمز يبقيان في الحاوية: المقروءُ له عرضٌ يُقرأ به.
+ */
+.hero-rail {
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  /*
+   * والطرفان يذوبان لا يُقصّان: خطٌّ ينتهي فجأةً عند حافّة النافذة يُقرأ
+   * عنصراً مبتوراً، وذائباً يُقرأ مجرىً يمرّ — وهو ما هو.
+   */
+  -webkit-mask-image: linear-gradient(
+    to left,
+    transparent,
+    #000 14%,
+    #000 86%,
+    transparent
+  );
+  mask-image: linear-gradient(to left, transparent, #000 14%, #000 86%, transparent);
+}
+@supports (width: 100dvw) {
+  .hero-rail {
+    width: 100dvw;
+    margin-inline: calc(50% - 50dvw);
+  }
+}
+
 .hero-line {
   margin-inline: auto;
   max-width: 20ch;
@@ -1718,6 +1795,27 @@ textarea {
   transform: scaleX(var(--held, 0));
   transform-origin: right center;
   background: color-mix(in srgb, var(--color-danger) 26%, transparent);
+}
+
+/* خبرٌ عابر: ينزل من الحافّة ويستقرّ — ومن طلب سكوناً رآه ساكناً */
+@keyframes toast-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.toast-note {
+  animation: toast-drop 0.22s var(--ease-monitor) both;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-note {
+    animation: none;
+  }
 }
 
 /*

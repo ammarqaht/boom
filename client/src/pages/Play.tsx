@@ -752,6 +752,25 @@ function RoundEnd({
   const reviewCount = state.review?.length ?? 0;
 
   /*
+   * من أسكن نبضُه الجولة؟ يُسمّى.
+   *
+   * «صمدت إلى آخر الجولة» خبرٌ عن نفسك تعرفه من العنوان فوقه. والجولة
+   * تنتهي على الجميع بتوقّف نبضٍ واحد، فالخبرُ الذي ينقصك: نبضُ مَن.
+   * وقد يسكن نبضان في النبضة الواحدة، فالصيغةُ تحتملهما.
+   */
+  const stopped = teams.filter((t) => t.flatlined && !t.waiting && t.id !== state.id);
+  const names = stopped.map((t) => t.name);
+  const lead = dead
+    ? 'شدّ حيلك في الجولة القادمة'
+    : names.length === 0
+      ? 'صمدت إلى آخر الجولة'
+      : names.length === 1
+        ? `${names[0]} توقّف نبضه — فانتهت الجولة`
+        : names.length === 2
+          ? `${names[0]} و${names[1]} توقّف نبضهما — فانتهت الجولة`
+          : `${names[0]} و${names.length - 1} غيره توقّف نبضهم — فانتهت الجولة`;
+
+  /*
    * صفحةٌ واحدة تجري كلها: كان الرأس والتبويبان ثابتين ولا يجري إلا ما
    * تحتهما، فيقرأ اللاعب أسئلته في نافذةٍ ضيّقة بينما نصف الشاشة مشغولٌ
    * بأرقامٍ قرأها. فصار المجرى واحداً من أعلى اللوحة إلى آخر بطاقة.
@@ -770,9 +789,7 @@ function RoundEnd({
           className="mb-3.5 h-11"
         />
         <h2 className="ink-state text-2xl font-black">{dead ? 'توقف نبضك' : 'نبضك مستمر'}</h2>
-        <p className="mt-1 text-sm font-medium text-muted">
-          {dead ? 'شدّ حيلك في الجولة القادمة' : 'صمدت إلى آخر الجولة'}
-        </p>
+        <p className="mt-1 text-sm font-medium text-muted">{lead}</p>
 
         <div className="mt-3.5 grid grid-cols-2 gap-2">
           {/* العدّاد لا يغيب وإن سكن النبض: صفرٌ خبرٌ، والشرطة لا تقول شيئاً */}
@@ -781,9 +798,20 @@ function RoundEnd({
             value={state.roundPoints === null ? '0' : `+${state.roundPoints}`}
             label="نقاط الجولة"
             signal
+            /*
+             * المضاعفةُ تُرى في حسابها لا في حصيلتها.
+             * من دفع أربع نقاطٍ في بطاقةٍ ثم قرأ «+٨» لا يعرف أربحت له أم
+             * لا. والمعادلةُ تقول: هذه ثمرتها.
+             */
+            note={
+              /* أرقامٌ غربية كجيرانها في البلاطة — والمزجُ في سطرٍ واحد يُتعتع */
+              state.roundDoubled && state.roundBase !== null
+                ? `${state.roundBase} × 2 = ${state.roundPoints}`
+                : undefined
+            }
           />
           <Readout value={`${state.correct}/${state.answered}`} label="إجابة صحيحة" />
-          <Readout value={String(state.score)} label="مجموعك" />
+          <Readout value={String(state.score)} label="نقاط" />
         </div>
       </section>
 
@@ -852,7 +880,7 @@ function StandBy({
   const readout = (
     <div className="grid grid-cols-2 gap-2">
       <Readout value={formatTime(state.timeMs)} label="ثانية جاهزة" />
-      <Readout value={String(state.score)} label="مجموعك" signal />
+      <Readout value={String(state.score)} label="نقاط" signal />
       <Readout value={String(state.answered)} label="سؤالاً أجبت" />
       <Readout value={String(state.correct)} label="إجابة صحيحة" />
     </div>
@@ -942,11 +970,14 @@ function Readout({
   label,
   signal,
   danger,
+  note,
 }: {
   value: string;
   label: string;
   signal?: boolean;
   danger?: boolean;
+  /** سطرٌ يشرح الرقم — كمعادلة المضاعفة تحت نقاط الجولة */
+  note?: string;
 }) {
   return (
     <div className="tile px-3 py-2.5">
@@ -957,7 +988,10 @@ function Readout({
       >
         {value}
       </div>
-      <div className="mt-1 text-[11px] font-medium text-muted">{label}</div>
+      <div className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+        <span className="text-[11px] font-medium text-muted">{label}</span>
+        {note && <span className="tnum text-[11px] font-black text-gold">{note}</span>}
+      </div>
     </div>
   );
 }
