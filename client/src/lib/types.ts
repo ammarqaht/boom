@@ -42,6 +42,8 @@ export interface Award {
   teamId: string;
   name: string;
   points: number;
+  /** النقاط قبل المضاعفة — تُقرأ بها المعادلة على شاشة اللاعب */
+  base?: number;
   timeMs: number;
   flatlined?: boolean;
   /** كم من نقاطه جاء من الإجابات الصحيحة */
@@ -149,6 +151,9 @@ export interface TeamState {
   answered: number;
   correct: number;
   roundPoints: number | null;
+  /** نقاط الجولة قبل المضاعفة، وهل ضُوعفت — لمعادلة «أ × ٢ = ب» */
+  roundBase: number | null;
+  roundDoubled: boolean;
   question: Question | null;
   review: ReviewItem[] | null;
   /** قفل التجميد المتبقي بالمللي، واسم من جمّدك */

@@ -108,6 +108,25 @@ await pool.query(`
   );
 
   /*
+    * نصيبُ كلِّ غرفةٍ ممّا قِيس على كلِّ سؤال.
+    *
+    * question_stats مجموعٌ لا يُفصَّل: كان حذفُ الغرفة يُبقي عرضاتِها في
+    * المجموع لأن نصيبَها غيرُ معروف فلا يُطرح. فصار يُكتب هنا مفصّلاً مع
+    * كلِّ صرفٍ — صفٌّ لكلِّ (غرفة، سؤال) — فحذفُ الغرفة يطرح ما لها بعينه.
+    *
+    * ولا مفتاحَ أجنبيّ إلى rooms: الصرفُ يكتب الإحصاء قبل أن يُحفظ صفُّ
+    * الغرفة في الدورة نفسها، فأوّلُ صرفٍ لغرفةٍ جديدة يسبق وجودَها.
+    */
+  CREATE TABLE IF NOT EXISTS room_question_stats (
+    room_code   TEXT NOT NULL,
+    question_id TEXT NOT NULL,
+    shown       INTEGER NOT NULL DEFAULT 0,
+    correct     INTEGER NOT NULL DEFAULT 0,
+    wrong       INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (room_code, question_id)
+  );
+
+  /*
     * البلاغات والتعليقات في جدولٍ واحد مصنَّف: كلاهما رأيٌ يُرفع من داخل
     * اللعبة، ويُقرآن معاً في لوحة المالك. وبلاغُ السؤال بلا هويّة عمداً —
     * المهمّ السؤال لا من رآه.
@@ -196,6 +215,7 @@ await pool.query(`
   CREATE INDEX IF NOT EXISTS edits_at ON edits (at DESC);
   CREATE INDEX IF NOT EXISTS bank_trash_at ON bank_trash (at DESC);
   CREATE INDEX IF NOT EXISTS stats_bank ON question_stats (bank_id);
+  CREATE INDEX IF NOT EXISTS room_stats_room ON room_question_stats (room_code);
   CREATE INDEX IF NOT EXISTS feedback_kind ON feedback (kind, created_at DESC);
   CREATE INDEX IF NOT EXISTS feedback_question ON feedback (question_id);
 `);
@@ -260,6 +280,16 @@ const BUMP_STAT = `
     level = excluded.level,
     text = CASE WHEN excluded.text != '' THEN excluded.text ELSE question_stats.text END,
     last_at = excluded.last_at
+`;
+
+/* التوأمُ المفصَّل: نصيبُ هذه الغرفة من هذا السؤال، ليُطرح يوم تُحذف */
+const BUMP_ROOM_STAT = `
+  INSERT INTO room_question_stats (room_code, question_id, shown, correct, wrong)
+  VALUES ($1, $2, $3, $4, $5)
+  ON CONFLICT (room_code, question_id) DO UPDATE SET
+    shown = room_question_stats.shown + excluded.shown,
+    correct = room_question_stats.correct + excluded.correct,
+    wrong = room_question_stats.wrong + excluded.wrong
 `;
 
 /*
@@ -416,6 +446,10 @@ export async function recordStats(entries) {
         e.wrong,
         now,
       ]);
+      /* ومفصَّلاً باسم غرفته — وغرفةٌ بلا رمزٍ لا تُنسب (لا ينبغي أن تقع) */
+      if (e.room) {
+        await client.query(BUMP_ROOM_STAT, [e.room, e.id, e.shown, e.correct, e.wrong]);
+      }
     }
   });
   return entries.length;
@@ -603,13 +637,43 @@ export async function roomDetail(code) {
 export async function forgetRoom(code) {
   const before = await roomDetail(code);
   if (!before) return null;
+  let undone = 0;
   await inTransaction(async (client) => {
+    /*
+     * نصيبُ الغرفة من إحصاء الأسئلة يُطرح أوّلاً.
+     *
+     * وGREATEST حرزٌ لا زينة: غرفٌ لُعبت قبل أن يُكتب التفصيل لا نصيبَ
+     * مسجّلاً لها، فلا يُطرح عنها شيء — والطرحُ لا ينزل تحت الصفر بحال.
+     * ثم يُمحى صفُّ السؤال إن لم يبقَ فيه أثر، فلا يبقى صفٌّ بأصفار.
+     */
+    const { rowCount } = await client.query(
+      `UPDATE question_stats s
+          SET shown   = GREATEST(0, s.shown   - r.shown),
+              correct = GREATEST(0, s.correct - r.correct),
+              wrong   = GREATEST(0, s.wrong   - r.wrong)
+         FROM room_question_stats r
+        WHERE r.room_code = $1 AND r.question_id = s.question_id`,
+      [code],
+    );
+    undone = rowCount;
+    await client.query('DELETE FROM question_stats WHERE shown = 0 AND correct = 0 AND wrong = 0');
+    await client.query('DELETE FROM room_question_stats WHERE room_code = $1', [code]);
     await client.query('DELETE FROM feedback WHERE room_code = $1', [code]);
     /* صريحاً وإن كفى CASCADE — النيّة تُقرأ هنا */
     await client.query('DELETE FROM room_state WHERE code = $1', [code]);
     await client.query('DELETE FROM rooms WHERE code = $1', [code]);
   });
-  return before;
+  return { ...before, statsUndone: undone };
+}
+
+/** كم سؤالاً يُطرح إحصاؤه لو حُذفت هذه الغرفة — يُقرأ قبل الحذف لا بعده */
+export async function roomStatShare(code) {
+  const { rows } = await q(
+    `SELECT COUNT(*)::int AS questions, COALESCE(SUM(shown), 0)::int AS shown
+       FROM room_question_stats WHERE room_code = $1`,
+    [code],
+  );
+  return { questions: rows[0]?.questions ?? 0, shown: rows[0]?.shown ?? 0 };
 }
 
 /* ══════════════ أرشيف التحرير ══════════════ */

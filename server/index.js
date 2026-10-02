@@ -330,7 +330,8 @@ app.get('/api/console/room/:code', owner, async (req, res) => {
   const room = await store.roomDetail(String(req.params.code).toUpperCase());
   if (!room) return res.status(404).json({ error: 'غرفة غير موجودة' });
   const live = getRoom(room.code);
-  res.json({ ...room, live: Boolean(live) && live.status !== 'finished' });
+  const stats = await store.roomStatShare(room.code);
+  res.json({ ...room, stats, live: Boolean(live) && live.status !== 'finished' });
 });
 
 /*
@@ -413,6 +414,9 @@ app.get('/api/console/bank/:id', owner, async (req, res) => {
         answer: q.answer,
         level: q.level,
         shown: stat?.shown ?? 0,
+        /* صح وخطأ: كانا في الإحصاء ولا يُرسلان، فيقرأ الجدول شرطةً أبداً */
+        correct: stat?.correct ?? 0,
+        wrong: stat?.wrong ?? 0,
         rate: stat?.rate ?? null,
         reports: reports.get(q.id) ?? 0,
         issues: auditQuestion(q),

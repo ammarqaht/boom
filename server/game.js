@@ -378,6 +378,8 @@ export class Room {
       const record = this.served.get(id);
       out.push({
         id,
+        /* باسم غرفته: به يُطرح نصيبُها يوم تُحذف */
+        room: this.code,
         bank: id.includes(':') ? id.slice(0, id.indexOf(':')) : '؟',
         level: record?.level ?? 2,
         text: record?.q ?? '',
@@ -680,6 +682,8 @@ export class Room {
         teamId: team.id,
         name: team.name,
         points,
+        /* الأصلُ قبل الضرب: به تُقرأ المعادلة «٤ × ٢ = ٨» على شاشة اللاعب */
+        base: raw,
         correct: team.correct, // كم منها جاء من الإجابات — يُقرأ في المراجعة
         doubled: factor > 1 && raw > 0,
         ...extra,
@@ -884,6 +888,7 @@ export class Room {
   teamState(teamId) {
     const team = this.teams.get(teamId);
     if (!team) return null;
+    const award = this.result?.awards.find((a) => a.teamId === teamId);
     return {
       id: team.id,
       name: team.name,
@@ -901,7 +906,10 @@ export class Room {
       answered: team.answered,
       correct: team.correct,
       // نقاط هذه الجولة تحديداً — تُعرض في رسالة نهاية الجولة
-      roundPoints: this.result?.awards.find((a) => a.teamId === team.id)?.points ?? null,
+      roundPoints: award?.points ?? null,
+      /* وأصلُها ومضاعِفُها: تُقرأ المعادلة لا الحصيلةُ وحدها */
+      roundBase: award?.base ?? null,
+      roundDoubled: Boolean(award?.doubled),
       question:
         this.status === 'running' && team.current
           ? { id: team.current.id, q: team.current.q, options: team.current.options }
