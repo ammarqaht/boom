@@ -12,6 +12,12 @@
  *
  * --dry            يُخبر ولا يكتب
  * --delete-missing يحذف ملفَّ بنكٍ لم يبقَ في الموقع (بنكٌ حذفتَه هناك)
+ * --minus-archive  يُسقط ما يشهد الأرشيف أنك حذفته ثم رجع
+ *
+ * وأمّا --minus-archive فلحالةٍ بعينها: حذفتَ أسئلةً من اللوحة، ثم محا نشرٌ
+ * حذفَك فرجعت (وذاك ما كان يحدث قبل نقل البنوك إلى القاعدة). فسجلُّ التحرير
+ * في PostgreSQL نجا ونجت معه شهادةُ كل حذفٍ ثلاثين يوماً — فتُقرأ ويُسقط ما
+ * تشهد به، فتعود الملفّاتُ إلى ما كانت عليه بعد تحريرك لا قبله.
  */
 import { readFileSync, readdirSync, writeFileSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -22,6 +28,7 @@ const url = (process.env.NABDA_URL || 'http://localhost:3000').replace(/\/+$/, '
 const key = process.env.NABDA_OWNER_KEY;
 const dry = process.argv.includes('--dry');
 const deleteMissing = process.argv.includes('--delete-missing');
+const minusArchive = process.argv.includes('--minus-archive');
 
 if (!key) {
   console.error('✖ اضبط NABDA_OWNER_KEY — وهو مفتاح لوحة المالك نفسه');
@@ -42,9 +49,34 @@ if (!Array.isArray(live.questions) || live.questions.length === 0) {
   process.exit(1);
 }
 
+/*
+ * شهادةُ الأرشيف: معرّفاتُ ما حُذف من اللوحة ولم يُرجَع صراحةً.
+ *
+ * ومعرّفُ السؤال بصمةُ نصّه، فالسؤالُ الذي رجع بنشرٍ رجع بمعرّفه نفسه —
+ * فالمطابقةُ به تصيب ما حُذف بعينه.
+ */
+const dropped = new Set();
+if (minusArchive) {
+  const archive = await fetch(`${url}/api/console/edits`, {
+    headers: { 'x-nabda-key': encodeURIComponent(key) },
+  });
+  if (!archive.ok) {
+    console.error(`✖ تعذّر قراءة الأرشيف: ${archive.status}`);
+    process.exit(1);
+  }
+  const rows = await archive.json();
+  for (const row of rows) if (row.kind === 'delete') dropped.add(row.oldId);
+  console.log(`🗃 الأرشيف يشهد بحذف ${dropped.size} سؤالاً\n`);
+}
+
 /* تجميعُ الأسئلة ببنوكها، بالترتيب الذي جاءت به */
 const grouped = new Map();
+const skipped = [];
 for (const item of live.questions) {
+  if (dropped.has(item.id)) {
+    skipped.push(item);
+    continue;
+  }
   if (!grouped.has(item.bank)) {
     grouped.set(item.bank, { id: item.bank, name: item.bankName, questions: [] });
   }
@@ -74,6 +106,12 @@ for (const file of readdirSync(banksDir).filter((f) => f.endsWith('.json'))) {
 }
 
 console.log(`${dry ? '🔎 فحصٌ بلا كتابة' : '⇣ سحبٌ'} من ${url}\n`);
+if (skipped.length) {
+  console.log(`أُسقط ${skipped.length} سؤالاً بشهادة الأرشيف، منها:`);
+  for (const item of skipped.slice(0, 5)) console.log(`   • ${item.bank}: ${item.q.slice(0, 48)}`);
+  if (skipped.length > 5) console.log(`   … و${skipped.length - 5} غيرها`);
+  console.log('');
+}
 
 let changed = 0;
 for (const bank of grouped.values()) {
