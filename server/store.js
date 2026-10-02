@@ -720,6 +720,18 @@ export async function forgetEdit(id) {
   return rowCount;
 }
 
+/**
+ * محوُ الأرشيف جملةً.
+ *
+ * البنوكُ لا تُمسّ: ما فيها باقٍ على حاله، وإنما تذهب نسخُ التراجع. ومن
+ * محاها فقد أغلق بابَ إرجاع كلِّ محذوفٍ لم يُرجَع بعد — فيُقال له عددُه
+ * قبل أن يقع.
+ */
+export async function forgetAllEdits() {
+  const { rowCount } = await q('DELETE FROM edits');
+  return rowCount;
+}
+
 /* ══════════════ نصُّ البنوك ══════════════ */
 
 /** البنوك كما في القاعدة — تُقرأ مرّةً عند الإقلاع */

@@ -699,6 +699,8 @@ export function Edits({
   const [busy, setBusy] = useState<number | null>(null);
   /* سؤالٌ واحدٌ مفتوحٌ للتأكيد: إرجاعٌ أو حذف — لا يجتمعان في صفٍّ واحد */
   const [ask, setAsk] = useState<{ id: number; mode: 'restore' | 'delete' } | null>(null);
+  /* محوُ السجلّ كلّه — عملٌ خارج الصفوف فله حالُه */
+  const [wiping, setWiping] = useState(false);
 
   const mine = useMemo(
     () => (rows ?? []).filter((r) => !sift.bank || r.bank === sift.bank),
@@ -741,8 +743,24 @@ export function Edits({
     if (res.ok) onChanged();
   };
 
+  /**
+   * محوُ السجلّ كلّه — بضغطٍ مطوّل كحذف البنك.
+   *
+   * ويمحو الأرشيف أجمع لا المعروضَ وحده: المرشّح يضيّق النظر لا السجلّ،
+   * فلو محا المعروضَ ظنّ المالكُ أنه أخلى الأرشيف وفيه بقيّةٌ من بنكٍ آخر.
+   * فيُقال له العددُ في الزرّ قبل أن يضغط.
+   */
+  const forgetAll = async () => {
+    setWiping(true);
+    const res = await api.send('DELETE', 'edits');
+    setWiping(false);
+    if (res.ok) onChanged();
+  };
+
   const deleted = mine.filter((r) => r.kind === 'delete').length;
   const wiped = mine.reduce((n, r) => n + r.shown, 0);
+  /* محذوفٌ لم يُرجَع بعد: هؤلاء وحدهم من يُغلق بابُهم بالمحو */
+  const lost = rows.filter((r) => r.kind === 'delete' && r.restorable).length;
 
   return (
     <div className="grid gap-4">
@@ -880,6 +898,28 @@ export function Edits({
             </p>
           </section>
         ))
+      )}
+
+      {rows.length > 0 && (
+        <Panel
+          title="محوُ السجلّ"
+          hint="يُخلي الأرشيف أجمع — نسخَ البنوك جميعاً لا ما يعرضه المرشّح. ولا يمسّ بنكاً ولا سؤالاً قائماً، إنما تذهب نسخُ التراجع."
+        >
+          {wiping ? (
+            <p className="text-[13.5px] font-bold text-muted">يُمحى…</p>
+          ) : (
+            <HoldButton
+              bare
+              label="احذف السجلّ كلّه"
+              hint={
+                lost > 0
+                  ? `${say(rows.length, 'question')} تذهب — ويُغلق بابُ إرجاع ${say(lost, 'question')} محذوفة`
+                  : `${say(rows.length, 'question')} تذهب — لا رجعة بعده`
+              }
+              onConfirm={() => void forgetAll()}
+            />
+          )}
+        </Panel>
       )}
     </div>
   );
