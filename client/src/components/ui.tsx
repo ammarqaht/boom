@@ -925,10 +925,18 @@ export function useQr(url: string, dark: string, light: string) {
 }
 
 /** سطر الحقوق — الوحيد الذي بقي */
+/**
+ * توقيع مـــداد — نفس السطر الذي تُذيَّل به حلقة وبناء وعطاء.
+ *
+ * الشعار صورةٌ مورَّدة لا يُعاد رسمها ولا تلوينها، فله نسختان: الكريمي
+ * للغامق والفيروزي للفاتح، والسمةُ على <html> هي من يختار بينهما (‎.medad-mark‎).
+ */
 export function Credit({ className = '' }: { className?: string }) {
   return (
-    <p className={`text-xs font-medium text-faint ${className}`}>
-      تم إنشاء الموقع بواسطة مشعل الجلال
+    <p className={`inline-flex items-center gap-1.5 text-xs font-medium text-faint ${className}`}>
+      تم تطوير هذا النظام بواسطة
+      <img src="/brand/medad-cream.png" alt="مداد" className="medad-mark medad-on-dark" />
+      <img src="/brand/medad-teal.png" alt="" aria-hidden="true" className="medad-mark medad-on-light" />
     </p>
   );
 }
@@ -977,7 +985,7 @@ export function FormPage({
 
         <div className="w-full lg:max-w-xl lg:flex-1">{children}</div>
       </div>
-      <Credit className="px-5 pb-6 text-center" />
+      <Credit className="justify-center self-center px-5 pb-6" />
     </div>
   );
 }

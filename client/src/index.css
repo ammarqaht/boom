@@ -1906,3 +1906,20 @@ textarea {
     transition: opacity 0.2s linear;
   }
 }
+
+/* شعار مـــداد في التذييل — 785×244 أصلاً، بارتفاع السطر لا فوقه */
+.medad-mark {
+  height: 13px;
+  width: auto;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+.medad-on-light {
+  display: none;
+}
+[data-theme='light'] .medad-on-dark {
+  display: none;
+}
+[data-theme='light'] .medad-on-light {
+  display: block;
+}
