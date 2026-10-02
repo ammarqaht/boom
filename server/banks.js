@@ -79,17 +79,28 @@ function dress(bank) {
   };
 }
 
-/** البنكُ كما يُكتب في القاعدة: نصٌّ وخياراتٌ ومستوى، بلا ما يُشتقّ */
+/**
+ * البنكُ كما يُكتب في القاعدة: نصٌّ وخياراتٌ ومستوى، بلا ما يُشتقّ.
+ *
+ * والصوابُ يُقدَّم إلى أوّل الخيارات ويُثبَّت موضعُه على الصفر — ولا يُكتفى
+ * بتثبيت الرقم: ملفٌّ قديمٌ صوابُه في الموضع الثاني (وبنوكُ تمّوز كانت كذلك،
+ * مواضعُها موزّعةٌ عشوائياً) كان يُكتب بخياراته كما هي وبرقمٍ يقول «الأول» —
+ * فيصير الخطأُ صواباً في كل سؤال، صامتاً لا يظهر إلا في وجه لاعب. والخلطُ
+ * يقع عند التوزيع لا في الملفّ، فتقديمُ الصواب لا يُفقد شيئاً.
+ */
 function bare(bank) {
   return {
     id: bank.id,
     name: bank.name,
-    questions: bank.questions.map((item) => ({
-      q: item.q,
-      options: item.options,
-      answer: 0, // الصواب أوّل الخيارات دائماً
-      level: item.level ?? 2,
-    })),
+    questions: bank.questions.map((item) => {
+      const at = Number(item.answer) || 0;
+      return {
+        q: item.q,
+        options: [item.options[at], ...item.options.filter((_, i) => i !== at)],
+        answer: 0,
+        level: item.level ?? 2,
+      };
+    }),
   };
 }
 

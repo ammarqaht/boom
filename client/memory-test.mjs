@@ -1,6 +1,7 @@
 // اختبار الذاكرة: تُكتب الغرفة على القرص، وتُبعث كما كانت — موقوفة
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
+import { writeFileSync, unlinkSync } from 'node:fs';
 import pg from 'pg';
 
 /*
@@ -353,6 +354,52 @@ check(
     .then(() => false)
     .catch(() => true),
 );
+
+/*
+ * ملفٌّ صوابُه ليس أوّلاً: يُقدَّم عند الزرع ولا يُثبَّت الرقمُ وحده.
+ *
+ * وهذا الحارسُ غالٍ: بنوكُ تمّوز كانت مواضعُ صوابها موزّعةً عشوائياً، فلو
+ * كُتب الرقمُ «صفر» على خياراتٍ لم تُقدَّم لصار الخطأُ صواباً في كل سؤال —
+ * صامتاً لا يظهر إلا في وجه لاعب.
+ */
+{
+  const file = join(serverDir, 'banks', 'zz-answer.json');
+  writeFileSync(
+    file,
+    JSON.stringify(
+      {
+        id: 'zz-answer',
+        name: 'موضع الصواب',
+        questions: [
+          {
+            q: 'أيُّها الصواب؟',
+            options: ['خطأ أول', 'خطأ ثان', 'الصواب', 'خطأ ثالث'],
+            answer: 2,
+            level: 2,
+          },
+        ],
+      },
+      null,
+      2,
+    ) + '\n',
+    'utf8',
+  );
+  try {
+    await importFiles(); // يُدخل الناقص وحده — وهو مسارُ الزرع نفسه
+    const row = (await store.allBankRows()).find((b) => b.id === 'zz-answer');
+    const first = row?.questions[0];
+    check('الزرعُ يقدّم الصواب إلى أوّل الخيارات', first?.options[first.answer] === 'الصواب');
+    check('ويُثبّت موضعه على الصفر', first?.answer === 0);
+    const live = allBanks().find((b) => b.id === 'zz-answer');
+    check(
+      'وفي الذاكرة كذلك — فاللاعب يرى الصواب صواباً',
+      live?.questions[0].options[live.questions[0].answer] === 'الصواب',
+    );
+  } finally {
+    await deleteBank('zz-answer').catch(() => {});
+    unlinkSync(file);
+  }
+}
 
 /* الاستيراد من الملفّات: الناقصَ وحده، ثم استبدالاً */
 const kept = await importFiles();
