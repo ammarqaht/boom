@@ -47,11 +47,46 @@ type ResultPayload = { isCorrect: boolean; questionId: string; answer: number };
 
 type Session = { code: string; teamId: string; token: string };
 
+/*
+ * الجلسة تُحفظ في القرص وفي الذاكرة معاً.
+ *
+ * localStorage يرمي استثناءً على بعض الأجهزة — تصفّحٌ خاصّ في iOS، أو
+ * حظرُ بيانات الموقع، أو تخزينٌ ممتلئ. وكان الحفظ يُنادى عارياً قبل أن
+ * تُعرض الشاشة، فإذا رمى: المجموعةُ مسجّلةٌ في السيرفر واللاعبُ واقفٌ على
+ * باب الدخول لا يدري — فيعيد المحاولة فيُقال له «الاسم مستخدم».
+ *
+ * فصار الحفظ محروساً، ومعه نسخةٌ في الذاكرة: هي وحدها تكفي للرجوع بعد
+ * انقطاع الشبكة ما بقيت الصفحة مفتوحة — وذاك أكثرُ ما يحدث في القاعة.
+ * ولا يُنجى من تحديث الصفحة على جهازٍ لا يخزّن، فيُنبَّه اللاعب صريحاً.
+ */
+let kept: Session | null = null;
+
 function loadSession(): Session | null {
+  if (kept) return kept;
   try {
     return JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null');
   } catch {
     return null;
+  }
+}
+
+/** يحفظ الجلسة ويقول: هل ثبتت في القرص أم في الذاكرة وحدها؟ */
+function saveSession(session: Session) {
+  kept = session;
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearSession() {
+  kept = null;
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch {
+    /* ما لم يُكتب لا يُمحى — والذاكرة طُويت قبل قليل */
   }
 }
 
@@ -80,6 +115,8 @@ export default function Play() {
   const [reported, setReported] = useState<Set<string>>(new Set());
   const asked = useRef<{ question: Question; choice: number } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  /* جهازٌ لا يخزّن: الجلسة في الذاكرة وحدها، فتحديثُ الصفحة يُخرجه */
+  const [volatile, setVolatile] = useState(false);
 
   const locked = !!lockedFor && lockedFor === state?.question?.id;
 
@@ -105,7 +142,7 @@ export default function Play() {
     const onState = (next: TeamState) => setState(next);
     const onRoom = (next: RoomState) => setRoom(next);
     const onRemoved = () => {
-      localStorage.removeItem(SESSION_KEY);
+      clearSession();
       setState(null);
       setError('أزالك المنظّم من الغرفة');
     };
@@ -131,9 +168,9 @@ export default function Play() {
       const session = loadSession();
       if (!session) return;
       const res = await ask<{ state: TeamState }>('team:rejoin', session);
-      if (!res.ok) return localStorage.removeItem(SESSION_KEY);
+      if (!res.ok) return clearSession();
       /* لعبةٌ انتهت لا يُعاد إليها: الجلسة تُطوى ويبدأ اللاعب من الباب */
-      if (res.state.status === 'finished') return localStorage.removeItem(SESSION_KEY);
+      if (res.state.status === 'finished') return clearSession();
       setState(res.state);
     };
     const onConnect = () => {
@@ -188,15 +225,14 @@ export default function Play() {
     });
     setBusy(false);
     if (!res.ok) return setError(res.error);
-    localStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify({
-        code: code.trim().toUpperCase(),
-        teamId: res.teamId,
-        token: res.token,
-      }),
-    );
+    /* الشاشة أولاً: الانضمام نجح فعلاً، فلا يقف اللاعب على الباب لأجل تخزين */
     setState(res.state);
+    const stored = saveSession({
+      code: code.trim().toUpperCase(),
+      teamId: res.teamId,
+      token: res.token,
+    });
+    setVolatile(!stored);
   };
 
   /*
@@ -267,7 +303,7 @@ export default function Play() {
       icon: <ExitIcon size={17} />,
       hold: 'تخرج من الغرفة وتحتاج إلى الانضمام من جديد.',
       onClick: () => {
-        localStorage.removeItem(SESSION_KEY);
+        clearSession();
         location.href = '/';
       },
     },
@@ -287,6 +323,7 @@ export default function Play() {
         onAnswer={answer}
         actions={actions}
         live={live}
+        volatile={volatile}
       />
       {showHistory && (
         <HistoryModal
@@ -304,10 +341,13 @@ function TopBar({
   state,
   actions,
   live,
+  volatile: unsaved,
 }: {
   state: TeamState;
   actions: MenuAction[];
   live: boolean;
+  /** جهازٌ رفض حفظ الجلسة — تحديثُ الصفحة يُخرج اللاعب */
+  volatile?: boolean;
 }) {
   return (
     /* الترويسة على سطحٍ لا على الأرضية: أبيضُ في الفاتح وأسودُ في الغامق */
@@ -325,14 +365,23 @@ function TopBar({
             )}
           </div>
           {/* الانقطاع يُقال صراحةً: شاشةٌ مقطوعة تبدو سليمة، وإجاباتُها تذهب سُدىً */}
-          {live ? (
-            <div className="tnum text-[11px] font-medium tracking-[0.08em] text-muted">
-              الجولة {state.round}
-            </div>
-          ) : (
+          {!live ? (
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-danger">
               <OfflineIcon size={12} />
               انقطع الاتصال — يُعاد الوصل
+            </div>
+          ) : unsaved ? (
+            /*
+             * جهازٌ لا يخزّن (تصفّحٌ خاصّ غالباً): الوصلُ قائمٌ والجلسةُ في
+             * الذاكرة، فانقطاعُ الشبكة لا يضرّ — وتحديثُ الصفحة يُخرجه. فيُقال
+             * له ما يملك أن يتجنّبه، لا ما لا يفهمه.
+             */
+            <div className="text-[11px] font-bold text-warn">
+              لا تُحدّث الصفحة — جهازك لا يحفظ الجلسة
+            </div>
+          ) : (
+            <div className="tnum text-[11px] font-medium tracking-[0.08em] text-muted">
+              الجولة {state.round}
             </div>
           )}
         </div>
@@ -362,6 +411,7 @@ function TeamScreen({
   onAnswer,
   actions,
   live,
+  volatile: unsaved,
 }: {
   state: TeamState;
   teams: PublicTeam[];
@@ -374,6 +424,7 @@ function TeamScreen({
   onAnswer: (choice: number) => void;
   actions: MenuAction[];
   live: boolean;
+  volatile?: boolean;
 }) {
   const shown = useSmoothTime(state.timeMs, state.status === 'running' && !state.flatlined);
   const level = dangerLevel(shown);
@@ -392,13 +443,13 @@ function TeamScreen({
    * فتُطوى الحالة كلها طيّاً نظيفاً.
    */
   const leave = (to: string) => {
-    localStorage.removeItem(SESSION_KEY);
+    clearSession();
     location.href = to;
   };
 
   const frame = (children: React.ReactNode) => (
     <div className="relative flex h-full flex-col px-3.5 pb-4">
-      <TopBar state={state} actions={actions} live={live} />
+      <TopBar state={state} actions={actions} live={live} volatile={unsaved} />
       {children}
     </div>
   );
@@ -418,6 +469,30 @@ function TeamScreen({
           />
         </div>
       </div>,
+    );
+  }
+
+  /*
+   * دخل والجولة جارية: ينتظر القادمة.
+   *
+   * قبل هذا كان الباب يُغلق في وجهه: «الجولة بدأت — انتظر القادمة» رسالةُ
+   * خطأٍ على شاشة الدخول، فيظلّ يضغط «انضمّ» كلما مرّت دقيقة. والآن مجموعته
+   * مسجّلةٌ يراها المنظّم، وشاشته تقول له إنه داخلٌ وإنما ينتظر — وهذا
+   * الفرعُ قبل فرع الاستعداد، فعدّادُ جولةٍ ليست له لا يُعرض عليه.
+   */
+  if (state.waiting) {
+    return frame(
+      <StandBy
+        state={state}
+        teams={teams}
+        history={history}
+        title="انتظر الجولة القادمة"
+        note={
+          state.status === 'ended' || state.status === 'lobby'
+            ? 'مجموعتك مسجّلة — تبدأ معك الجولة القادمة'
+            : 'دخلتَ والجولة جارية — تدخل اللعب مع بدء الجولة القادمة'
+        }
+      />,
     );
   }
 

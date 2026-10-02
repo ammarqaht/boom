@@ -48,6 +48,8 @@ for (let i = 0; i < 3; i++) {
 }
 nour.timeMs = 18000;
 saqr.timeMs = 11000;
+/* دخل والجولة جارية: انتظارُه وما طُبّق على غيره عند البدء يجب أن يعبرا القرص */
+const late = room.addTeam('المتأخرون');
 
 const before = {
   code: room.code,
@@ -73,7 +75,7 @@ check(
 );
 check(
   'السجلّ يحمل عدد اللاعبين والأسئلة المتمايزة',
-  listed[0].players === 2 && listed[0].questions === before.served,
+  listed[0].players === 3 && listed[0].questions === before.served,
 );
 
 // ══ سقوط السيرفر: تُمحى الذاكرة ═══════════════════════════════
@@ -109,6 +111,10 @@ check('سجلّ ما رآه عاد', n2.seen.size === before.nourSeen);
 check('المراجعة عادت', n2.review.length === before.nourReview);
 check('السؤال المعروض عاد بعينه', n2.current.id === before.nourCurrent);
 check('الوقت عاد', s2.timeMs === before.saqrTime);
+const l2 = [...back.teams.values()].find((t) => t.name === 'المتأخرون');
+check('والمنتظِر عاد منتظِراً — لا يدخل جولةً نصفُها مضى', l2?.waiting === true);
+check('وما طُبّق عند بدء الجولة عاد معه — فالإعادة تردّ البطاقات', n2.roundEntry !== null);
+void late;
 check('عُدّ ما عرضته الغرفة عاد', back.served.size === before.served);
 check('الفريق يعود غير متصل حتى يفتح جهازه', n2.connected === false);
 
@@ -297,6 +303,79 @@ tally.adjustScore(solo.id, -5);
 check('ولا تنزل النقاط تحت الصفر', tally.teams.get(solo.id).score === 0);
 tally.adjustScore('لا-وجود-له', 5);
 check('ولاعبٌ مجهول لا يكسر شيئاً', tally.teams.get(solo.id).score === 0);
+
+// ══ البنوك في القاعدة: تنجو من النشر ═════════════════════════
+/*
+ * هذا جوهرُ النقل: المرجعُ جدولُ banks لا ملفّات الحاوية. فالفحصُ يُحرّر بنكاً
+ * ثم يُعيد التهيئة — وإعادةُ التهيئة هي ما يحدث عند كل إقلاع، أي عند كل نشر.
+ * فإن بقي التحرير فقد نجا ممّا كان يمحوه.
+ */
+const banksMod = await import(pathToFileURL(join(serverDir, 'banks.js')).href);
+const { initBanks, importFiles, allBanks, listBanks, saveBank, deleteBank, writeBank } = banksMod;
+
+/* المخطّطُ مُسح في أول الفحص، فالجدول فارغ: تُزرع الملفّات مرّةً */
+const seeded = await initBanks();
+const fileCount = allBanks().reduce((n, b) => n + b.questions.length, 0);
+check('القاعدةُ الفارغة تُزرع من ملفّات المستودع', seeded > 0 && fileCount > 0);
+console.log(`   زُرع ${seeded} بنكاً · ${fileCount} سؤالاً`);
+check('ولا تُزرع مرّتين', (await initBanks()) === seeded && !!allBanks().length);
+
+/* تحريرٌ ثم «نشر»: التحرير يبقى */
+const target = allBanks()[0];
+const trimmed = target.questions.slice(1);
+const goneId = target.questions[0].id;
+await saveBank(target.id, trimmed);
+check('الحذفُ نزل عدّادَ البنك', allBanks()[0].questions.length === trimmed.length);
+await initBanks(); // ← هذا هو النشر
+const revivedBank = allBanks().find((b) => b.id === target.id);
+check('وبقي بعد إعادة التهيئة — لا يمحوه نشر', revivedBank.questions.length === trimmed.length);
+check('والسؤال المحذوف لم يرجع', !revivedBank.questions.some((q) => q.id === goneId));
+check(
+  'ومعرّفاتُ الأسئلة كما كانت — فلا يضيع إحصاءٌ ولا بلاغ',
+  revivedBank.questions[0].id === target.questions[1].id,
+);
+
+/* بنكٌ يُحذف ويُرجَع — عبر القاعدة لا عبر الملفّات */
+const count = listBanks().length;
+const dropped = await deleteBank(revivedBank.id);
+check('حذفُ البنك يُرجع نسخته', dropped?.questions.length === trimmed.length);
+check('وقائمةُ البنوك نقصت', listBanks().length === count - 1);
+await initBanks();
+check('ولم يرجع بإعادة التهيئة', !listBanks().some((b) => b.id === dropped.id));
+await writeBank({ id: dropped.id, name: dropped.name, questions: dropped.questions });
+check(
+  'والإرجاع يردّه بأسئلته',
+  allBanks().find((b) => b.id === dropped.id)?.questions.length === trimmed.length,
+);
+check(
+  'ولا يُكتب فوق معرّفٍ مأخوذ',
+  await writeBank(dropped)
+    .then(() => false)
+    .catch(() => true),
+);
+
+/* الاستيراد من الملفّات: الناقصَ وحده، ثم استبدالاً */
+const kept = await importFiles();
+check(
+  'الاستيراد بلا استبدال يُبقي ما في القاعدة',
+  kept.every((row) => row.action === 'kept'),
+);
+check(
+  'والبنك المحرَّر ما زال منقوصاً',
+  allBanks().find((b) => b.id === dropped.id).questions.length === trimmed.length,
+);
+const replaced = await importFiles({ replace: true });
+const row = replaced.find((r) => r.id === dropped.id);
+check(
+  'والاستبدال يردّ ملفَّ المستودع',
+  row?.action === 'replaced' && row.count === trimmed.length + 1,
+);
+check(
+  'فعاد السؤال المحذوف من الملفّ',
+  allBanks()
+    .find((b) => b.id === dropped.id)
+    .questions.some((q) => q.id === goneId),
+);
 
 // ══ اللقطة تذهب والسجلّ يبقى ══════════════════════════════════
 await store.forgetState(before.code);

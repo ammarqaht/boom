@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { socket, ask } from '../lib/socket';
-import type { Bank, FeedItem, PublicTeam, RoomState } from '../lib/types';
+import type { Bank, CardId, FeedItem, PublicTeam, RoomState } from '../lib/types';
 import {
   Button,
   Card,
@@ -32,11 +32,15 @@ import {
   EyeIcon,
   EyeOffIcon,
   HistoryIcon,
+  HourglassIcon,
   MinusIcon,
+  MultiplyIcon,
   OfflineIcon,
   PauseIcon,
   PlayIcon,
   PlusIcon,
+  RefreshIcon,
+  RestartIcon,
   ScreenIcon,
   SnowflakeIcon,
   TrophyIcon,
@@ -411,14 +415,6 @@ function Console({
     },
     { label: 'بنوك الأسئلة', icon: <CardsIcon size={17} />, onClick: () => setShowBanks(true) },
     {
-      label: 'فتح البطاقات من جديد',
-      icon: <CardsIcon size={17} />,
-      onClick: () => {
-        send('admin:reopenCards');
-        flash('فُتحت البطاقات من جديد');
-      },
-    },
-    {
       label: 'إنهاء اللعبة وعرض الأوائل',
       icon: <TrophyIcon size={17} />,
       hold: 'تنتهي اللعبة ويظهر الترتيب النهائي على كل الشاشات.',
@@ -663,6 +659,17 @@ function Console({
                   ))}
                 </div>
               </Panel>
+            )}
+
+            {room.teams.length > 0 && (
+              <CardsPanel
+                teams={byJoin}
+                cards={room.cards}
+                onReset={() => {
+                  send('admin:reopenCards');
+                  flash('صُفّرت عدّادات البطاقات');
+                }}
+              />
             )}
 
             {feed.length > 0 && (
@@ -1009,6 +1016,32 @@ function RoundPanel({
       </div>
       )}
 
+      {/*
+       * إعادةُ الجولة الحالية — تظهر دائماً ولا تعمل إلا والجولة موقوفة.
+       *
+       * ظاهرةٌ ليعرف المنظّم أنها هناك قبل أن يحتاجها: عطبٌ في جهاز لاعبٍ
+       * أو شبكةٍ تسقط لا يُكتشف إلا والجولة تجري، فإن لم يكن الزرُّ معروفاً
+       * ضاعت الجولة. وباهتةٌ معطَّلة لأن الإعادة قرارٌ يُتّخذ بعد أن تسكن
+       * القاعة: يوقف، ثم ينظر، ثم يعيد. ولا تظهر على لعبةٍ انتهت — لا جولةَ
+       * حاضرةً تُعاد.
+       */}
+      {!done && (
+        <Button
+          variant="ghost"
+          className="mt-2.5 w-full"
+          disabled={room.status !== 'paused'}
+          title={
+            room.status === 'paused'
+              ? 'تعود العدّادات إلى أولها، ورقم الجولة ونقاطها كما هي — وتُردّ آثار البطاقات'
+              : 'أوقف الجولة أولاً ثم أعِدها'
+          }
+          onClick={() => onSend('admin:restartRound')}
+        >
+          <RestartIcon size={15} />
+          أعِد الجولة من أوّلها
+        </Button>
+      )}
+
       <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-line pt-2.5 text-xs font-medium text-muted sm:mt-3 sm:pt-3">
         <span>
           المستوى <b className="font-black text-ink">{level}</b>
@@ -1027,6 +1060,83 @@ function RoundPanel({
         الجولة
       </p>
     </section>
+  );
+}
+
+/* أيقونةُ كل بطاقة — أسماؤها تأتي من السيرفر، وهذه صورتُها وحدها */
+const CARD_ICON: Record<CardId, typeof HourglassIcon> = {
+  time: HourglassIcon,
+  freeze: SnowflakeIcon,
+  double: MultiplyIcon,
+};
+
+/**
+ * بطاقات اللاعبين: لكل لاعبٍ سطرٌ وفيه قرصٌ عن كل بطاقة يقول ما بقي له.
+ *
+ * المنظّم يُسأل في القاعة «هل بقيت لي مضاعفة؟» فلا يملك جواباً: المتجر
+ * عند اللاعب وحده. فصار المتبقي معروضاً أمامه، والقرصُ الفارغ يبهت فلا
+ * يُقرأ الصفر رقماً بين الأرقام.
+ */
+function CardsPanel({
+  teams,
+  cards,
+  onReset,
+}: {
+  teams: PublicTeam[];
+  cards: RoomState['cards'];
+  onReset: () => void;
+}) {
+  const spent = teams.some((t) => cards.some((c) => (t.cardsLeft?.[c.id] ?? c.limit) < c.limit));
+
+  return (
+    <Panel title="بطاقات اللاعبين" hint="ما بقي لكل لاعب">
+      <div className="grid">
+        {teams.map((team) => (
+          <div
+            key={team.id}
+            className="flex items-center gap-2 border-b border-line-soft py-2 last:border-0"
+          >
+            <b className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{team.name}</b>
+            <div className="flex shrink-0 items-center gap-1">
+              {cards.map((card) => {
+                const left = team.cardsLeft?.[card.id] ?? card.limit;
+                const Glyph = CARD_ICON[card.id];
+                return (
+                  <span
+                    key={card.id}
+                    title={`${card.name} — بقيت ${left} من ${card.limit}`}
+                    className={`tnum flex items-center gap-1 rounded-chip px-2 py-1 text-[11.5px] font-bold ${
+                      left === 0
+                        ? 'text-faint opacity-55 shadow-[inset_0_0_0_1px_var(--color-line)]'
+                        : 'text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line-2)]'
+                    }`}
+                  >
+                    <Glyph size={12} />
+                    {left}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/*
+       * التصفير يعيد كل البطاقات متاحةً للجميع — وهو زرٌّ هنا لا سطرٌ في
+       * قائمة الخيارات: مكانه حيث يُقرأ أثرُه. ويبهت إن لم يُشترَ شيءٌ بعد،
+       * فلا تصفيرَ لعدّادٍ لم يتحرّك.
+       */}
+      <Button
+        variant="ghost"
+        className="mt-2.5 w-full"
+        disabled={!spent}
+        title={spent ? 'تعود كل البطاقات متاحةً للجميع من جديد' : 'لم يشترِ أحدٌ بطاقةً بعد'}
+        onClick={onReset}
+      >
+        <RefreshIcon size={15} />
+        تصفير عدّادات البطاقات
+      </Button>
+    </Panel>
   );
 }
 
@@ -1134,20 +1244,32 @@ function TeamRow({
         {!team.connected && <OfflineIcon size={13} className="shrink-0 text-faint" />}
       </div>
       <div className="tnum text-[10.5px] font-medium text-muted sm:text-[11px]">
-        {team.correct} من {team.answered} صحيحة
+        {/* المنتظِر لم يُسأل بعد، فـ«٠ من ٠ صحيحة» خبرٌ كاذبٌ عن مهارته */}
+        {team.waiting ? (
+          'ينتظر الجولة القادمة'
+        ) : frozen && team.frozenBy ? (
+          /* المنظّم يُعلن: «النسور جمّدوا الصقور» — فيحتاج الاسم أمامه */
+          <span className="text-frost">جمّده {team.frozenBy}</span>
+        ) : (
+          `${team.correct} من ${team.answered} صحيحة`
+        )}
       </div>
     </div>
   );
 
   const time = (
     <div className="leading-none">
+      {/*
+       * عدّادُ المنتظِر لا يُعرض رقماً: عدّادُه ممتلئٌ لأنه لم يبدأ، ورقمٌ
+       * ممتلئٌ بين العدّادات النازلة يقول إنه المتصدّر وهو لم يلعب.
+       */}
       <b
-        className={`tnum text-xl font-black sm:text-2xl ${team.flatlined ? 'text-danger' : 'ink-state'}`}
+        className={`tnum text-xl font-black sm:text-2xl ${team.flatlined ? 'text-danger' : team.waiting ? 'text-faint' : 'ink-state'}`}
       >
-        {formatTime(team.timeMs)}
+        {team.waiting ? '—' : formatTime(team.timeMs)}
       </b>
       <span className="mt-0.5 block text-[10.5px] font-medium text-muted sm:mt-1 sm:text-[11px]">
-        {team.flatlined ? 'توقف' : 'ثانية'}
+        {team.waiting ? 'ينتظر' : team.flatlined ? 'توقف' : 'ثانية'}
       </span>
     </div>
   );

@@ -6,7 +6,17 @@ import { join, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server } from 'socket.io';
-import { listBanks, normalizeBankIds, allBanks, findQuestion, saveBank } from './banks.js';
+import {
+  listBanks,
+  normalizeBankIds,
+  allBanks,
+  findQuestion,
+  saveBank,
+  deleteBank,
+  writeBank,
+  initBanks,
+  importFiles,
+} from './banks.js';
 import { auditQuestion, auditAll } from './audit.js';
 import {
   createRoom,
@@ -464,7 +474,7 @@ function readQuestion(body) {
 }
 
 /** إضافة سؤال — يُرفض إن كان فيه خطأٌ يكسر اللعبة، ويمرّ مع التنبيهات */
-app.post('/api/console/bank/:id/question', owner, (req, res) => {
+app.post('/api/console/bank/:id/question', owner, async (req, res) => {
   const bank = allBanks().find((b) => b.id === req.params.id);
   if (!bank) return res.status(404).json({ error: 'بنك غير معروف' });
 
@@ -472,7 +482,7 @@ app.post('/api/console/bank/:id/question', owner, (req, res) => {
   const issues = auditQuestion(question);
   if (issues.some((i) => i.severity === 'error')) return res.status(400).json({ issues });
 
-  saveBank(bank.id, [...bank.questions, question]);
+  await saveBank(bank.id, [...bank.questions, question]);
   res.json({ ok: true, issues });
 });
 
@@ -519,7 +529,7 @@ app.put('/api/console/question/:id', owner, async (req, res) => {
   const next = moving
     ? fromBank.questions.filter((q) => q.id !== req.params.id)
     : fromBank.questions.map((q) => (q.id === req.params.id ? question : q));
-  saveBank(fromBank.id, next);
+  await saveBank(fromBank.id, next);
 
   /*
    * نقلٌ إلى بنكٍ آخر: يُنزَع من الأصل ويُضاف إلى الهدف. فإن لم يتغيّر نصُّه
@@ -528,7 +538,7 @@ app.put('/api/console/question/:id', owner, async (req, res) => {
    */
   if (moving) {
     const toFresh = allBanks().find((b) => b.id === toBank.id);
-    saveBank(toBank.id, [...toFresh.questions, question]);
+    await saveBank(toBank.id, [...toFresh.questions, question]);
     const newId = newIdOf(toBank.id, question.q);
     if (!changed) {
       if (newId) await store.moveQuestionStats(before.id, newId, toBank.id);
@@ -588,7 +598,7 @@ app.delete('/api/console/question/:id', owner, async (req, res) => {
     return res.status(400).json({ error: 'لا يُترك البنك فارغاً' });
   }
   const before = found.question;
-  saveBank(
+  await saveBank(
     found.bank.id,
     found.bank.questions.filter((q) => q.id !== req.params.id),
   );
@@ -607,6 +617,95 @@ app.delete('/api/console/question/:id', owner, async (req, res) => {
 });
 
 /* ── الأسئلة المحرَّرة: أرشيفُ ثلاثين يوماً ── */
+
+/**
+ * حذفُ بنكٍ كاملاً — ويُؤرشَف بأسئلته فيُرجَع.
+ *
+ * ثلاثُ بواباتٍ قبل الحذف: لا يُحذف آخر بنك (اللعبة بلا سؤالٍ لا تقوم)،
+ * ولا بنكٌ تستعمله غرفةٌ في الذاكرة (أسئلةُ لاعبٍ تُسحب من تحته وهو يلعب —
+ * والغرفةُ تُحذف من لوحة الغرف إن أراد)، والمعرّفُ يجب أن يكون معروفاً.
+ */
+app.delete('/api/console/bank/:id', owner, async (req, res) => {
+  const bank = allBanks().find((b) => b.id === req.params.id);
+  if (!bank) return res.status(404).json({ error: 'بنك غير معروف' });
+
+  const busy = [...allRooms()].filter((room) => room.bankIds.includes(bank.id));
+  if (busy.length) {
+    const codes = busy.map((room) => room.code).join('، ');
+    return res.status(400).json({ error: `البنك مستعملٌ في غرفة: ${codes}` });
+  }
+
+  /* يُؤرشَف أولاً ثم يُحذف: لو سقط الحذف بقي أرشيفٌ زائد — ولو سقط الأرشيف لم يُمحَ شيء */
+  const trashId = await store.trashBank({
+    bankId: bank.id,
+    name: bank.name,
+    questions: bank.questions.map((item) => ({
+      q: item.q,
+      options: item.options,
+      level: item.level,
+    })),
+  });
+  try {
+    await deleteBank(bank.id);
+  } catch (err) {
+    await store.forgetTrashedBank(trashId);
+    return res.status(400).json({ error: err.message });
+  }
+  res.json({ ok: true, trashId, questions: bank.questions.length });
+});
+
+/**
+ * استيرادُ ملفّات المستودع إلى القاعدة.
+ *
+ * فالقاعدةُ هي المرجع بعد النقل، ومن أراد أن يكتب مئةَ سؤالٍ في محرّرٍ ويرفعها
+ * إلى git احتاج باباً. و«استبدالاً» يمحو ما حُرِّر من اللوحة في البنوك التي
+ * لها ملفّات — فيُطلب صريحاً في الجسم لا بالغلط.
+ */
+app.post('/api/console/banks/import', owner, async (req, res) => {
+  const replace = req.body?.replace === true;
+  try {
+    const done = await importFiles({ replace });
+    res.json({ ok: true, replace, banks: done });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+/** البنوك المحذوفة — تُعرض ثلاثين يوماً ثم تُنسى */
+app.get('/api/console/trash', owner, async (_req, res) => {
+  const live = new Set(allBanks().map((b) => b.id));
+  res.json(
+    (await store.listTrashedBanks()).map((row) => ({
+      id: row.id,
+      bank: row.bank,
+      name: row.name,
+      count: row.questions.length,
+      at: row.at,
+      /* أُرجِع فعلاً؟ يُقرأ من البنوك الحيّة لا من السلّة */
+      restorable: !live.has(row.bank),
+    })),
+  );
+});
+
+/** إرجاعُ بنكٍ من السلّة بأسئلته كما كان */
+app.post('/api/console/trash/:id/restore', owner, async (req, res) => {
+  const row = await store.getTrashedBank(req.params.id);
+  if (!row) return res.status(404).json({ error: 'لا بنك بهذا الرقم' });
+  try {
+    await writeBank({ id: row.bank, name: row.name, questions: row.questions });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  await store.forgetTrashedBank(row.id);
+  res.json({ ok: true, count: row.questions.length });
+});
+
+/** نسيانُ بنكٍ من السلّة قبل الثلاثين — ولا رجعة بعده */
+app.delete('/api/console/trash/:id', owner, async (req, res) => {
+  const gone = await store.forgetTrashedBank(req.params.id);
+  if (!gone) return res.status(404).json({ error: 'لا بنك بهذا الرقم' });
+  res.json({ ok: true });
+});
 
 app.get('/api/console/edits', owner, async (_req, res) => {
   const names = new Map(allBanks().map((b) => [b.id, b.name]));
@@ -641,7 +740,7 @@ app.post('/api/console/edit/:id/restore', owner, async (req, res) => {
       ? bank.questions.map((q) => (q.id === edit.newId ? old : q))
       : [...bank.questions, old];
 
-  saveBank(bank.id, questions);
+  await saveBank(bank.id, questions);
   await store.forgetEdit(edit.id);
   res.json({ ok: true });
 });
@@ -766,6 +865,13 @@ app.use((err, _req, res, _next) => {
   if (res.headersSent) return;
   res.status(500).json({ error: 'تعذّر تنفيذ الطلب' });
 });
+
+/*
+ * البنوك أوّلاً: المرجعُ جدولُ banks في القاعدة، والملفّاتُ بذرةٌ تُزرع إن
+ * كانت فارغة. وتقع قبل بعث الغرف — فالغرفةُ المبعوثة تُطابق بنوكَها على
+ * الموجود، ولو تأخّرت التهيئةُ عنها لرُدّت بنوكُها إلى أوّل بنك.
+ */
+await initBanks();
 
 /*
  * بعثُ ما كان: الغرف التي لم تخمل تعود كما تركها السيرفر — لكن موقوفة.
@@ -905,6 +1011,22 @@ io.on('connection', (socket) => {
     reply?.({ ok: true });
   });
 
+  /*
+   * إعادةُ الجولة الحالية. لا تُقبل إلا والجولة موقوفة — فالإعادة قرارٌ
+   * يُتّخذ بعد أن تسكن القاعة، لا ضغطةٌ تُفلت أثناء اللعب.
+   */
+  socket.on('admin:restartRound', (_payload, reply) => {
+    const room = asAdmin();
+    if (!room) return reply?.({ ok: false, error: 'غير مصرح' });
+    if (!room.restartRound()) {
+      return reply?.({ ok: false, error: 'أوقف الجولة أولاً ثم أعِدها' });
+    }
+    io.to(channel(room.code)).emit('room:started');
+    pushAll(room);
+    pushFeed(room);
+    reply?.({ ok: true });
+  });
+
   socket.on('admin:pause', () => {
     const room = asAdmin();
     if (room) (room.pause(), pushAll(room));
@@ -979,12 +1101,12 @@ io.on('connection', (socket) => {
   socket.on('team:join', ({ code, name } = {}, reply) => {
     const room = getRoom(code);
     if (!room) return reply?.({ ok: false, error: 'رمز الغرفة غير صحيح' });
-    if (room.status === 'running') {
-      return reply?.({
-        ok: false,
-        error: 'الجولة بدأت بالفعل — انتظر الجولة القادمة',
-      });
-    }
+    /*
+     * الجولةُ الجارية لا تُغلق الباب: كان الانضمام يُرفض فيقف اللاعب بلا
+     * شاشةٍ ولا خبر ويعيد المحاولة مراراً. فصار يُقبل منتظِراً — تُسجَّل
+     * مجموعته وتظهر للمنظّم، وشاشتُه تقول له متى يبدأ (room.addTeam هو
+     * من يُعلّم الانتظار، فالحالُ عنده).
+     */
     const clean = String(name || '')
       .trim()
       .slice(0, 24);

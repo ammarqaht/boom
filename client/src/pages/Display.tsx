@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Chip,
+  Credit,
   ErrorNote,
   Field,
   FormPage,
@@ -131,7 +132,9 @@ function Board({ room }: { room: RoomState }) {
   const stopped = useFlatlineMoment(room.teams, room.round);
   const curtain = useLingering(room.status === 'ended' ? room.result : null, CURTAIN_OUT_MS);
 
-  const alive = room.teams.filter((t) => !t.flatlined).length;
+  /* المنتظِرون ليسوا في السباق: لا يُعدّون نبضاً حيّاً ولا من جملة المتسابقين */
+  const racing = room.teams.filter((t) => !t.waiting);
+  const alive = racing.filter((t) => !t.flatlined).length;
 
   /*
    * القاعة تقرأ سباقاً لا جدولاً: الترتيب هنا بما بقي من الوقت لحظةً
@@ -139,10 +142,12 @@ function Board({ room }: { room: RoomState }) {
    * يحدث، لا نتيجتَه بعد أن حدث.
    */
   const ranked = [...room.teams].sort((a, b) => {
+    /* من دخل والجولة جارية يُذيَّل: ليس متسابقاً، وعدّادُه الممتلئ ليس تصدّراً */
+    if (a.waiting !== b.waiting) return a.waiting ? 1 : -1;
     if (a.flatlined !== b.flatlined) return a.flatlined ? 1 : -1;
     return b.timeMs - a.timeMs || b.score - a.score;
   });
-  const leaderId = ranked.find((t) => !t.flatlined)?.id;
+  const leaderId = ranked.find((t) => !t.flatlined && !t.waiting)?.id;
 
   const board = useRef<HTMLDivElement>(null);
   useReorderSlide(board, ranked.map((t) => t.id).join(','));
@@ -210,7 +215,7 @@ function Board({ room }: { room: RoomState }) {
         </div>
         <div className="tnum flex items-center gap-4">
           <span>
-            {alive} نبضة حيّة من {room.teams.length}
+            {alive} نبضة حيّة من {racing.length}
           </span>
           <span className="text-faint">·</span>
           <span className="font-black text-ink">{location.host}/play</span>
@@ -281,6 +286,13 @@ function Lobby({ code, qr, teams }: { code: string; qr: string; teams: PublicTea
           ))}
         </div>
       </div>
+
+      {/*
+       * التوقيع على شاشة الانتظار وحدها: القاعةُ تقرؤها دقائقَ وهي تنضمّ،
+       * فهو موضعُه. ولا يظهر والجولة تجري — لا يُزاحم عدّاداً.
+       * والقياسُ مكبَّرٌ لأن بينه وبين العين عرضُ القاعة.
+       */}
+      <Credit className="text-center !text-[20px]" />
     </div>
   );
 }
@@ -353,7 +365,14 @@ function Channel({
         <div
           className={`tnum text-[28px] font-medium ${team.flatlined ? 'text-faint' : 'text-muted'}`}
         >
-          {team.correct}/{team.answered} إجابة صحيحة
+          {team.waiting ? (
+            'دخل الآن — ينتظر الجولة القادمة'
+          ) : frozen && team.frozenBy ? (
+            /* القاعة تحبّ أن تعرف من جمّد من — والمجمَّد يُقرأ له عذرُه */
+            <span className="text-frost">جمّده {team.frozenBy}</span>
+          ) : (
+            `${team.correct}/${team.answered} إجابة صحيحة`
+          )}
         </div>
       </div>
 
@@ -367,7 +386,13 @@ function Channel({
 
       {/* العدّاد لا يغيب وإن سكن النبض: الصفر خبرٌ يُقرأ، والكلمة تحته تفسّره */}
       <div className="relative text-center">
-        {team.flatlined ? (
+        {team.waiting ? (
+          /* عدّادٌ لم يبدأ لا يُعرض رقماً — الشرطةُ أصدق من ثلاثين ثانيةً لم تُنفَق */
+          <>
+            <b className="tnum block text-[50px] leading-none font-black text-faint">—</b>
+            <span className="mt-1 block text-[28px] font-medium text-muted">ينتظر</span>
+          </>
+        ) : team.flatlined ? (
           <>
             <b className="tnum block text-[50px] leading-none font-black text-danger">
               {formatTime(team.timeMs)}

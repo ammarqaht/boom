@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button, HoldButton } from '../../components/ui';
 import {
   type Api,
   type Col,
@@ -441,6 +442,244 @@ type Edit = {
   restorable: boolean;
   at: number;
 };
+
+/* ══════════════ البنوك: حذفٌ وإرجاع ══════════════ */
+
+type Trashed = {
+  id: number;
+  bank: string;
+  name: string;
+  count: number;
+  at: number;
+  restorable: boolean;
+};
+
+/**
+ * إدارةُ البنوك: ما في كلٍّ منها، وحذفُه، وما حُذف.
+ *
+ * الحذفُ بضغطٍ مطوّل لا بضغطةٍ وتأكيد: البنكُ مئاتُ الأسئلة، والضغطةُ
+ * الطائشة في لوحةٍ تُدار بالإبهام تكلّف بنكاً كاملاً. والمطوّلُ لا يُفلت.
+ *
+ * ولا يذهب المحذوف: يُحفظ بأسئلته كلّها ثلاثين يوماً كأرشيف التحرير،
+ * فيُرجَع كما كان أو يُنسى مبكّراً.
+ */
+export function Shelf({
+  api,
+  banks,
+  onCounts,
+  reloadKey,
+  onChanged,
+}: {
+  api: Api;
+  banks: BankInfo[];
+  onCounts: (counts: Counts) => void;
+  reloadKey: number;
+  onChanged: () => void;
+}) {
+  const load = useCallback(() => api.get<Trashed[]>('trash'), [api]);
+  const [rows] = useFeed(load, reloadKey);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    if (!rows) return;
+    onCounts({ all: banks.length, deleted: rows.length });
+  }, [rows, banks.length, onCounts]);
+
+  const flash = (message: string) => {
+    setNote(message);
+    setTimeout(() => setNote(''), 4000);
+  };
+
+  const remove = async (bank: BankInfo) => {
+    setBusy(bank.id);
+    const res = await api.send<{ error?: string }>('DELETE', `bank/${bank.id}`);
+    setBusy(null);
+    if (res.ok) {
+      flash(`حُذف «${bank.name}» — ويُرجَع من المحذوفة أدناه`);
+      onChanged();
+    } else flash(res.data?.error ?? 'تعذّر الحذف');
+  };
+
+  const restore = async (row: Trashed) => {
+    setBusy(String(row.id));
+    const res = await api.send<{ error?: string }>('POST', `trash/${row.id}/restore`);
+    setBusy(null);
+    if (res.ok) {
+      flash(`أُرجع «${row.name}» بأسئلته`);
+      onChanged();
+    } else flash(res.data?.error ?? 'تعذّر الإرجاع');
+  };
+
+  /*
+   * استيرادُ ملفّات المستودع: الحلقةُ المقابلة لـpull-banks.
+   *
+   * القاعدةُ هي المرجع، فمن كتب أسئلةً في محرّرٍ ورفعها إلى git احتاج باباً
+   * تدخل منه. و«الناقصَ وحده» آمنٌ لا يمسّ قائماً، و«استبدالاً» يمحو ما
+   * حُرِّر من اللوحة في البنوك التي لها ملفّات — فهو بضغطٍ مطوّل.
+   */
+  const bring = async (replace: boolean) => {
+    setBusy(replace ? 'import-replace' : 'import-missing');
+    const res = await api.send<{ error?: string; banks?: { action: string }[] }>(
+      'POST',
+      'banks/import',
+      { replace },
+    );
+    setBusy(null);
+    if (!res.ok) return flash(res.data?.error ?? 'تعذّر الاستيراد');
+    const rows = res.data?.banks ?? [];
+    const tally = (name: string) => rows.filter((r) => r.action === name).length;
+    const said = [
+      tally('added') && `أُضيف ${tally('added')}`,
+      tally('replaced') && `استُبدل ${tally('replaced')}`,
+      tally('same') && `${tally('same')} مطابق`,
+      tally('kept') && `${tally('kept')} بقي كما هو`,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+    flash(said || 'لا ملفّات');
+    onChanged();
+  };
+
+  const forget = async (row: Trashed) => {
+    setBusy(String(row.id));
+    const res = await api.send<{ error?: string }>('DELETE', `trash/${row.id}`);
+    setBusy(null);
+    if (res.ok) {
+      flash(`نُسي «${row.name}» — ولا رجعة`);
+      onChanged();
+    } else flash(res.data?.error ?? 'تعذّر النسيان');
+  };
+
+  if (!rows) return <Loading />;
+
+  const total = banks.reduce((n, b) => n + b.count, 0);
+  const cols: Col[] = [
+    { label: 'البنك', w: 'minmax(0,1.4fr)' },
+    { label: 'المعرّف', w: 'minmax(0,1fr)' },
+    { label: 'الأسئلة', w: '90px', align: 'center' },
+    { label: '', w: '190px', align: 'end' },
+  ];
+
+  return (
+    <div className="grid gap-4">
+      <StatRow>
+        <Stat lead label="بنوك" value={banks.length} unit={unit(banks.length, 'bank')} />
+        <Stat label="أسئلة" value={total} unit={unit(total, 'question')} />
+        <Stat
+          label="محذوفة"
+          value={rows.length}
+          hint="تُحفظ بأسئلتها ثلاثين يوماً ثم تُنسى"
+          tone={rows.length ? 'warn' : undefined}
+        />
+      </StatRow>
+
+      {note && (
+        <p className="rounded-card bg-signal-2 px-5 py-3 text-[13.5px] font-bold text-signal-ink">
+          {note}
+        </p>
+      )}
+
+      <Panel
+        title="البنوك"
+        hint="الحذف بضغطٍ مطوّل — ويُحفظ البنك بأسئلته فيُرجَع. ولا يُحذف آخر بنك، ولا بنكٌ تستعمله غرفةٌ قائمة."
+        flush
+      >
+        <Grid cols={cols} min={720}>
+          {banks.map((bank) => (
+            <Row key={bank.id} cols={cols} tall>
+              <Cell className="font-bold">{bank.name}</Cell>
+              <Cell className="font-mono text-[12.5px] text-muted" align="start">
+                <span dir="ltr">{bank.id}</span>
+              </Cell>
+              <Cell align="center" className="tnum font-bold">
+                {bank.count}
+              </Cell>
+              <Cell align="end">
+                {banks.length <= 1 ? (
+                  <Badge>آخرُ بنك — لا يُحذف</Badge>
+                ) : busy === bank.id ? (
+                  <span className="text-[12.5px] font-bold text-muted">يُحذف…</span>
+                ) : (
+                  <HoldButton
+                    bare
+                    label={`احذف «${bank.name}»`}
+                    hint={`${say(bank.count, 'question')} تُحفظ ثلاثين يوماً`}
+                    onConfirm={() => void remove(bank)}
+                  />
+                )}
+              </Cell>
+            </Row>
+          ))}
+        </Grid>
+      </Panel>
+
+      <Panel
+        title="ملفّات المستودع"
+        hint="البنوك تعيش في القاعدة فلا يمحوها نشر، وملفّات server/banks نسخةٌ تُستورد منها"
+      >
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button
+            variant="ghost"
+            disabled={busy !== null}
+            title="يُدخل بنكاً له ملفٌّ وليس في القاعدة — ولا يمسّ بنكاً قائماً"
+            onClick={() => void bring(false)}
+          >
+            {busy === 'import-missing' ? 'جارٍ…' : 'استورد الناقص'}
+          </Button>
+          <HoldButton
+            bare
+            label="استبدل من الملفّات"
+            hint="يمحو ما حُرِّر من اللوحة في البنوك التي لها ملفّات"
+            onConfirm={() => void bring(true)}
+          />
+        </div>
+      </Panel>
+
+      {rows.length > 0 && (
+        <Panel title="البنوك المحذوفة" hint="تُرجَع بأسئلتها كما كانت، أو تُنسى قبل الثلاثين" flush>
+          {rows.map((row) => (
+            <div key={row.id} className="border-b border-line-soft px-5 py-3.5 last:border-0">
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="min-w-0">
+                  <b className="text-[14px] font-black">{row.name}</b>
+                  <span className="mr-2 text-[12.5px] font-medium text-muted" dir="ltr">
+                    {row.bank}
+                  </span>
+                  <p className="mt-0.5 text-[12.5px] font-medium text-muted">
+                    {say(row.count, 'question')} · حُذف {stamp(row.at)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {row.restorable ? (
+                    <button
+                      type="button"
+                      onClick={() => void restore(row)}
+                      disabled={busy === String(row.id)}
+                      className="h-8 rounded-chip px-3.5 text-[12.5px] font-bold text-signal-ink shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-signal)_30%,transparent)] transition hover:bg-signal-2"
+                    >
+                      {busy === String(row.id) ? 'يُرجَع…' : 'إرجاع البنك'}
+                    </button>
+                  ) : (
+                    <Badge tone="signal">أُرجع</Badge>
+                  )}
+                  <div className="w-[150px]">
+                    <HoldButton
+                      bare
+                      label="انسَ نهائياً"
+                      hint="لا رجعة بعده"
+                      onConfirm={() => void forget(row)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </Panel>
+      )}
+    </div>
+  );
+}
 
 /**
  * أرشيفُ ثلاثين يوماً.

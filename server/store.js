@@ -154,8 +154,47 @@ await pool.query(`
     at          BIGINT NOT NULL
   );
 
+  /*
+    * نصُّ البنوك — وهو الحقيقة.
+    *
+    * كان في ملفّات server/banks وحدها، والملفُّ يعيش في الحاوية: والحاوية
+    * تُبنى من المستودع عند كل نشر. فكلُّ ما حُرِّر أو حُذف أو أُضيف من لوحة
+    * المالك كان يُمحى بالنشر التالي، والمحذوفُ يرجع. وهي القصةُ نفسها التي
+    * نُقل بسببها سجلُّ الغرف من SQLite إلى هنا.
+    *
+    * فالملفّاتُ الآن بذرةٌ تُزرع مرّةً حين تكون القاعدة فارغة، وتبقى نسخةً
+    * في git تُسحب إليها بـpull-banks وتُستورد منها من اللوحة. أما المرجع
+    * الذي يقرأه السيرفر ويكتب فيه فهذا الجدول.
+    *
+    * وأسئلةُ البنك في عمودٍ واحد: اللعبةُ تقرأ البنك كاملاً ولا تستعلم عن
+    * سؤالٍ بعينه، والتحريرُ يُعيد كتابة البنك كلّه — فصفٌّ لكل بنكٍ أوفقُ
+    * لما يُفعل به من صفٍّ لكل سؤال.
+    */
+  CREATE TABLE IF NOT EXISTS banks (
+    id        TEXT PRIMARY KEY,
+    name      TEXT NOT NULL,
+    questions TEXT NOT NULL,
+    at        BIGINT NOT NULL
+  );
+
+  /*
+    * سلّةُ البنوك: البنكُ المحذوف كاملاً بأسئلته.
+    *
+    * حذفُ بنكٍ يمحو مئات الأسئلة بضغطةٍ واحدة، وملفُّه يذهب من القرص. فيُحفظ
+    * هنا نصُّه كلّه ثلاثين يوماً كأرشيف التحرير: يُرجَع بأسئلته كما كان، أو
+    * يُنسى مبكّراً إن أراد المالك.
+    */
+  CREATE TABLE IF NOT EXISTS bank_trash (
+    id        BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    bank_id   TEXT NOT NULL,
+    name      TEXT NOT NULL,
+    questions TEXT NOT NULL,
+    at        BIGINT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS rooms_created ON rooms (created_at DESC);
   CREATE INDEX IF NOT EXISTS edits_at ON edits (at DESC);
+  CREATE INDEX IF NOT EXISTS bank_trash_at ON bank_trash (at DESC);
   CREATE INDEX IF NOT EXISTS stats_bank ON question_stats (bank_id);
   CREATE INDEX IF NOT EXISTS feedback_kind ON feedback (kind, created_at DESC);
   CREATE INDEX IF NOT EXISTS feedback_question ON feedback (question_id);
@@ -681,6 +720,69 @@ export async function forgetEdit(id) {
   return rowCount;
 }
 
+/* ══════════════ نصُّ البنوك ══════════════ */
+
+/** البنوك كما في القاعدة — تُقرأ مرّةً عند الإقلاع */
+export async function allBankRows() {
+  const { rows } = await q('SELECT * FROM banks ORDER BY id');
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    questions: JSON.parse(r.questions),
+    at: Number(r.at),
+  }));
+}
+
+/** يكتب بنكاً أو يستبدله — والكتابةُ ذرّةٌ واحدة، فلا يُقرأ بنكٌ نصفُه قديم */
+export async function putBank({ id, name, questions }) {
+  await q(
+    `INSERT INTO banks (id, name, questions, at) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (id) DO UPDATE SET name = $2, questions = $3, at = $4`,
+    [id, name, JSON.stringify(questions), Date.now()],
+  );
+}
+
+export async function dropBank(id) {
+  const { rowCount } = await q('DELETE FROM banks WHERE id = $1', [id]);
+  return rowCount;
+}
+
+/* ══════════════ سلّة البنوك ══════════════ */
+
+/** يحفظ بنكاً محذوفاً بأسئلته كلها */
+export async function trashBank({ bankId, name, questions }) {
+  const { rows } = await q(
+    'INSERT INTO bank_trash (bank_id, name, questions, at) VALUES ($1, $2, $3, $4) RETURNING id',
+    [bankId, name, JSON.stringify(questions), Date.now()],
+  );
+  return Number(rows[0].id);
+}
+
+const readTrash = (r) => ({
+  id: Number(r.id),
+  bank: r.bank_id,
+  name: r.name,
+  questions: JSON.parse(r.questions),
+  at: Number(r.at),
+});
+
+export async function listTrashedBanks(days = EDIT_DAYS) {
+  const { rows } = await q('SELECT * FROM bank_trash WHERE at >= $1 ORDER BY at DESC LIMIT 100', [
+    Date.now() - days * DAY_MS,
+  ]);
+  return rows.map(readTrash);
+}
+
+export async function getTrashedBank(id) {
+  const { rows } = await q('SELECT * FROM bank_trash WHERE id = $1', [Number(id)]);
+  return rows.length ? readTrash(rows[0]) : null;
+}
+
+export async function forgetTrashedBank(id) {
+  const { rowCount } = await q('DELETE FROM bank_trash WHERE id = $1', [Number(id)]);
+  return rowCount;
+}
+
 /**
  * كنسُ الأرشيف — والغرفُ ليست منه.
  *
@@ -692,6 +794,10 @@ export async function sweepOld() {
   const edits = await q('DELETE FROM edits WHERE at < $1', [Date.now() - EDIT_DAYS * DAY_MS]);
   if (edits.rowCount) {
     console.log(`🧹 نُسيت ${edits.rowCount} نسخةً محرَّرة تجاوزت ${EDIT_DAYS} يوماً`);
+  }
+  const banks = await q('DELETE FROM bank_trash WHERE at < $1', [Date.now() - EDIT_DAYS * DAY_MS]);
+  if (banks.rowCount) {
+    console.log(`🧹 نُسي ${banks.rowCount} بنكاً محذوفاً تجاوز ${EDIT_DAYS} يوماً`);
   }
   return 0;
 }

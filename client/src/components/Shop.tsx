@@ -5,7 +5,7 @@ import { Button } from './ui';
 import { CheckIcon, HourglassIcon, MultiplyIcon, SnowflakeIcon } from './icons';
 
 const CARD_META: Record<CardId, { Icon: typeof HourglassIcon; effect: string }> = {
-  time: { Icon: HourglassIcon, effect: 'تبدأ الجولة القادمة بخمس ثوانٍ زيادة' },
+  time: { Icon: HourglassIcon, effect: 'تبدأ الجولة القادمة بعشر ثوانٍ زيادة' },
   freeze: {
     Icon: SnowflakeIcon,
     effect: 'تقفل لاعباً عن الإجابة خمس ثوانٍ في بداية الجولة',
@@ -13,9 +13,21 @@ const CARD_META: Record<CardId, { Icon: typeof HourglassIcon; effect: string }> 
   double: { Icon: MultiplyIcon, effect: 'نقاط جولتك القادمة ×٢ — تسقط إن توقف نبضك' },
 };
 
+/*
+ * صيغةُ المعدود: «نقطة» و«نقطتان» و«3 نقاط» و«14 نقطة». والقاعدة في
+ * المتصفّح أصلاً — Intl.PluralRules يعرف أصناف العربية — فلا جدولَ يُكتب
+ * باليد. ولم تكن تلزمنا حين كانت الأسعار كلّها فوق العشر.
+ */
+const PLURAL = new Intl.PluralRules('ar');
+
+const pointsWord = (n: number) => {
+  const pick = PLURAL.select(n);
+  return pick === 'two' ? 'نقطتان' : pick === 'few' ? 'نقاط' : 'نقطة';
+};
+
 /**
  * متجر البطاقات — صفوف لا صناديق، ويظهر بين الجولات فقط.
- * كل بطاقة مرة واحدة لكل لاعب، وتُطبّق في الجولة التالية.
+ * لكل بطاقةٍ حدُّها من المرّات طوال اللعبة، وتُطبّق في الجولة التالية.
  */
 export function Shop({ shop, score }: { shop: ShopData; score: number }) {
   const [busy, setBusy] = useState<CardId | null>(null);
@@ -96,10 +108,10 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
                   {busy === card.id
                     ? 'جارٍ…'
                     : !card.affordable
-                      ? `${card.price} نقطة`
+                      ? `${card.price} ${pointsWord(card.price)}`
                       : card.id === 'freeze'
                         ? 'اختر هدفاً'
-                        : `${card.price} نقطة`}
+                        : `${card.price} ${pointsWord(card.price)}`}
                 </Button>
               )}
             </div>
@@ -157,7 +169,8 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
       })}
 
       <p className="pt-1 text-center text-xs font-medium text-muted">
-        رصيدك <b className="tnum text-ink">{score}</b> نقطة · نقطةٌ لك عن كل إجابة صحيحة
+        رصيدك <b className="tnum text-ink">{score}</b> {pointsWord(score)} · نقطةٌ لك عن كل إجابة
+        صحيحة
         {(shop.pending.time || shop.pending.double) && (
           <>
             {' '}
@@ -274,7 +287,15 @@ export function FreezeOverlay({
 
       <SnowflakeIcon size={64} className="relative text-frost" />
       <p className="relative text-3xl font-black">تجمّد نبضك</p>
-      {frozenBy && <p className="relative font-bold text-ink-2">جمّدك اللاعب {frozenBy}</p>}
+      {/*
+       * من جمّدك يُسمّى صريحاً وبارزاً: التجميد يُفقد ثوانٍ ويُربك، فإن لم
+       * يُعرف صاحبُه ظُنّ عطباً في اللعبة — ومعرفتُه نصفُ المتعة.
+       */}
+      {frozenBy && (
+        <p className="relative text-lg font-black text-ink">
+          تم تجميدك من قبل <span className="text-frost">{frozenBy}</span>
+        </p>
+      )}
       <p className="tnum relative text-sm font-medium text-muted">
         يذوب الجليد بعد <b className="text-frost">{meltIn(seconds)}</b>
       </p>

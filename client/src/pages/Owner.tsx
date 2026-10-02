@@ -14,7 +14,15 @@ import {
 } from '../components/icons';
 import { type Api, type Range, DateRange, QuestionEditor, say } from './console/shared';
 import Dashboard, { type Alerts } from './console/Dashboard';
-import { Edits, Questions, Reports, type BankInfo, type Counts, type Sift } from './console/Banks';
+import {
+  Edits,
+  Questions,
+  Reports,
+  Shelf,
+  type BankInfo,
+  type Counts,
+  type Sift,
+} from './console/Banks';
 import { Comments, Rooms } from './console/RoomsAndComments';
 
 /**
@@ -59,6 +67,7 @@ const PAGES: Record<string, { label: string; lead: string }> = {
   questions: { label: 'الأسئلة', lead: 'ما في البنوك وما قاسه اللعب — يُرتَّب ويُحرَّر' },
   reports: { label: 'البلاغات', lead: 'شكوى اللاعبين والمنظّمين — بلا هوية' },
   edits: { label: 'الأسئلة المحرَّرة', lead: 'نسخُ ما حُرِّر أو حُذف — تُحفظ ثلاثين يوماً' },
+  shelf: { label: 'إدارة البنوك', lead: 'ما في كل بنك، وحذفُه بضغطٍ مطوّل، وما حُذف منها' },
   rooms: { label: 'الغرف', lead: 'سجلّ المسابقات كلّه — وتُحدَّد الفترة من الشريط' },
   comments: { label: 'التعليقات', lead: 'ما قاله المنظّمون واللاعبون بعد اللعب' },
 };
@@ -67,6 +76,7 @@ const BANK_PAGES = [
   { id: 'questions', label: 'الأسئلة' },
   { id: 'reports', label: 'البلاغات' },
   { id: 'edits', label: 'الأسئلة المحرَّرة' },
+  { id: 'shelf', label: 'إدارة البنوك' },
 ];
 
 const VIEWS: Record<string, { id: string; label: string }[]> = {
@@ -625,6 +635,15 @@ export default function Owner() {
               <Edits
                 api={api}
                 sift={sift}
+                banks={banks}
+                onCounts={setCounts}
+                reloadKey={reloadKey}
+                onChanged={refresh}
+              />
+            )}
+            {door === 'banks' && page === 'shelf' && (
+              <Shelf
+                api={api}
                 banks={banks}
                 onCounts={setCounts}
                 reloadKey={reloadKey}

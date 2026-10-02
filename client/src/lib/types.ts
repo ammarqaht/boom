@@ -28,8 +28,14 @@ export interface PublicTeam {
   locked: boolean;
   /** المتبقي من التجميد بالمللي — لعدّاد الشاشات */
   lockedMs: number;
+  /** اسمُ من جمّدها — ما دام القفل قائماً */
+  frozenBy: string | null;
   /** مضاعفة ×2 فعّالة هذه الجولة — بطاقة ذهبية */
   doubled: boolean;
+  /** دخل والجولة جارية — ينتظر القادمة ولا يُحتسب في هذه */
+  waiting: boolean;
+  /** ما بقي له من كل بطاقة — للوحة المنظّم */
+  cardsLeft: Record<CardId, number>;
 }
 
 export interface Award {
@@ -98,6 +104,8 @@ export interface RoomState {
   /** مستوى الأسئلة: primary | middle | secondary | university */
   difficulty: string;
   settings: Settings;
+  /** البطاقات وحدودها — تُقرأ في لوحة المنظّم */
+  cards: { id: CardId; name: string; limit: number }[];
   result: RoomResult | null;
   history: RoomResult[];
   standings: Standing[] | null;
@@ -129,6 +137,8 @@ export interface TeamState {
   timeMs: number;
   score: number;
   flatlined: boolean;
+  /** دخل والجولة جارية — شاشته «انتظر الجولة القادمة» */
+  waiting: boolean;
   lastResult: 'correct' | 'wrong' | null;
   status: RoomStatus;
   round: number;

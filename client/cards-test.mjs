@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 
 const gamePath = join(process.cwd(), '..', 'server', 'game.js');
-const { createRoom, CARDS, CARD_LIMIT } = await import(pathToFileURL(gamePath).href);
+const { createRoom, CARDS } = await import(pathToFileURL(gamePath).href);
 
 const check = (label, ok) => console.log(`${ok ? '✅' : '❌'} ${label}`);
 
@@ -24,9 +24,10 @@ function playRoundEndingWith(loser, times = []) {
   return now;
 }
 
-check('الأسعار: وقت 10 · تجميد 14 · مضاعفة 15',
-  CARDS.time.price === 10 && CARDS.freeze.price === 14 && CARDS.double.price === 15);
-check('حدّ البطاقة مرّتان', CARD_LIMIT === 2);
+check('الأسعار: وقت 3 · تجميد 4 · مضاعفة 6',
+  CARDS.time.price === 3 && CARDS.freeze.price === 4 && CARDS.double.price === 6);
+check('الحدود: وقت 4 · تجميد 4 · مضاعفة 2',
+  CARDS.time.limit === 4 && CARDS.freeze.limit === 4 && CARDS.double.limit === 2);
 check('لا شراء في اللوبي', room.buyCard(a.id, 'time').ok === false);
 
 // الجولة الأولى: الأسود يخسر
@@ -57,8 +58,10 @@ a.score = 20;
 const aBefore = a.score;
 check('شراء وقت إضافي', room.buyCard(a.id, 'time').ok && a.score === aBefore - CARDS.time.price);
 check('تسجيل استخدام البطاقة', a.cardUses.get('time') === 1);
-check('تُشترى مرة ثانية', room.buyCard(a.id, 'time').ok === true);
-check('لا ثالثة بعد الحدّ', room.buyCard(a.id, 'time').ok === false);
+const rest = [2, 3, 4].map(() => room.buyCard(a.id, 'time').ok);
+check('تُشترى حتى الحدّ — أربعاً', rest.every(Boolean));
+check('بلغ عدّاد الاستخدام الحدّ', a.cardUses.get('time') === CARDS.time.limit);
+check('لا خامسة بعد الحدّ', room.buyCard(a.id, 'time').ok === false);
 c.score = 1;
 check('رفض الشراء لعدم كفاية النقاط', room.buyCard(c.id, 'double').ok === false);
 
@@ -73,13 +76,13 @@ check('شراء مضاعفة', room.buyCard(b.id, 'double').ok && b.pendingMulti
 const shopA = room.teamState(a.id).shop;
 check('المتجر مفتوح بين الجولات', shopA.open === true);
 check('المتجر يعلّم الوقت مستنفَداً', shopA.cards.find((x) => x.id === 'time').used === true);
-check('المتجر يعرض المتبقي', shopA.cards.find((x) => x.id === 'freeze').left === CARD_LIMIT - 1);
+check('المتجر يعرض المتبقي', shopA.cards.find((x) => x.id === 'freeze').left === CARDS.freeze.limit - 1);
 check('المتجر يعرض الخصوم للتجميد', shopA.rivals.length === 2);
 
 // الجولة الثانية: تطبيق الآثار عند البدء
 const base = room.settings.startSeconds * 1000;
 room.start();
-check('وقت النسور +10 ثوانٍ عند البدء (بطاقتان)', a.timeMs === base + 10000);
+check('وقت النسور +40 ثانية عند البدء (أربع بطاقات ×10ث)', a.timeMs === base + 40000);
 check('الصقور مقفلة 5 ثوانٍ (تجميد)', b.lockedMs === 5000 && b.frozenBy === 'النسور');
 check('استُهلك وقت النسور المؤجّل', a.pendingBonusMs === 0);
 

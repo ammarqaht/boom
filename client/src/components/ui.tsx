@@ -924,7 +924,6 @@ export function useQr(url: string, dark: string, light: string) {
   return src;
 }
 
-/** سطر الحقوق — الوحيد الذي بقي */
 /**
  * توقيع مـــداد — نفس السطر الذي تُذيَّل به حلقة وبناء وعطاء.
  *

@@ -177,7 +177,21 @@ if (ended) {
       `     ${a.name}: ${a.points} نقطة ${a.flatlined ? '(توقف النبض)' : `(${(a.timeMs / 1000).toFixed(1)} ث)`}`,
     );
   }
-  check('فريق واحد فقط توقف نبضه', ended.awards.filter((a) => a.flatlined).length === 1);
+  /*
+   * القاعدةُ ليست «واحدٌ فقط»: فريقان قد ينفد وقتهما في النبضة الواحدة
+   * (٢٥٠ مللي)، وكلاهما حينئذٍ توقّف. والحارسُ الصادق أن لا يبقى ناجٍ
+   * بوقتٍ صفر — فذاك كان العطب: يُحسب في الناجين وينال نقطة مركز.
+   */
+  const stoppedTeams = ended.awards.filter((a) => a.flatlined);
+  check('توقّف نبضٌ واحدٌ على الأقل', stoppedTeams.length >= 1);
+  check(
+    'وكلُّ من توقّف وقتُه صفر',
+    stoppedTeams.every((a) => a.timeMs === 0),
+  );
+  check(
+    'ولا ناجٍ بوقتٍ صفر',
+    ended.awards.filter((a) => !a.flatlined).every((a) => a.timeMs > 0),
+  );
   // النقاط الآن = نصيب الترتيب + نقطةٌ عن كل إجابة صحيحة، فالقيم تتفاوت
   const byRank = ended.awards.filter((a) => !a.flatlined);
   // الترتيب بالوقت الباقي — أما النقاط فقد تتجاوز الأعلى لمن أصاب أكثر
@@ -244,12 +258,12 @@ admin.emit('admin:toggleBlur');
 await wait(400);
 check('إلغاء التغبيش يعمل', adminState.displayBlurred === false);
 
-// متجر البطاقات عبر السوكِت: المتصدّر يشتري «وقت إضافي» مرّتين ثم يُمنع
+// متجر البطاقات عبر السوكِت: المتصدّر يشتري «وقت إضافي» حتى الحدّ ثم يُمنع
 const buyer = teams.reduce((best, t) => (t.state.score > best.state.score ? t : best), teams[0]);
 const timeCard = buyer.state.shop.cards.find((c) => c.id === 'time');
 check('المتجر مفتوح بين الجولات', buyer.state.shop.open === true);
-check('المتجر يعلن المتبقي من البطاقة', timeCard.left === 2);
-// نمنحه رصيداً كافياً عبر تعديل المنظّم — فالسعر صار متوازناً مع جولات عدّة
+check('المتجر يعلن المتبقي من البطاقة', timeCard.left === 4);
+// نمنحه رصيداً كافياً عبر تعديل المنظّم — فالحدّ أربعٌ ولا نريد رفضاً لقلّة الرصيد
 admin.emit('admin:adjustScore', { teamId: buyer.id, points: 40 });
 await wait(500);
 const scoreBefore2 = buyer.state.score;
@@ -257,11 +271,13 @@ const bought = await ask(buyer.socket, 'team:buyCard', { card: 'time' });
 check('شراء بطاقة الوقت عبر السوكِت', bought.ok === true);
 await wait(500);
 check(
-  `خُصم سعر البطاقة (عشر نقاط) — ${scoreBefore2} ← ${buyer.state.score}`,
-  buyer.state.score === scoreBefore2 - 10,
+  `خُصم سعر البطاقة (ثلاث نقاط) — ${scoreBefore2} ← ${buyer.state.score}`,
+  buyer.state.score === scoreBefore2 - 3,
 );
-check('المتبقي صار واحداً', buyer.state.shop.cards.find((c) => c.id === 'time').left === 1);
-check('تُشترى مرّة ثانية', (await ask(buyer.socket, 'team:buyCard', { card: 'time' })).ok === true);
+check('المتبقي صار ثلاثاً', buyer.state.shop.cards.find((c) => c.id === 'time').left === 3);
+const rest = [];
+for (let i = 0; i < 3; i++) rest.push((await ask(buyer.socket, 'team:buyCard', { card: 'time' })).ok);
+check('تُشترى حتى الحدّ — أربعاً', rest.every(Boolean));
 await wait(300);
 check('المتجر علّمها مستنفَدة', buyer.state.shop.cards.find((c) => c.id === 'time').used === true);
 check(
@@ -286,8 +302,8 @@ check(
   adminState.teams.some((t) => t.score > 0),
 );
 check(
-  'المشتري بدأ بـ40 ث (بطاقتان) والبقية بـ30',
-  adminState.teams.every((t) => (t.id === buyer.id ? t.timeMs === 40000 : t.timeMs === 30000)),
+  'المشتري بدأ بـ70 ث (أربع بطاقات ×10ث) والبقية بـ30',
+  adminState.teams.every((t) => (t.id === buyer.id ? t.timeMs === 70000 : t.timeMs === 30000)),
 );
 check('الجولة الثانية بدأت باستعداد', adminState.status === 'countdown');
 
@@ -305,6 +321,50 @@ console.log(
   `   الجولة 1: ${round1Ids.size} سؤال | الجولة 2: ${round2Ids.length} سؤال | مكرر: ${repeated.length}`,
 );
 check('لا تتكرر أسئلة الجولة الأولى في الثانية', repeated.length === 0);
+
+// الداخل والجولة جارية: يُقبل منتظِراً لا يُردّ على الباب
+const latecomer = connect();
+await new Promise((r) => latecomer.on('connect', r));
+let lateState = null;
+latecomer.on('team:state', (st) => (lateState = st));
+const lateRes = await ask(latecomer, 'team:join', { code: created.code, name: 'المتأخرون' });
+check('الانضمام أثناء الجولة مقبول', lateRes.ok === true);
+check('وحالته «منتظِر»', lateRes.state.waiting === true);
+check('ولا سؤال عنده', lateRes.state.question === null);
+await wait(400);
+const lateRow = adminState.teams.find((t) => t.id === lateRes.teamId);
+check('والمنظّم يراه منتظِراً', lateRow?.waiting === true);
+const lateTime = lateRow?.timeMs;
+await wait(900);
+check(
+  'وعدّاده لا ينزل مع الجولة',
+  adminState.teams.find((t) => t.id === lateRes.teamId)?.timeMs === lateTime,
+);
+
+// إعادة الجولة: لا تُقبل إلا بعد الإيقاف، ولا تُقدّم رقم الجولة
+check('الإعادة مرفوضة والجولة تجري', (await ask(admin, 'admin:restartRound')).ok === false);
+admin.emit('admin:pause');
+await wait(400);
+const roundBefore = adminState.round;
+const doneBefore = adminState.history.length;
+check('الإعادة مقبولة بعد الإيقاف', (await ask(admin, 'admin:restartRound')).ok === true);
+await wait(400);
+check('رقم الجولة لم يتقدّم', adminState.round === roundBefore);
+check('ولا سطر جديد في السجلّ', adminState.history.length === doneBefore);
+check('والحال استعدادٌ من جديد', adminState.status === 'countdown');
+check(
+  'والعدّادات عادت إلى أولها',
+  adminState.teams.every((t) => t.waiting || t.timeMs >= 30000),
+);
+check('والمنتظِر دخل اللعب', lateState?.waiting === false);
+await wait(3400);
+check('وله سؤال في الجولة المُعادة', lateState?.question !== null);
+
+/* يُطرد المتأخر ليبقى الترتيب النهائي على الثلاثة — وفي الطرد فحصُ الإزالة */
+admin.emit('admin:removeTeam', { teamId: lateRes.teamId });
+await wait(400);
+check('إزالة المتأخر', !adminState.teams.some((t) => t.id === lateRes.teamId));
+latecomer.close();
 
 // إنهاء اللعبة وعرض الأوائل
 check('إنهاء اللعبة', (await ask(admin, 'admin:finishGame')).ok);
@@ -355,6 +415,29 @@ check(
   'ولا تُسرّب شيئاً في جسم الردّ',
   !(await (await fetch('http://localhost:3000/api/console/rooms')).text()).includes('code'),
 );
+
+/*
+ * بنكٌ تستعمله غرفةٌ قائمة لا يُحذف — ولا يُحذف شيءٌ في هذا الفحص: الغرفة
+ * أُنشئت على quran وseerah، فالحذف يُرفض ويبقى البنك في مكانه.
+ *
+ * ويحتاج مفتاحَ المالك، وهو عند من شغّل السيرفر لا عندنا — فإن لم يُمرَّر
+ * في البيئة تُخطّى الفحوص بخبرٍ لا بسقوط.
+ */
+const OWNER_KEY = process.env.NABDA_OWNER_KEY || '';
+if (!OWNER_KEY) {
+  console.log('   ⚠ تُخطّى فحوصُ حذف البنك: مرّر NABDA_OWNER_KEY نفسه الذي شغّلتَ به السيرفر');
+} else {
+  const banksBefore = (await (await fetch('http://localhost:3000/api/banks')).json()).length;
+  const busyDelete = await fetch('http://localhost:3000/api/console/bank/quran', {
+    method: 'DELETE',
+    headers: { 'x-nabda-key': encodeURIComponent(OWNER_KEY) },
+  });
+  check('لا يُحذف بنكٌ تستعمله غرفةٌ قائمة', busyDelete.status === 400);
+  check(
+    'والبنك باقٍ في مكانه',
+    (await (await fetch('http://localhost:3000/api/banks')).json()).length === banksBefore,
+  );
+}
 
 // ══ المرحلة ٤: بلاغ اللاعب، والتعليق مع تقييمه ═══════════════
 const anyQuestion = adminFeed.at(-1)[0];

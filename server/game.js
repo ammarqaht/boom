@@ -12,26 +12,43 @@ const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // بدون ال�
 const IDLE_ROOM_MS = 2 * 60 * 60 * 1000;
 const COUNTDOWN_MS = 3000;
 const FREEZE_MS = 5000; // مدة قفل الإجابة عند التجميد
-const TIME_CARD_MS = 5000; // الوقت الإضافي من بطاقة «وقت إضافي»
+const TIME_CARD_MS = 10000; // الوقت الإضافي من بطاقة «وقت إضافي»
 const DOUBLE_FACTOR = 2; // مضاعِف بطاقة «مضاعفة»
 
 /**
- * تعريفات البطاقات — المرجع الوحيد للأسعار والأنواع.
+ * تعريفات البطاقات — المرجع الوحيد للأسعار والحدود والأنواع.
  *
- * موازنة السعر: اللاعب يصيب في الجولة ستاً إلى عشر، ويأخذ نصيبه من
- * الترتيب فوقها، فمتوسّط الجولة ثمانٍ إلى ثلاث عشرة. واللعبة تبلغ عشر
- * جولات، فالحصيلة تقارب المئة. فجُعل «وقت إضافي» بجولة، و«تجميد»
- * و«مضاعفة» بجولةٍ ونصف — وكلها مرّتان، فأقصى الإنفاق ثمانٍ وسبعون:
- * ميزانيةٌ تُدار لا مصروفٌ يُنفَق أول جولة.
+ * موازنة السعر تُقاس بحصيلة الجولة لا بالتقدير: الجولة تنتهي بأول نبضٍ
+ * يتوقّف، فطولها يساوي عدّادَ البداية — نحو ثلاثين ثانية يجيب فيها
+ * اللاعب خمسة أسئلة إلى سبعة. فحصيلة الجولة ثلاثٌ للأضعف، وخمسٌ أو ستّ
+ * للوسط، وإحدى عشرة لأقوى من في القاعة. والعشر جولات تبلغ به ثلاثين إلى
+ * مئة وسبع.
+ *
+ * وعلى هذه الحصيلة تُسعَّر كل بطاقة بما تُغِلّه فعلاً:
+ *
+ * • «مضاعفة» تساوي حصيلة جولتك بعينها (ثلاثٌ للأضعف، إحدى عشرة للأقوى)،
+ *   فثمنها جولةٌ وسطى: ستّ. فيخسر بها الضعيف ويربح القويّ — رهانُ مهارةٍ
+ *   لا قرعة. ولو سُعِّرت بخمس عشرة لما استحقّت الشراء أبداً: احتمال أن
+ *   تبلغ جولةُ أقوى لاعبٍ خمس عشرة أربعةٌ في المئة.
+ *
+ * • «وقت إضافي» لا يُثمر نقاطاً كثيرة: الجولة تنتهي بموت غيرك لا بنفاد
+ *   وقتك، فعشر الثواني تساوي نقطةً أو نقطةً ونصفاً لمن يحتاجها، ودون
+ *   نصف نقطة لأقوى من في القاعة. فهي شريانُ نجاةٍ من التوقّف لا مكسبُ
+ *   نقاط، وثمنها ثلاث: يقدر عليها من دخله ثلاث.
+ *
+ * • «تجميد» لا تردّ على مشتريها نقاطاً أصلاً — الترتيب بمجموع النقاط،
+ *   وهي تنقص الخصم نقطةً وسبعاً من عشرٍ ولا تزيدك إلا جزءاً من نقطةٍ
+ *   يأتي من تبدّل المراكز. فثمنها أربع: تضحيةٌ محسوبة لا انتحار.
+ *
+ * والحدود تتبع الثمن: المضاعفة مرّتان (رهانٌ يُحسم)، والوقت والتجميد
+ * أربعاً — فأقصى الإنفاق أربعون، نحو ثلثي حصيلة لاعبٍ وسط: ميزانيةٌ
+ * تُدار لا مصروفٌ يُنفَق أول جولة.
  */
 export const CARDS = {
-  time: { price: 10, name: 'وقت إضافي' },
-  freeze: { price: 14, name: 'تجميد' },
-  double: { price: 15, name: 'مضاعفة' },
+  time: { price: 3, name: 'وقت إضافي', limit: 4 },
+  freeze: { price: 4, name: 'تجميد', limit: 4 },
+  double: { price: 6, name: 'مضاعفة', limit: 2 },
 };
-
-/** كم مرة تُشترى البطاقة الواحدة طوال اللعبة */
-export const CARD_LIMIT = 2;
 
 /**
  * مستويات المسابقة — ونسبةُ كل طبقة من الأسئلة المعروضة.
@@ -40,13 +57,19 @@ export const CARD_LIMIT = 2;
  * ليست تصفيةً بل ترجيح: كل الأسئلة تبقى في البِركة، وإنما يتغيّر ترتيب
  * ظهورها. فاللاعب لا يرى في الجولة إلا بضعة أسئلة من ألفٍ ومئة، والمهم
  * ما يتصدّر الطابور لا ما يُحذف منه — وبهذا لا يضيع سؤالٌ ولا يُحرَم
- * فريقٌ ابتدائيّ من سؤالٍ صعبٍ يُطربه أن يعرفه.
+ * فريقٌ ابتدائيّ من سؤالٍ صعبٍ يُطربه أن يعرفه (والصفرُ تأخيرٌ لا حذف:
+ * طبقةٌ بلا نصيبٍ لا تُسحب حتى تنفد أخواتها).
+ *
+ * والسلّم يرتفع درجةً درجة: الابتدائيّ سهلٌ في أكثره وفيه من المتوسط،
+ * والمتوسطُ يجمع السهل والمتوسط وقليلاً من الصعب، والثانويُّ أغلبه متوسط
+ * وفيه من السهل والصعب شيء، والجامعيُّ بين المتوسط والصعب وفيه سهلٌ قليل
+ * — فلا مرحلةٌ تُسأل ما ليس لها، ولا مرحلةٌ يُحرَم أهلُها من طبقةٍ كلها.
  */
 export const DIFFICULTY = {
-  primary: { name: 'ابتدائي', mix: [45, 45, 10] },
-  middle: { name: 'متوسط', mix: [20, 60, 20] },
-  secondary: { name: 'ثانوي', mix: [10, 40, 50] },
-  university: { name: 'جامعي', mix: [0, 25, 75] },
+  primary: { name: 'ابتدائي', mix: [70, 30, 0] },
+  middle: { name: 'متوسط', mix: [45, 45, 10] },
+  secondary: { name: 'ثانوي', mix: [20, 60, 20] },
+  university: { name: 'جامعي', mix: [10, 40, 50] },
 };
 
 export const DEFAULT_DIFFICULTY = 'middle';
@@ -185,12 +208,19 @@ class Team {
     this.connected = true;
     // يبقى عبر الجولات: لا يُعاد سؤال على الفريق حتى ينفد البنك كله
     this.seen = new Set();
-    // عدد مرات شراء كل بطاقة — الحدّ CARD_LIMIT لكل نوع طوال اللعبة
+    // عدد مرات شراء كل بطاقة — والحدّ في CARDS[id].limit لكل نوع طوال اللعبة
     this.cardUses = new Map();
     // آثار مؤجّلة تُطبّق في الجولة التالية
     this.pendingBonusMs = 0; // وقت إضافي يُضاف عند بدء الجولة
     this.pendingMultiplier = 1; // مضاعِف نقاط الجولة القادمة
     this.pendingFreezeBy = null; // اسم من جمّدك، يُطبّق قفلاً عند البدء
+    /*
+     * منتظِرٌ للجولة القادمة: دخل والجولة جارية. لا يُسأل ولا ينزل عدّاده
+     * ولا يُحتسب في نقاط الجولة الجارية — ويزول انتظاره عند بدء التالية.
+     */
+    this.waiting = false;
+    /* ما طُبّق عليه عند بدء الجولة — يُردّ إن أُعيدت الجولة */
+    this.roundEntry = null;
     this.resetForRound(settings);
   }
 
@@ -360,9 +390,20 @@ export class Room {
 
   addTeam(name) {
     const team = new Team(name, this.settings);
+    /*
+     * من جاء والجولة جارية ينتظر القادمة: لا يُردّ على الباب كما كان —
+     * فالمنظّم لا يملك أن يفتح له، واللاعب يقف بلا شاشةٍ ولا خبر — ولا
+     * يُدخَل في جولةٍ نصفُها مضى فيأخذ مركزاً بعدّادٍ ممتلئ لم يُنفقه.
+     */
+    team.waiting = this.midRound();
     this.teams.set(team.id, team);
     this.touch();
     return team;
+  }
+
+  /** جولةٌ قائمة: استعدادٌ أو جريانٌ أو إيقاف */
+  midRound() {
+    return this.status === 'countdown' || this.status === 'running' || this.status === 'paused';
   }
 
   /**
@@ -395,12 +436,22 @@ export class Room {
      * صراحةً ويردّ الحال إلى lobby، ثم يُضغط زرُّ البدء.
      */
     if (this.status === 'finished') return false;
+    /*
+     * ولا يُبتدأ على جولةٍ قائمة: كان البدء وهي تجري يمحو إجاباتها
+     * ويردّ العدادات إلى أولها بلا نقاطٍ ولا سجلّ — جولةٌ تتبخّر بضغطة.
+     * وإعادةُ الجولة بابها restartRound، وهي تشترط الإيقاف.
+     */
+    if (this.status === 'countdown' || this.status === 'running' || this.status === 'paused') {
+      return false;
+    }
     this.startedAt ??= Date.now();
     // البدء بعد نهاية جولة يعني جولة جديدة — بلا خطوة تجهيز منفصلة
     if (this.status === 'ended') this.round++;
     for (const team of this.teams.values()) {
       team.resetForRound(this.settings);
+      team.waiting = false; // من انتظر الجولة القادمة فقد جاءت
       // تطبيق البطاقات المؤجّلة عند بدء الجولة
+      const entry = { bonusMs: team.pendingBonusMs, freezeBy: team.pendingFreezeBy };
       if (team.pendingBonusMs) {
         team.timeMs = this.clampTime(team.timeMs + team.pendingBonusMs);
         team.pendingBonusMs = 0;
@@ -410,11 +461,48 @@ export class Room {
         team.frozenBy = team.pendingFreezeBy;
         team.pendingFreezeBy = null;
       }
+      /*
+       * ما طُبّق عند البدء يُحفظ: الجولة قد تُعاد لعطبٍ، ولا يُضيَّع على
+       * اللاعب ثمنُ بطاقةٍ استُهلكت في جولةٍ لم تُحتسب.
+       */
+      team.roundEntry = entry;
       // pendingMultiplier يبقى حتى احتساب النقاط في نهاية الجولة
       this.nextQuestion(team);
     }
     this.result = null;
     // ثلاث ثوانٍ استعداد قبل أن تبدأ العدادات فعلياً
+    this.status = 'countdown';
+    this.countdownEndsAt = Date.now() + COUNTDOWN_MS;
+    this.lastTickAt = this.countdownEndsAt;
+    this.touch();
+    return true;
+  }
+
+  /**
+   * إعادةُ الجولة الحالية من أوّلها — بابُها الإيقاف.
+   *
+   * عطبٌ يصيب اللعب: جهازُ لاعبٍ يعلّق، أو شبكةٌ تنقطع عن القاعة، أو
+   * سؤالٌ يُقرأ بصوتٍ عالٍ سهواً. فيوقف المنظّم الجولة ثم يعيدها: العدادات
+   * تعود إلى أولها، والنقاط لم تُحتسب بعد (الاحتساب في نهاية الجولة)،
+   * ورقمُ الجولة لا يتقدّم وسجلُّها لا يُكتب — فهي الجولة نفسها تُلعب ثانية.
+   *
+   * وآثارُ البطاقات التي استُهلكت عند بدء الجولة المُلغاة تُردّ كما كانت:
+   * من دفع نقاطه في وقتٍ إضافي يأخذه في الإعادة، ومن جُمّد يُجمَّد.
+   */
+  restartRound() {
+    if (this.status !== 'paused') return false;
+    for (const team of this.teams.values()) {
+      team.resetForRound(this.settings);
+      team.waiting = false;
+      const entry = team.roundEntry;
+      if (entry?.bonusMs) team.timeMs = this.clampTime(team.timeMs + entry.bonusMs);
+      if (entry?.freezeBy) {
+        team.lockedMs = FREEZE_MS;
+        team.frozenBy = entry.freezeBy;
+      }
+      this.nextQuestion(team);
+    }
+    this.result = null;
     this.status = 'countdown';
     this.countdownEndsAt = Date.now() + COUNTDOWN_MS;
     this.lastTickAt = this.countdownEndsAt;
@@ -507,10 +595,15 @@ export class Room {
 
   flatline(team) {
     if (team.flatlined) return;
+    this.stop(team);
+    this.endRound();
+  }
+
+  /** يُسكِن نبض فريقٍ بلا إنهاء الجولة — تُنهيها الدالةُ المستدعية مرّةً واحدة */
+  stop(team) {
     team.flatlined = true;
     team.flatlinedAt = Date.now();
     team.current = null;
-    this.endRound();
   }
 
   /** نبضة السيرفر: هي المرجع الوحيد للوقت — المتصفح يعرض فقط */
@@ -527,18 +620,29 @@ export class Room {
     const elapsed = now - this.lastTickAt;
     this.lastTickAt = now;
 
-    let firstFlatlined = null;
+    /*
+     * من نفد وقته في هذه النبضة سكن نبضه — كلُّهم لا أوّلُهم.
+     *
+     * كان يُسكَّن أولُ من يُصادَف في الطابور ويُنهى الجولة، فيبقى الآخر
+     * الذي نفد وقته في النبضة نفسها «حيّاً» بوقتٍ صفر: فيُحسب في الناجين
+     * وينال نقاط مركزٍ ويحتفظ بمضاعِفه. وإنهاءُ الجولة يبقى مرّةً واحدة
+     * بعد الحلقة، فلا تُحتسب النقاط ولا يُكتب السجلّ مرّتين.
+     */
+    let stopped = false;
     for (const team of this.teams.values()) {
-      if (team.flatlined) continue;
+      if (team.flatlined || team.waiting) continue;
       // فترة التجميد: العدّاد ينزل لكن الإجابة مقفلة
       if (team.lockedMs > 0) {
         team.lockedMs = Math.max(0, team.lockedMs - elapsed);
         if (team.lockedMs === 0) team.frozenBy = null;
       }
       team.timeMs = Math.max(0, team.timeMs - elapsed);
-      if (team.timeMs === 0 && !firstFlatlined) firstFlatlined = team;
+      if (team.timeMs === 0) {
+        this.stop(team);
+        stopped = true;
+      }
     }
-    if (firstFlatlined) this.flatline(firstFlatlined);
+    if (stopped) this.endRound();
     return true;
   }
 
@@ -553,8 +657,14 @@ export class Room {
    * يرى اللاعب رصيده يتضخّم وهو يجيب، ولا ينفق ما لم يُحصّله بعد.
    */
   endRound() {
+    /*
+     * حرزٌ: جولةٌ انتهت لا تنتهي مرّتين. لو استُدعيت ثانيةً لأُضيفت
+     * النقاط إلى الأرصدة من جديد وكُتب السجلّ سطرين.
+     */
+    if (this.status === 'ended') return;
     this.status = 'ended';
-    const teams = [...this.teams.values()];
+    /* المنتظِرون لم يلعبوا هذه الجولة: لا جائزةَ لهم ولا يُعدّون في المراكز */
+    const teams = [...this.teams.values()].filter((t) => !t.waiting);
     const survivors = teams.filter((t) => !t.flatlined).sort((a, b) => b.timeMs - a.timeMs);
 
     /*
@@ -667,7 +777,7 @@ export class Room {
     }
     const card = CARDS[cardId];
     if (!card) return { ok: false, error: 'بطاقة غير معروفة' };
-    if ((team.cardUses.get(cardId) ?? 0) >= CARD_LIMIT) {
+    if ((team.cardUses.get(cardId) ?? 0) >= card.limit) {
       return { ok: false, error: 'استنفدت هذه البطاقة' };
     }
     if (team.score < card.price) return { ok: false, error: 'نقاطك لا تكفي' };
@@ -716,8 +826,14 @@ export class Room {
       bankIds: this.bankIds,
       difficulty: this.difficulty,
       settings: this.settings,
-      result: this.result,
-      history: this.history,
+      /* روستر البطاقات: اسمها وحدّها — تقرؤه لوحةُ المنظّم فلا تُكرّر الأسماء */
+      cards: Object.entries(CARDS).map(([id, card]) => ({
+        id,
+        name: card.name,
+        limit: card.limit,
+      })),
+      result: this.present(this.result),
+      history: this.history.map((round) => this.present(round)),
       standings: this.standings,
       displayBlurred: this.displayBlurred,
       countdownMs: this.countdownRemaining(),
@@ -733,10 +849,35 @@ export class Room {
           correct: t.correct,
           locked: t.lockedMs > 0, // مجمّدة حالياً — تظهر ❄️ على شاشة العرض
           lockedMs: Math.round(t.lockedMs), // المتبقي من التجميد — لعدّاد الشاشات
+          frozenBy: t.lockedMs > 0 ? t.frozenBy : null, // من جمّدها — تذكره القاعة والمنظّم
           doubled: t.pendingMultiplier > 1, // مضاعفة فعّالة هذه الجولة — بطاقة ذهبية
+          waiting: t.waiting, // دخل والجولة جارية — ينتظر القادمة
+          cardsLeft: this.cardsLeftFor(t), // ما بقي له من كل بطاقة — للوحة المنظّم
         }))
         .sort((a, b) => b.score - a.score || b.timeMs - a.timeMs),
     };
+  }
+
+  /**
+   * جوائزُ جولةٍ مقصورةً على الحاضرين.
+   *
+   * المجموعة التي دخلت وخرجت لا مكان لها في السجلّ: المنظّم يقرأ السجلّ
+   * ليعلن ويقارن، فسطرُ من ليس في القاعة ضجيجٌ يُشغل ويُربك. ولا يُمحى من
+   * التاريخ شيء — history على حاله في الذاكرة والقرص، وإنما يُصفّى عند
+   * البثّ، فمن رجع رجع سطرُه معه.
+   */
+  present(round) {
+    if (!round) return null;
+    return { ...round, awards: round.awards.filter((a) => this.teams.has(a.teamId)) };
+  }
+
+  /** ما بقي لفريقٍ من كل بطاقة — عدداً لا أسماء، فاللوحة تُبثّ أربع مرّات في الثانية */
+  cardsLeftFor(team) {
+    const left = {};
+    for (const [id, card] of Object.entries(CARDS)) {
+      left[id] = card.limit - (team.cardUses.get(id) ?? 0);
+    }
+    return left;
   }
 
   /** ما يراه فريق واحد — السؤال بلا حقل answer */
@@ -749,6 +890,7 @@ export class Room {
       timeMs: Math.round(team.timeMs),
       score: team.score,
       flatlined: team.flatlined,
+      waiting: team.waiting, // دخل والجولة جارية — شاشتُه «انتظر الجولة القادمة»
       lastResult: team.lastResult,
       status: this.status,
       round: this.round,
@@ -781,8 +923,8 @@ export class Room {
       id,
       name: card.name,
       price: card.price,
-      used: (team.cardUses.get(id) ?? 0) >= CARD_LIMIT,
-      left: CARD_LIMIT - (team.cardUses.get(id) ?? 0),
+      used: (team.cardUses.get(id) ?? 0) >= card.limit,
+      left: card.limit - (team.cardUses.get(id) ?? 0),
       affordable: team.score >= card.price,
     }));
     // الآثار المؤجّلة الجاهزة للجولة القادمة — لتذكير الفريق
@@ -837,6 +979,8 @@ Room.prototype.snapshot = function snapshot() {
       pendingBonusMs: t.pendingBonusMs,
       pendingMultiplier: t.pendingMultiplier,
       pendingFreezeBy: t.pendingFreezeBy,
+      waiting: t.waiting,
+      roundEntry: t.roundEntry,
       timeMs: Math.round(t.timeMs),
       flatlined: t.flatlined,
       flatlinedAt: t.flatlinedAt,
@@ -900,6 +1044,8 @@ export function restoreRoom(snap) {
     team.pendingBonusMs = t.pendingBonusMs ?? 0;
     team.pendingMultiplier = t.pendingMultiplier ?? 1;
     team.pendingFreezeBy = t.pendingFreezeBy ?? null;
+    team.waiting = Boolean(t.waiting);
+    team.roundEntry = t.roundEntry ?? null;
     team.timeMs = t.timeMs;
     team.flatlined = Boolean(t.flatlined);
     team.flatlinedAt = t.flatlinedAt ?? null;
