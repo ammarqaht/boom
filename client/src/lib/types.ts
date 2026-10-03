@@ -66,6 +66,8 @@ export interface ShopCard {
   /** كم مرة بقيت منها */
   left: number;
   affordable: boolean;
+  /** كم مرّةً اشتُريت في هذه الفترة — وبها وحدها يُنقض الشراء */
+  bought: number;
 }
 
 export interface Shop {

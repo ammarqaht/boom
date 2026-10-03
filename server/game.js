@@ -215,6 +215,15 @@ class Team {
     this.pendingMultiplier = 1; // مضاعِف نقاط الجولة القادمة
     this.pendingFreezeBy = null; // اسم من جمّدك، يُطبّق قفلاً عند البدء
     /*
+     * ما اشتُري في فترة ما بين الجولتين، بترتيبه.
+     *
+     * الأثرُ المؤجَّل وحده لا يكفي لنقض الشراء: «وقت إضافي» يتراكم في
+     * ‎pendingBonusMs‎ فلا يُعرف منه كم مرّةً اشتُري، و«تجميد» أثرُه عند
+     * خصمه لا عندك. فيُقيَّد كلُّ شراءٍ هنا بثمنه وهدفه، ويُنقض بعينه.
+     * ويُفرَغ عند بدء الجولة — فما طُبّق لا يُستردّ.
+     */
+    this.pendingBuys = [];
+    /*
      * منتظِرٌ للجولة القادمة: دخل والجولة جارية. لا يُسأل ولا ينزل عدّاده
      * ولا يُحتسب في نقاط الجولة الجارية — ويزول انتظاره عند بدء التالية.
      */
@@ -468,6 +477,8 @@ export class Room {
        * اللاعب ثمنُ بطاقةٍ استُهلكت في جولةٍ لم تُحتسب.
        */
       team.roundEntry = entry;
+      /* بابُ النقض يُغلق ببدء الجولة: ما طُبّق أثرُه لا يُستردّ ثمنُه */
+      team.pendingBuys = [];
       // pendingMultiplier يبقى حتى احتساب النقاط في نهاية الجولة
       this.nextQuestion(team);
     }
@@ -764,6 +775,7 @@ export class Room {
       team.pendingBonusMs = 0;
       team.pendingMultiplier = 1;
       team.pendingFreezeBy = null;
+      team.pendingBuys = [];
       team.resetForRound(this.settings);
     }
     this.touch();
@@ -800,6 +812,7 @@ export class Room {
 
     team.score -= card.price;
     team.cardUses.set(cardId, (team.cardUses.get(cardId) ?? 0) + 1);
+    team.pendingBuys.push({ card: cardId, price: card.price, targetId: targetId ?? null });
     this.touch();
     return { ok: true };
   }
@@ -884,6 +897,49 @@ export class Room {
     return left;
   }
 
+  /**
+   * نقضُ شراءٍ ما دامت الجولة لم تبدأ.
+   *
+   * الضغطةُ على هاتفٍ في قاعةٍ مظلمة تُخطئ، وستُّ نقاطٍ ثمنُ جولةٍ كاملة
+   * للاعبٍ متوسّط — فمن دفعها بالخطأ خسر جولةً بلا لعب. والبابُ مفتوحٌ
+   * ما دام الأثرُ مؤجَّلاً: فإذا بدأت الجولةُ وقع الأثرُ وأُغلق الباب.
+   *
+   * ويُنقض الأحدثُ فالأحدث: من اشترى «وقتاً إضافياً» مرّتين يستردّ واحدة.
+   */
+  refundCard(teamId, cardId) {
+    const team = this.teams.get(teamId);
+    if (!team) return { ok: false, error: 'اللاعب غير موجود' };
+    if (this.status !== 'ended') {
+      return { ok: false, error: 'النقض متاح بين الجولات فقط' };
+    }
+    const at = team.pendingBuys.findLastIndex((buy) => buy.card === cardId);
+    if (at === -1) return { ok: false, error: 'لم تشترِ هذه البطاقة في هذه الفترة' };
+
+    const [buy] = team.pendingBuys.splice(at, 1);
+
+    if (cardId === 'time') {
+      team.pendingBonusMs = Math.max(0, team.pendingBonusMs - TIME_CARD_MS);
+    } else if (cardId === 'double') {
+      /* ولا يعود إلى واحدٍ إن بقيت مضاعفةٌ أخرى في القيد (لا يقع، وحرزٌ) */
+      if (!team.pendingBuys.some((other) => other.card === 'double')) {
+        team.pendingMultiplier = 1;
+      }
+    } else if (cardId === 'freeze') {
+      /*
+       * ولا يُفكّ تجميدٌ ليس منك: لو جمّد لاعبان هدفاً واحداً حمل الهدفُ
+       * اسمَ آخرهما، فمن نقض قبله لا يرفع قفلَ غيره.
+       */
+      const target = this.teams.get(buy.targetId);
+      if (target && target.pendingFreezeBy === team.name) target.pendingFreezeBy = null;
+    }
+
+    team.score += buy.price;
+    const used = team.cardUses.get(cardId) ?? 0;
+    team.cardUses.set(cardId, Math.max(0, used - 1));
+    this.touch();
+    return { ok: true, card: cardId, price: buy.price };
+  }
+
   /** ما يراه فريق واحد — السؤال بلا حقل answer */
   teamState(teamId) {
     const team = this.teams.get(teamId);
@@ -934,6 +990,8 @@ export class Room {
       used: (team.cardUses.get(id) ?? 0) >= card.limit,
       left: card.limit - (team.cardUses.get(id) ?? 0),
       affordable: team.score >= card.price,
+      /* كم مرّةً اشتُريت في هذه الفترة — وبها وحدها يظهر زرُّ النقض */
+      bought: team.pendingBuys.filter((buy) => buy.card === id).length,
     }));
     // الآثار المؤجّلة الجاهزة للجولة القادمة — لتذكير الفريق
     const pending = {
@@ -987,6 +1045,7 @@ Room.prototype.snapshot = function snapshot() {
       pendingBonusMs: t.pendingBonusMs,
       pendingMultiplier: t.pendingMultiplier,
       pendingFreezeBy: t.pendingFreezeBy,
+      pendingBuys: t.pendingBuys,
       waiting: t.waiting,
       roundEntry: t.roundEntry,
       timeMs: Math.round(t.timeMs),
@@ -1052,6 +1111,8 @@ export function restoreRoom(snap) {
     team.pendingBonusMs = t.pendingBonusMs ?? 0;
     team.pendingMultiplier = t.pendingMultiplier ?? 1;
     team.pendingFreezeBy = t.pendingFreezeBy ?? null;
+    /* لقطةٌ قديمة لا تحمله — ومصفوفةٌ فارغة أسلمُ من undefined تُقرأ بـfilter */
+    team.pendingBuys = Array.isArray(t.pendingBuys) ? t.pendingBuys : [];
     team.waiting = Boolean(t.waiting);
     team.roundEntry = t.roundEntry ?? null;
     team.timeMs = t.timeMs;
@@ -1100,6 +1161,14 @@ export function sweepIdleRooms(now = Date.now()) {
   const gone = [];
   for (const [code, room] of rooms) {
     if (now - room.touchedAt > IDLE_ROOM_MS) {
+      /*
+       * وتُختم منتهيةً قبل أن تُنسى.
+       *
+       * كانت تُحذف من الذاكرة وحالُها في السجلّ «ended» — أي بين جولتين.
+       * فيقرأ المالكُ بعد شهرٍ غرفةً تنتظر جولتها القادمة منذ ثلاثين
+       * يوماً. ومن ترك غرفته ساعتين فقد انتهت، فيُقال ذلك.
+       */
+      room.status = 'finished';
       rooms.delete(code);
       gone.push(code);
     }

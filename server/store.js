@@ -406,6 +406,25 @@ export async function saveRoom(room) {
 }
 
 /**
+ * ختمُ الغرف الخاملة منتهيةً في السجلّ.
+ *
+ * ولا يكفي ختمُ ما في الذاكرة: هناك غرفٌ كُنست قبل أن يُكتب هذا، وغرفٌ
+ * سقط السيرفر وهي قائمة فلم تُكنس أصلاً — وكلُّها في السجلّ «بين جولتين»
+ * منذ شهور. فيمرّ هذا على السجلّ نفسه كل عشر دقائق ويختم ما تجاوز حدّه.
+ *
+ * وend_at يأخذ آخر تفاعلٍ لا وقتَ الختم: الغرفةُ انتهت حين تُركت، لا حين
+ * انتبهنا إلى تركها.
+ */
+export async function closeIdleRooms(maxIdleMs) {
+  const { rowCount } = await q(
+    `UPDATE rooms SET status = 'finished', ended_at = COALESCE(ended_at, touched_at)
+      WHERE status <> 'finished' AND touched_at < $1`,
+    [Date.now() - maxIdleMs],
+  );
+  return rowCount;
+}
+
+/**
  * لقطات الغرف التي ما زال يُرجى استئنافها.
  *
  * ما تجاوز حدَّ الخمول يُترك في السجلّ ولا يُبعث: من ترك غرفته ساعتين

@@ -71,6 +71,49 @@ if (!existsSync(engineEntry)) fetchEngine();
 const loaded = await import(pathToFileURL(join(engineEntry, 'dist', 'index.js')).href);
 const EmbeddedPostgres = loaded.default ?? loaded;
 
+const { Client } = require_(join(root, 'node_modules', 'pg'));
+
+/*
+ * قاعدةٌ تعمل أصلاً ليست خطأً يُصاح به.
+ *
+ * المحرّكُ يبقى بعد إغلاق النافذة التي أقلعته — فمن أعاد الأمر لقي
+ * «lock file postmaster.pid already exists» وانهياراً بلا تفسير. وهو
+ * خبرٌ لا عطب: القاعدةُ جاهزة، فيُقال ذلك ويُمضى.
+ *
+ * ⚠ والفحصُ باستعلامٍ حقيقيّ لا بفتح منفذ: جُرّب بالمنفذ أولاً فكذب —
+ * محرّكٌ مات وبقي قيدُه في جدول TCP دقائق، فقال الحارسُ «تعمل» والسيرفرُ
+ * بعده يسقط بـECONNRESET عند كل اتصال. والمنفذُ المفتوح ليس قاعدةً تردّ.
+ */
+async function alive() {
+  /* ومهلةٌ صريحة: pg بلا مهلةٍ ينتظر أبداً على منفذٍ مفتوحٍ لا يردّ */
+  const probe = new Client({
+    connectionString: URL_FOR('postgres'),
+    ssl: false,
+    connectionTimeoutMillis: 2500,
+  });
+  try {
+    await probe.connect();
+    await probe.query('SELECT 1');
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await probe.end().catch(() => {});
+  }
+}
+
+if (await alive()) {
+  console.log(`
+  ✅ القاعدة تعمل أصلاً على المنفذ ${PORT} — لا شيء يُفعل
+
+     ${URL_FOR('nabda')}
+
+  وإن أردت إيقافها: أغلق النافذة التي أقلعتها، أو
+     powershell "Get-Process postgres | Stop-Process -Force"
+`);
+  process.exit(0);
+}
+
 const fresh = !existsSync(join(DATA, 'PG_VERSION'));
 const pg = new EmbeddedPostgres({
   databaseDir: DATA,
@@ -93,7 +136,6 @@ await pg.start();
  * WIN1252 — فأوّلُ سؤالٍ عربيّ يُكتب فيها يسقط بـ«لا مقابل لهذا الحرف في
  * الترميز». وtemplate0 وحده يقبل ترميزاً يخالف ترميزَ العنقود.
  */
-const { Client } = require_(join(root, 'node_modules', 'pg'));
 const admin = new Client({ connectionString: URL_FOR('postgres'), ssl: false });
 await admin.connect();
 for (const name of DATABASES) {

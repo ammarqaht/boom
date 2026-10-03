@@ -1275,6 +1275,16 @@ io.on('connection', (socket) => {
     reply?.(result);
   });
 
+  /* نقضُ الشراء — نظيرُ buyCard، وشرطُه أن الجولة لم تبدأ (يفحصه refundCard) */
+  socket.on('team:refundCard', ({ card } = {}, reply) => {
+    if (ctx?.role !== 'team') return reply?.({ ok: false, error: 'غير مصرح' });
+    const room = getRoom(ctx.code);
+    if (!room) return reply?.({ ok: false, error: 'الغرفة غير موجودة' });
+    const result = room.refundCard(ctx.teamId, card);
+    if (result.ok) pushAll(room); // النقاط عادت، وقد يُرفع قفلٌ عن خصم
+    reply?.(result);
+  });
+
   socket.on('team:answer', ({ questionId, choice } = {}) => {
     if (ctx?.role !== 'team') return;
     const room = getRoom(ctx.code);
@@ -1369,6 +1379,13 @@ setInterval(
         console.warn(`⚠ تعذّر نسيان لقطة ${code}: ${err.message}`);
       }
       feedSent.delete(code);
+    }
+    /* وما في السجلّ من خاملاتٍ يُختم منتهياً — ولو كُنست قبل هذا الكود */
+    try {
+      const closed = await store.closeIdleRooms(IDLE_ROOM_MS);
+      if (closed) console.log(`🏁 خُتمت ${closed} غرفةً خاملةً منتهية`);
+    } catch (err) {
+      console.warn('⚠ تعذّر ختم الخاملات:', err.message);
     }
   },
   10 * 60 * 1000,
