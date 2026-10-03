@@ -1,16 +1,42 @@
 import { useState } from 'react';
 import type { CardId, Shop as ShopData } from '../lib/types';
 import { ask } from '../lib/socket';
-import { Button, toast } from './ui';
+import { Button, toast, type Tone } from './ui';
 import { CheckIcon, DoubleIcon, SnowflakeIcon, TimePlusIcon } from './icons';
 
-const CARD_META: Record<CardId, { Icon: typeof TimePlusIcon; effect: string }> = {
-  time: { Icon: TimePlusIcon, effect: 'تبدأ الجولة القادمة بعشر ثوانٍ زيادة' },
+/*
+ * لكلّ بطاقةٍ لونُها وملمسُها.
+ *
+ * البطاقاتُ ثلاثٌ تُشترى في ثوانٍ بين جولتين، فإن تشابهت وجوهُها لزم
+ * اللاعبَ أن يقرأ ثلاثةَ أسطرٍ ليفرّق بينها — وهو لا يملك ذلك. فصار
+ * التمييزُ بصريّاً: صقيعٌ أزرقُ للتجميد، وبريقٌ ذهبيٌّ يمرّ للمضاعفة،
+ * وخضرةُ وقتٍ للوقت. والنصُّ يبقى لمن أراد التفصيل.
+ */
+const CARD_META: Record<
+  CardId,
+  { Icon: typeof TimePlusIcon; effect: string; skin: string; ink: string; tone: Tone }
+> = {
+  time: {
+    Icon: TimePlusIcon,
+    effect: 'تبدأ الجولة القادمة بعشر ثوانٍ زيادة',
+    skin: 'skin-time',
+    ink: 'text-safe',
+    tone: 'safe',
+  },
   freeze: {
     Icon: SnowflakeIcon,
     effect: 'تقفل لاعباً عن الإجابة خمس ثوانٍ في بداية الجولة',
+    skin: 'skin-frost',
+    ink: 'text-frost',
+    tone: 'frost',
   },
-  double: { Icon: DoubleIcon, effect: 'نقاط جولتك القادمة ×٢ — تسقط إن توقف نبضك' },
+  double: {
+    Icon: DoubleIcon,
+    effect: 'نقاط جولتك القادمة ×٢ — تسقط إن توقف نبضك',
+    skin: 'skin-gold',
+    ink: 'text-gold',
+    tone: 'gold',
+  },
 };
 
 /*
@@ -54,6 +80,7 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
    */
   const buy = async (card: CardId, targetId?: string) => {
     const meta = shop.cards.find((c) => c.id === card);
+    const look = CARD_META[card];
     const victim = targetId ? shop.rivals.find((r) => r.id === targetId)?.name : null;
     setBusy(card);
     const res = await ask('team:buyCard', { card, targetId });
@@ -65,8 +92,25 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
       victim
         ? `جمّدتَ ${victim} — خمس ثوانٍ في بداية الجولة`
         : `اشتريتَ «${meta?.name ?? 'البطاقة'}» — تُطبَّق في الجولة القادمة`,
-      'safe',
+      look.tone,
+      <look.Icon size={16} />,
     );
+  };
+
+  /*
+   * نقضُ الشراء — ما دامت الجولة لم تبدأ.
+   *
+   * الضغطةُ تُخطئ على هاتفٍ في قاعةٍ مظلمة، وستُّ نقاطٍ ثمنُ جولةٍ كاملة
+   * للاعبٍ متوسّط: فمن دفعها سهواً خسر جولةً بلا لعب. والسيرفرُ يحرس
+   * الباب — يفتحه ما دام الأثرُ مؤجَّلاً ويغلقه ببدء الجولة.
+   */
+  const undo = async (card: CardId) => {
+    const meta = shop.cards.find((c) => c.id === card);
+    setBusy(card);
+    const res = await ask('team:refundCard', { card });
+    setBusy(null);
+    if (!res.ok) return flash(res.error);
+    toast(`نُقض شراء «${meta?.name ?? 'البطاقة'}» — ورُدّت نقاطُك`, 'signal');
   };
 
   return (
@@ -82,10 +126,15 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
         const picking = card.id === 'freeze' && pickTarget;
         const disabled = card.used || !card.affordable || busy !== null;
 
+        const owned = card.bought > 0;
+
         return (
-          <div key={card.id} className={`tile p-3 ${card.used ? 'opacity-50' : ''}`}>
+          <div key={card.id} className={`tile p-3 ${card.used && !owned ? 'opacity-50' : ''}`}>
             <div className="grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3">
-              <span className="flex size-10 items-center justify-center rounded-chip bg-surface-2 text-signal">
+              {/* المربّعُ يحمل ملمسَ البطاقة — فتُعرف قبل أن تُقرأ */}
+              <span
+                className={`flex size-10 items-center justify-center rounded-chip bg-surface-2 ${meta.skin} ${meta.ink}`}
+              >
                 <meta.Icon size={22} />
               </span>
 
@@ -107,13 +156,29 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
                 <p className="mt-0.5 text-xs leading-relaxed text-muted">{meta.effect}</p>
               </div>
 
-              {card.used ? (
-                <span className="flex items-center gap-1.5 rounded-chip px-3 py-2 text-sm font-bold text-safe shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-safe)_35%,transparent)]">
-                  <CheckIcon size={13} strokeWidth={3.5} />
+              {/*
+                زرُّ النقض يحلّ محلّ زرّ الشراء ما دام الشراءُ قابلاً للنقض.
+                ولا يُزاد زرٌّ ثالث: الصفُّ ضيّقٌ على هاتف، وزرّان في موضعٍ
+                واحد يُضغط أحدُهما بالخطأ.
+              */}
+              {owned ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => void undo(card.id)}
+                  disabled={busy !== null}
+                  className="shrink-0 text-muted"
+                >
+                  {busy === card.id ? 'جارٍ…' : 'تراجع'}
+                </Button>
+              ) : card.used ? (
+                <span className="flex items-center gap-1.5 rounded-chip px-3 py-1.5 text-[13px] font-bold text-safe shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-safe)_35%,transparent)]">
+                  <CheckIcon size={12} strokeWidth={3.5} />
                   استُنفدت
                 </span>
               ) : (
                 <Button
+                  size="sm"
                   onClick={() =>
                     card.id === 'freeze' ? (setTarget(null), setPickTarget(true)) : buy(card.id)
                   }
@@ -164,17 +229,18 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
 
                 <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] gap-1.5">
                   <Button
+                    size="sm"
                     onClick={() => target && buy('freeze', target)}
                     disabled={!target || busy !== null}
                   >
-                    <SnowflakeIcon size={16} />
+                    <SnowflakeIcon size={14} />
                     {busy === 'freeze'
                       ? 'جارٍ…'
                       : target
                         ? `أكّد تجميد ${shop.rivals.find((r) => r.id === target)?.name}`
                         : 'اختر لاعباً أولاً'}
                   </Button>
-                  <Button variant="ghost" onClick={() => setPickTarget(false)}>
+                  <Button size="sm" variant="ghost" onClick={() => setPickTarget(false)}>
                     إلغاء
                   </Button>
                 </div>

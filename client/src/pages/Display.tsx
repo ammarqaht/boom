@@ -117,10 +117,48 @@ export default function Display() {
   return <Board room={room} />;
 }
 
+/**
+ * مقياسُ الشاشة: الشاشةُ كلُّها تكبر، لا الخطُّ وحده.
+ *
+ * الشاشةُ مبنيّةٌ بمقاساتٍ ثابتةٍ بالبكسل — وهو الصواب في شاشةٍ تُقرأ من
+ * آخر القاعة، فالمقاسُ عندها قرارٌ لا نسبة. لكنّ البروجكترات تختلف: ما
+ * بُني لـ١٤٤٠ يبدو ضائعاً في ٢٥٦٠، وتُقرأ النبضاتُ خيطاً في وسط فراغ.
+ *
+ * فتُقاس الشاشةُ إلى تصميمها وتُزوَّم كلُّها: الخطُّ والهوامشُ والمجاري
+ * والرمزُ معاً، بنسبةٍ واحدة. وبالأصغر من بُعدَيها — فشاشةٌ عريضةٌ قصيرة
+ * لو قيست بعرضها وحده لفاض طولُها.
+ *
+ * ولماذا ‎transform‎ لا ‎zoom‎؟ جُرِّب ‎zoom‎ أولاً فاضطربت النِّسب تحته:
+ * ‎width: 140%‎ خرجت ألفاً وأربعَ مئةٍ على نافذةٍ عرضها ألفٌ وأربعةٌ
+ * وعشرون، ففاضت الشاشة أفقياً. والتحويلُ تُحسب نِسبُه قبله فلا تلتبس.
+ *
+ * وحاويةُ الثوابت التي يُنشئها ليست ضرراً هنا بل مرادٌ: الصندوقُ المحوَّل
+ * يملأ النافذة بالضبط، فالستائرُ الثابتة فيه تملؤها وتكبر معها.
+ */
+const BOARD_W = 1440;
+const BOARD_H = 900;
+
+function useBoardScale() {
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const fit = () => {
+      const by = Math.min(window.innerWidth / BOARD_W, window.innerHeight / BOARD_H);
+      /* حدٌّ أدنى لئلا تصغر عن القراءة، وأعلى لئلا تتضخّم على جدارٍ كامل */
+      setScale(Math.round(Math.max(0.68, Math.min(2.4, by)) * 100) / 100);
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, []);
+  return scale;
+}
+
 /** شاشة العرض تملأ البروجكتر — لا شيء فيها أصغر من ٢٨px */
 function Board({ room }: { room: RoomState }) {
   const joinUrl = `${location.origin}/play?code=${room.code}`;
-  const qr = useQr(joinUrl, '#060b12ff', '#e4f0f8ff');
+  /* لونا الرمز من أرضية الوضع الغامق وحبره — فيُمسح من آخر القاعة */
+  const qr = useQr(joinUrl, '#0f1821ff', '#e4f0f8ff');
+  const scale = useBoardScale();
   /*
    * مشهد نهاية الجولة في القاعة على ثلاث لقطات:
    *   ١) ستارةُ السكون تنزل باسم من توقّف نبضه.
@@ -152,8 +190,25 @@ function Board({ room }: { room: RoomState }) {
   const board = useRef<HTMLDivElement>(null);
   useReorderSlide(board, ranked.map((t) => t.id).join(','));
 
+  /*
+   * المقاسُ يُقسَّم عليه قبل أن يُضرب فيه.
+   *
+   * ‎zoom‎ يضرب المقاسَ المستعمَل، و‎100%‎ تُحسب من الأب قبل الضرب — فلو
+   * تُركت ‎h-full‎ لخرج الطولُ عن الشاشة بنسبة الزوم. فيُعطى البعدان
+   * مقلوبَ النسبة، فيعود الحاصلُ ملءَ الشاشة بالضبط.
+   */
   return (
-    <div className="flex h-full flex-col px-14">
+    <div className="h-full w-full overflow-hidden">
+      <div
+        className="flex flex-col px-14"
+        style={{
+          width: `${100 / scale}%`,
+          height: `${100 / scale}%`,
+          transform: `scale(${scale})`,
+          /* يمينُ الأعلى: الأصلُ في اتجاه القراءة، وإلا انزاح اللوحُ كلُّه */
+          transformOrigin: 'top right',
+        }}
+      >
       {/*
        * الترويسة على سطحٍ لا على الأرضية: أبيضُ في الفاتح وأسودُ في الغامق.
        *
@@ -234,6 +289,7 @@ function Board({ room }: { room: RoomState }) {
 
       {/* فوق النتائج: إعلانُ السكون، ينفرج عنها بعد لحظتين */}
       {stopped.name && <FlatlineMoment name={stopped.name} leaving={stopped.leaving} />}
+      </div>
     </div>
   );
 }

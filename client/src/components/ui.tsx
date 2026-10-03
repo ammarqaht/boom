@@ -165,7 +165,7 @@ export function ThemeButton({ theme, onToggle }: { theme: Theme; onToggle: () =>
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'ghost' | 'danger';
-  size?: 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg';
 };
 
 export function Button({
@@ -179,7 +179,7 @@ export function Button({
     ghost: 'text-ink shadow-[inset_0_0_0_1px_var(--color-line-2)] hover:bg-surface-2',
     danger: 'text-danger shadow-[inset_0_0_0_1px_var(--color-danger)]/60 hover:bg-danger-2',
   }[variant];
-  const box = size === 'lg' ? 'px-6 py-3 text-lg' : 'px-4 py-2.5';
+  const box = { lg: 'px-6 py-3 text-lg', md: 'px-4 py-2.5', sm: 'px-3 py-1.5 text-[13px]' }[size];
   return (
     <button
       {...props}
@@ -496,12 +496,77 @@ export function Select({
   );
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+/**
+ * حقلٌ بعنوانه.
+ *
+ * ⚠ و‎group‎ ليس زينة: ‎<label>‎ تُحيل كلَّ ضغطةٍ داخلها إلى أوّل عنصرٍ
+ * تفاعليٍّ فيها — ولو وقعت في فراغٍ بين عنصرين. فكان الضغط في الفراغ بين
+ * بنكين يُفعّل «تحديد الكل» لأنه أوّلُ زرٍّ في الحقل، فتنقلب البنوك كلُّها
+ * ولا يدري المنظّم لماذا. والعلاج أن تكون ‎<label>‎ لحقلٍ ذي عنصرٍ واحد،
+ * ومجموعةً لما سواه.
+ */
+export function Field({
+  label,
+  group,
+  children,
+}: {
+  label: string;
+  /** الحقل مجموعةُ عناصر لا عنصرٌ واحد — فلا يُلفّ بـ‎<label>‎ */
+  group?: boolean;
+  children: ReactNode;
+}) {
+  const head = <span className="mb-2 block text-sm font-bold tracking-[0.08em] text-muted">{label}</span>;
+  if (group) {
+    return (
+      <div role="group" aria-label={label} className="block">
+        {head}
+        {children}
+      </div>
+    );
+  }
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-bold tracking-[0.08em] text-muted">{label}</span>
+      {head}
       {children}
     </label>
+  );
+}
+
+/**
+ * مربّعُ تحديدٍ بهوية الموقع — مع لفظه، وكلاهما يُضغط.
+ *
+ * ولفظُه ثابتٌ لا ينقلب بين «تحديد الكل» و«إلغاء التحديد»: اللفظُ المنقلب
+ * يُقرأ أمراً حين يُقرأ خبراً، فيظنّ الناظرُ أن الزرّ عمل وحده. والمربّع
+ * يقول الحالَ والنصُّ يقول الفعل.
+ */
+export function CheckAll({
+  checked,
+  onToggle,
+  label,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={checked}
+      className="flex shrink-0 items-center gap-2 rounded-chip px-2 py-1 text-xs font-black text-signal transition hover:bg-signal-2"
+    >
+      <span
+        className={`flex size-[16px] shrink-0 items-center justify-center rounded-[3px] transition ${
+          checked
+            ? 'bg-signal text-on-signal'
+            : 'text-transparent shadow-[inset_0_0_0_1.5px_var(--color-line-2)]'
+        }`}
+        aria-hidden="true"
+      >
+        <CheckIcon size={10} strokeWidth={4} />
+      </span>
+      {label}
+    </button>
   );
 }
 
@@ -818,13 +883,34 @@ export function HoldButton({
 
 /* ════════════ خبرٌ عابر ════════════ */
 
-type Note = { id: number; text: string; tone: 'signal' | 'safe' | 'danger' };
+/*
+ * اللونُ يسبق الحرف.
+ *
+ * ثلاثُ بطاقاتٍ تُشترى في ثانيةٍ بين جولتين، فالخبرُ عنها يُقرأ بلونه قبل
+ * نصّه: صقيعٌ أزرقُ للتجميد، وذهبٌ لامعٌ للمضاعفة، وأخضرُ للوقت. ومن رأى
+ * اللونَ عرف ماذا اشترى بلا أن يقرأ.
+ */
+export type Tone = 'signal' | 'safe' | 'danger' | 'frost' | 'gold';
 
-const NOTE_SKIN: Record<Note['tone'], string> = {
+type Note = { id: number; text: string; tone: Tone; icon?: ReactNode; out?: boolean };
+
+const NOTE_SKIN: Record<Tone, string> = {
   signal: 'bg-signal text-on-signal',
   safe: 'bg-safe text-ground',
   danger: 'bg-danger text-white',
+  frost: 'skin-frost text-ground',
+  gold: 'skin-gold text-ground',
 };
+
+/* سطحُ الملمسين: اللونُ أرضيةً، والملمسُ طبقةً فوقه من الـCSS */
+const NOTE_BASE: Partial<Record<Tone, string>> = {
+  frost: 'var(--color-frost)',
+  gold: 'var(--color-gold)',
+};
+
+/* يُقرأ في ثلاثٍ ونصف — وكان في اثنتين ونصف فيمرّ قبل أن يُلتفت إليه */
+const NOTE_MS = 4200;
+const NOTE_OUT_MS = 300;
 
 let noteSeq = 0;
 const listeners = new Set<(note: Note) => void>();
@@ -839,8 +925,8 @@ const listeners = new Set<(note: Note) => void>();
  * ووحدةٌ عامّة لا حالٌ في كل صفحة: يُنادى من أي موضعٍ بلا تمرير دوالّ
  * عبر ثلاث طبقات.
  */
-export function toast(text: string, tone: Note['tone'] = 'signal') {
-  const note = { id: ++noteSeq, text, tone };
+export function toast(text: string, tone: Tone = 'signal', icon?: ReactNode) {
+  const note = { id: ++noteSeq, text, tone, icon };
   for (const listen of listeners) listen(note);
 }
 
@@ -848,10 +934,21 @@ export function toast(text: string, tone: Note['tone'] = 'signal') {
 export function Toasts() {
   const [notes, setNotes] = useState<Note[]>([]);
 
+  /*
+   * الخروجُ على مرحلتين: يُعلَّم «خارج» فتجري حركةُ الطلوع، ثم يُحذف.
+   * ولو حُذف رأساً لاختفى قطعاً — والظهورُ بانزلاقٍ والاختفاءُ ببتر يُقرأ
+   * عطباً في الصفحة لا نهايةَ خبر.
+   */
   useEffect(() => {
     const add = (note: Note) => {
       setNotes((list) => [...list.slice(-2), note]);
-      window.setTimeout(() => setNotes((list) => list.filter((n) => n.id !== note.id)), 2600);
+      window.setTimeout(() => {
+        setNotes((list) => list.map((n) => (n.id === note.id ? { ...n, out: true } : n)));
+        window.setTimeout(
+          () => setNotes((list) => list.filter((n) => n.id !== note.id)),
+          NOTE_OUT_MS,
+        );
+      }, NOTE_MS);
     };
     listeners.add(add);
     return () => {
@@ -869,9 +966,19 @@ export function Toasts() {
       {notes.map((note) => (
         <span
           key={note.id}
-          className={`toast-note max-w-full truncate rounded-chip px-4 py-2.5 text-[13.5px] font-black ${NOTE_SKIN[note.tone]}`}
+          style={
+            NOTE_BASE[note.tone] ? { backgroundColor: NOTE_BASE[note.tone] } : undefined
+          }
+          className={`toast-note flex max-w-full items-center gap-2.5 rounded-chip px-4 py-2.5 text-[13.5px] font-black ${
+            NOTE_SKIN[note.tone]
+          } ${note.out ? 'is-out' : ''}`}
         >
-          {note.text}
+          {note.icon && (
+            <span className="relative shrink-0" aria-hidden="true">
+              {note.icon}
+            </span>
+          )}
+          <span className="relative min-w-0 truncate">{note.text}</span>
         </span>
       ))}
     </div>
@@ -1032,44 +1139,45 @@ export function FormPage({
   foot?: ReactNode;
   children: ReactNode;
 }) {
+  /*
+   * عمودٌ واحدٌ في المقاسين: بطلٌ ثم ما تحته.
+   *
+   * كان عمودين على الحاسب — تعريفٌ يميناً ونموذجٌ يساراً — فيقرأ الداخلُ
+   * شاشتين مختلفتين لصفحةٍ واحدة بحسب جهازه. والصفحةُ بابٌ لا لوحة: بابٌ
+   * واحدٌ في منتصف الشاشة أصدقُ من عمودين، ويختصر على الذهن قفزةً.
+   *
+   * والعرضُ محبوسٌ بـ‎32rem‎: البابُ لا يتمدّد بتمدّد الشاشة.
+   */
   return (
     <div className="flex min-h-full flex-col">
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center gap-7 px-5 py-10 lg:flex-row lg:items-center lg:gap-16">
-        <div className="lg:flex-1">
-          <div className="flex items-baseline justify-between gap-4 lg:block">
-            <Wordmark className="text-4xl lg:text-6xl" />
-            <span className="text-sm font-bold tracking-[0.14em] text-muted lg:mt-4 lg:block">
-              {title}
-            </span>
-          </div>
-          {/*
-            السطرُ والمجرى يظهران على الجوّال أيضاً.
-            كانا ‎lg:block‎ وحدهما، فيخرج اللاعبُ على هاتفه بوردمارك وحقلين
-            في وسط شاشةٍ فارغة — وهو الجهازُ الذي تُلعب به اللعبةُ كلّها،
-            والحاسبُ استثناء. والسطرُ يقول له ما يحتاجه الآن: من أين الرمز.
-          */}
-          <p className="mt-3 max-w-[40ch] text-[14px] leading-relaxed text-muted lg:mt-4 lg:text-lg">
+      <div className="mx-auto flex w-full max-w-[32rem] flex-1 flex-col justify-center px-5 py-10">
+        <header className="text-center">
+          <Wordmark className="text-5xl sm:text-6xl" />
+          <span className="mt-2.5 block text-[12.5px] font-bold tracking-[0.14em] text-muted">
+            {title}
+          </span>
+          <p className="mx-auto mt-3.5 max-w-[38ch] text-[14px] leading-relaxed text-muted">
             {lead}
           </p>
-          <div
-            className="lane lane-bare mt-5 h-16 lg:mt-9 lg:h-20"
-            style={
-              {
-                '--state': 'var(--color-signal)',
-                '--tile': '116px',
-                '--amp': '54px',
-              } as CSSProperties
-            }
-            aria-hidden="true"
-          >
-            <span className="lane-run lane-drift" style={{ '--drift': '6s' } as CSSProperties} />
-          </div>
+        </header>
+
+        {/* المجرى تحت البطل، ذائبَ الطرفين كمجرى الصفحة التعريفية */}
+        <div
+          className="lane lane-bare rail-fade mt-6 mb-7 h-14 shrink-0 sm:h-16"
+          style={
+            {
+              '--state': 'var(--color-signal)',
+              '--tile': '116px',
+              '--amp': '48px',
+            } as CSSProperties
+          }
+          aria-hidden="true"
+        >
+          <span className="lane-run lane-drift" style={{ '--drift': '6s' } as CSSProperties} />
         </div>
 
-        <div className="w-full lg:max-w-xl lg:flex-1">
-          {children}
-          {foot}
-        </div>
+        {children}
+        {foot}
       </div>
       <Credit className="justify-center self-center px-5 pb-6" />
     </div>

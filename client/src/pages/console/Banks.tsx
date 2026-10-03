@@ -528,36 +528,6 @@ export function Shelf({
     } else flash(res.data?.error ?? 'تعذّر الإرجاع');
   };
 
-  /*
-   * استيرادُ ملفّات المستودع: الحلقةُ المقابلة لـpull-banks.
-   *
-   * القاعدةُ هي المرجع، فمن كتب أسئلةً في محرّرٍ ورفعها إلى git احتاج باباً
-   * تدخل منه. و«الناقصَ وحده» آمنٌ لا يمسّ قائماً، و«استبدالاً» يمحو ما
-   * حُرِّر من اللوحة في البنوك التي لها ملفّات — فهو بضغطٍ مطوّل.
-   */
-  const bring = async (replace: boolean) => {
-    setBusy(replace ? 'import-replace' : 'import-missing');
-    const res = await api.send<{ error?: string; banks?: { action: string }[] }>(
-      'POST',
-      'banks/import',
-      { replace },
-    );
-    setBusy(null);
-    if (!res.ok) return flash(res.data?.error ?? 'تعذّر الاستيراد');
-    const rows = res.data?.banks ?? [];
-    const tally = (name: string) => rows.filter((r) => r.action === name).length;
-    const said = [
-      tally('added') && `أُضيف ${tally('added')}`,
-      tally('replaced') && `استُبدل ${tally('replaced')}`,
-      tally('same') && `${tally('same')} مطابق`,
-      tally('kept') && `${tally('kept')} بقي كما هو`,
-    ]
-      .filter(Boolean)
-      .join(' · ');
-    flash(said || 'لا ملفّات');
-    onChanged();
-  };
-
   const forget = async (row: Trashed) => {
     setBusy(String(row.id));
     const res = await api.send<{ error?: string }>('DELETE', `trash/${row.id}`);
@@ -643,23 +613,6 @@ export function Shelf({
             </article>
           ))}
         </div>
-      </Panel>
-
-      {/*
-        واستيرادُ الناقص صعد إلى الترويسة، فلم يبقَ هنا إلا الاستبدال.
-        ولا يصعد معه: هو يمحو ما حُرِّر من اللوحة، وزرٌّ بهذا الأثر لا
-        يُوضع حيث تقع عليه الضغطةُ مروراً — ويبقى بضغطه المطوّل.
-      */}
-      <Panel
-        title="ملفّات المستودع"
-        hint="البنوك تعيش في القاعدة فلا يمحوها نشر، وملفّات server/banks نسخةٌ تُستورد منها — و«استيراد البنوك» في الترويسة يُدخل الناقص منها"
-      >
-        <HoldButton
-          bare
-          label="استبدل من الملفّات"
-          hint="يمحو ما حُرِّر من اللوحة في البنوك التي لها ملفّات، ويردّها إلى نصّ المستودع"
-          onConfirm={() => void bring(true)}
-        />
       </Panel>
 
       {rows.length > 0 && (

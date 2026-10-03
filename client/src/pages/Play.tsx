@@ -25,10 +25,8 @@ import {
   ExitIcon,
   FlatlineIcon,
   HistoryIcon,
-  MoonIcon,
   OfflineIcon,
   PulseIcon,
-  SunIcon,
 } from '../components/icons';
 import {
   CommentCard,
@@ -132,7 +130,15 @@ function clearSession() {
 
 export default function Play() {
   const [params] = useSearchParams();
-  const { theme, toggle } = useTheme('user');
+  /*
+   * اللاعبُ غامقٌ دائماً، ولا خيار.
+   *
+   * شاشتُه تُقرأ في قاعةٍ مُطفأةٍ بجانب بروجكتر، وهي أختُ شاشة العرض
+   * ولوحة المنظّم في المجلس نفسه. والمجرى — وهو اللعبةُ كلّها — مبنيٌّ
+   * على سوادٍ يُضيء عليه الخطّ. فخيارُ الفاتح بابٌ إلى شاشةٍ أسوأ، ومن
+   * فتحه في القاعة أضرّ بنفسه ولم ينفع.
+   */
+  useTheme('dark');
   const [state, setState] = useState<TeamState | null>(null);
   /* حالُ الوصل: شاشةٌ مقطوعة لا تلعب، فلا تُترك تبدو سليمة */
   const [live, setLive] = useState(() => socket.connected);
@@ -298,22 +304,23 @@ export default function Play() {
         title="انضمام لاعب"
         lead="أدخل رمز الغرفة الظاهر على شاشة القاعة، أو امسح رمزها المعروض عليها."
         foot={
-          <ul className="mt-4 grid gap-2">
+          /*
+            لوحٌ واحدٌ بثلاثة سطور، لا ثلاثةُ صناديق.
+            الصناديقُ الثلاثة تُقرأ ثلاثَ بطاقاتٍ تُنافس بطاقةَ الدخول
+            فوقها، والقواعدُ حاشيةٌ لا ندٌّ لها. والحدُّ الواحد يجمعها
+            فيُقرأ السطرُ الواحد بعد السطر.
+          */
+          <ul className="mt-4 overflow-hidden rounded-card shadow-[inset_0_0_0_1px_var(--color-line)]">
             {PRIMER.map((rule) => (
               <li
                 key={rule.head}
-                className="flex items-start gap-3 rounded-card px-4 py-3 shadow-[inset_0_0_0_1px_var(--color-line)]"
+                className="flex items-center gap-3 border-b border-line-soft px-4 py-2.5 last:border-0"
               >
-                <span className="mt-0.5 shrink-0 text-signal" aria-hidden="true">
-                  <rule.Icon size={17} />
+                <span className="shrink-0 text-signal" aria-hidden="true">
+                  <rule.Icon size={15} />
                 </span>
-                <span className="min-w-0">
-                  <b className="block text-[13.5px] leading-snug font-black text-ink-2">
-                    {rule.head}
-                  </b>
-                  <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted">
-                    {rule.text}
-                  </span>
+                <span className="min-w-0 text-[12.5px] leading-relaxed text-muted">
+                  <b className="font-black text-ink-2">{rule.head}</b> — {rule.text}
                 </span>
               </li>
             ))}
@@ -350,11 +357,6 @@ export default function Play() {
   }
 
   const actions: MenuAction[] = [
-    {
-      label: theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الغامق',
-      icon: theme === 'dark' ? <SunIcon size={17} /> : <MoonIcon size={17} />,
-      onClick: toggle,
-    },
     {
       label: 'سجل الجولات',
       icon: <HistoryIcon size={17} />,
@@ -839,8 +841,9 @@ function RoundEnd({
    */
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4">
+      {/* المسافاتُ أوسع: ستُّ بلاطاتٍ متلاصقةٍ تُقرأ كتلةً واحدة لا ستّاً */}
       <section
-        className="shrink-0 border-b border-line py-4"
+        className="shrink-0 border-b border-line py-5"
         style={stateStyle(level, state.timeMs)}
       >
         <Lane
@@ -848,12 +851,12 @@ function RoundEnd({
           flatlined={dead}
           level={level}
           size="md"
-          className="mb-3.5 h-11"
+          className="mb-4 h-11"
         />
         <h2 className="ink-state text-2xl font-black">{dead ? 'توقف نبضك' : 'نبضك مستمر'}</h2>
-        <p className="mt-1 text-sm font-medium text-muted">{lead}</p>
+        <p className="mt-1.5 text-sm font-medium text-muted">{lead}</p>
 
-        <div className="mt-3.5 grid grid-cols-2 gap-2">
+        <div className="mt-5 grid grid-cols-2 gap-2.5">
           {/* العدّاد لا يغيب وإن سكن النبض: صفرٌ خبرٌ، والشرطة لا تقول شيئاً */}
           <Readout value={formatTime(state.timeMs)} label="ثانية بقيت" danger={dead} />
           <Readout
@@ -877,7 +880,7 @@ function RoundEnd({
         </div>
       </section>
 
-      <div className="grid shrink-0 grid-cols-2 gap-1.5 py-3.5">
+      <div className="grid shrink-0 grid-cols-2 gap-2 py-5">
         <Tab on={tab === 'cards'} onClick={() => setTab('cards')}>
           البطاقات
         </Tab>
@@ -891,7 +894,7 @@ function RoundEnd({
           <>
             <Shop shop={state.shop} score={state.score} />
             {reviewCount > 0 && (
-              <div className="px-3 pt-4 pb-1">
+              <div className="px-3 pt-6 pb-1">
                 <Button variant="ghost" className="w-full" onClick={() => setTab('review')}>
                   راجِع أسئلة الجولة
                 </Button>
@@ -1042,7 +1045,7 @@ function Readout({
   note?: string;
 }) {
   return (
-    <div className="tile px-3 py-2.5">
+    <div className="tile px-3.5 py-3">
       <div
         className={`tnum text-2xl leading-none font-black ${
           danger ? 'text-danger' : signal ? 'text-signal' : ''

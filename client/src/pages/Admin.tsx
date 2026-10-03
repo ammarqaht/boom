@@ -5,6 +5,7 @@ import type { Bank, CardId, FeedItem, PublicTeam, RoomState } from '../lib/types
 import {
   Button,
   Card,
+  CheckAll,
   CheckOption,
   ErrorNote,
   Field,
@@ -206,24 +207,24 @@ export default function Admin() {
             </span>
           </Field>
 
-          <Field label="بنوك الأسئلة — واحد أو أكثر">
+          <Field group label="بنوك الأسئلة — واحد أو أكثر">
             <div className="mb-1.5 flex items-center justify-between">
               <span className="tnum text-xs font-medium text-muted">
                 {bankIds.length} من {banks.length}
               </span>
-              <MiniAction
-                onClick={() =>
+              <CheckAll
+                label="تحديد الكل"
+                checked={bankIds.length === banks.length}
+                onToggle={() =>
                   setBankIds(
                     bankIds.length === banks.length ? [banks[0].id] : banks.map((b) => b.id),
                   )
                 }
-              >
-                {bankIds.length === banks.length ? 'إلغاء التحديد' : 'تحديد الكل'}
-              </MiniAction>
+              />
             </div>
-            {/* عمودان على الحاسب: أحد عشر بنكاً في عمودٍ واحد تُطيل البطاقة
+            {/* عمودان على كل مقاس: أحد عشر بنكاً في عمودٍ واحد تُطيل البطاقة
                 حتى تخرج عن الشاشة، والعين تمسح صفّين أسرع من عمودٍ طويل */}
-            <div className="grid gap-1.5 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-1.5">
               {banks.map((bank) => (
                 <CheckOption
                   key={bank.id}
@@ -239,7 +240,8 @@ export default function Admin() {
             </p>
           </Field>
 
-          <Field label="مستوى الأسئلة">
+          {/* مجموعةٌ لا ‎<label>‎: أربعةُ أزرار، وضغطةٌ في فراغها تُفعّل أوّلها */}
+          <Field group label="مستوى الأسئلة">
             <Segmented value={difficulty} options={LEVELS} onPick={setDifficulty} />
           </Field>
           <ErrorNote>{error}</ErrorNote>
@@ -474,6 +476,16 @@ function Console({
           </span>
 
           {/*
+            رقمُ الجولة في الترويسة — حيث تُقرأ هويّةُ الغرفة كلُّها.
+            كان بلاطةً في جانب زرّ البدء تحمل معه «كم جولةً اكتملت»، وهو
+            عددٌ لا يُتّخذ عليه قرار: المنظّم يسأل «أيُّ جولةٍ نحن فيها؟»
+            لا «كم مضى؟». فصار رقماً واحداً حيث ينظر أصلاً.
+          */}
+          <span className="tnum text-[12px] font-bold text-muted sm:text-[13px]">
+            الجولة <b className="font-black text-ink">{room.round}</b>
+          </span>
+
+          {/*
            * الانقطاع يُقال صراحةً: لوحةٌ مقطوعة تبدو سليمةً تماماً — تُضغط
            * أزرارها فلا يحدث شيء ولا خبر يقول لماذا. فتُعلن الحال.
            */}
@@ -619,7 +631,6 @@ function Console({
                 <LinkRow
                   icon={<HistoryIcon size={15} />}
                   label="رابط المنظّم"
-                  hint="يحمل مفتاح التحكم — لا تشاركه مع لاعب"
                   onCopy={() => copy(adminUrl, 'رابط المنظّم')}
                 />
               </div>
@@ -717,19 +728,19 @@ function Console({
             <span className="tnum text-xs font-medium text-muted">
               {room.bankIds.length} من {banks.length}
             </span>
-            <MiniAction
-              onClick={() =>
+            <CheckAll
+              label="تحديد الكل"
+              checked={room.bankIds.length === banks.length}
+              onToggle={() =>
                 send('admin:setBanks', {
                   bankIds:
                     room.bankIds.length === banks.length ? [banks[0].id] : banks.map((b) => b.id),
                 })
               }
-            >
-              {room.bankIds.length === banks.length ? 'إلغاء التحديد' : 'تحديد الكل'}
-            </MiniAction>
+            />
           </div>
 
-          <div className="grid gap-1.5 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-1.5">
             {banks.map((bank) => (
               <CheckOption
                 key={bank.id}
@@ -983,7 +994,13 @@ function RoundPanel({
           onConfirm={onRestart}
         />
       ) : (
-      /* items-stretch: البلاطة والزرّ بطولٍ واحد مهما اختلف محتواهما */
+      /*
+       * فعلا الجولة في صفٍّ واحد: ما يبدؤها وما يُعيدها.
+       *
+       * كانت الإعادةُ سطراً تحت زرّ البدء وبجانبه بلاطةُ عدّ. وهما فعلٌ
+       * واحد في لحظةٍ واحدة — المنظّم ينظر إلى موضعٍ واحدٍ فيجد ما يفعل،
+       * لا سطرين وبلاطةَ خبر.
+       */
       <div className="flex items-stretch gap-2.5 sm:gap-3">
         {idle && (
           <Button
@@ -1014,28 +1031,15 @@ function RoundPanel({
           </Button>
         )}
 
-        <div className="flex w-[78px] shrink-0 flex-col items-center justify-center rounded-chip text-center shadow-[inset_0_0_0_1px_var(--color-line)] sm:w-[92px]">
-          <div className="tnum text-[18px] leading-none font-black sm:text-[20px]">{room.round}</div>
-          <div className="mt-1 text-[10.5px] font-medium text-muted sm:text-[11px]">
-            الجولة · {room.history.length} مكتملة
-          </div>
-        </div>
-      </div>
-      )}
-
-      {/*
-       * إعادةُ الجولة الحالية — تظهر دائماً ولا تعمل إلا والجولة موقوفة.
-       *
-       * ظاهرةٌ ليعرف المنظّم أنها هناك قبل أن يحتاجها: عطبٌ في جهاز لاعبٍ
-       * أو شبكةٍ تسقط لا يُكتشف إلا والجولة تجري، فإن لم يكن الزرُّ معروفاً
-       * ضاعت الجولة. وباهتةٌ معطَّلة لأن الإعادة قرارٌ يُتّخذ بعد أن تسكن
-       * القاعة: يوقف، ثم ينظر، ثم يعيد. ولا تظهر على لعبةٍ انتهت — لا جولةَ
-       * حاضرةً تُعاد.
-       */}
-      {!done && (
+        {/*
+         * الإعادةُ تظهر دائماً ولا تعمل إلا والجولة موقوفة: عطبُ جهازٍ أو
+         * شبكةٍ لا يُكتشف إلا والجولة تجري، فإن لم يكن الزرُّ معروفاً ضاعت
+         * الجولة. وباهتةٌ معطَّلة لأن القرار يُتّخذ بعد أن تسكن القاعة.
+         */}
         <Button
+          size="lg"
           variant="ghost"
-          className="mt-2.5 w-full"
+          className="min-w-0 flex-1"
           disabled={room.status !== 'paused'}
           title={
             room.status === 'paused'
@@ -1045,8 +1049,9 @@ function RoundPanel({
           onClick={() => onSend('admin:restartRound')}
         >
           <RestartIcon size={15} />
-          أعِد الجولة من أوّلها
+          أعِد الجولة
         </Button>
+      </div>
       )}
 
       <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-line pt-2.5 text-xs font-medium text-muted sm:mt-3 sm:pt-3">
@@ -1126,7 +1131,12 @@ function CardsPanel({
                     }`}
                   >
                     <Glyph size={14} />
-                    <span className="max-sm:hidden">{card.name}</span>
+                    {/*
+                      الاسمُ يظهر على الجوّال أيضاً: كان ‎max-sm:hidden‎ فيعود
+                      القرصُ رمزاً ورقماً حيث يُقرأ أكثر — ولوحةُ المنظّم
+                      تُدار من هاتفٍ في القاعة قبل أن تُدار من حاسب.
+                    */}
+                    <span>{card.name}</span>
                     <b className="tnum font-black">{left}</b>
                   </span>
                 );

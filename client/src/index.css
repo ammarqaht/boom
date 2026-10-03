@@ -110,11 +110,21 @@
   --color-danger: #ff3b30;
   --color-danger-2: #2a0d0c;
 
-  /* مواقع الخيارات الأربعة — ثابتة بالموقع لا بالمعنى */
-  --color-opt-1: #34c8f0;
-  --color-opt-2: #5b7fef;
-  --color-opt-3: #12a594;
-  --color-opt-4: #e2547e;
+  /*
+   * مواقع الخيارات الأربعة — ثابتةٌ بالموقع لا بالمعنى.
+   *
+   * وكانت أربعةَ ألوانٍ متفرّقة: سماويٌّ وأزرقُ وأخضرُ مزرقٌّ وزهريّ. وهي
+   * تخالف قاعدةَ النظام كلَّها — «لونُ الهوية واحد، والحالاتُ وظيفيةٌ لا
+   * تُستعمل للهوية» — فتصير الشاشةُ قوسَ قزحٍ لا مِرقاباً، ويُقرأ الزهريُّ
+   * حالةَ خطأٍ وهو موضعٌ لا غير.
+   *
+   * فصارت أربعَ درجاتٍ من السماويّ نفسه: من فاتحه إلى عميقه. تتمايز
+   * للعين فيُقال «الثالث» ويُعرف، ولا تُدخل لوناً غريباً على الهوية.
+   */
+  --color-opt-1: #7fe4ff;
+  --color-opt-2: #4ad5ff;
+  --color-opt-3: #2baedd;
+  --color-opt-4: #1b86ae;
 
   /* نصفا قطر لا غير: الشارات والحقول، ثم المجاري والبطاقات */
   --radius-chip: 8px;
@@ -164,10 +174,10 @@
   --color-danger-2: #fbeceb;
   --color-danger-ink: #b3261e;
 
-  --color-opt-1: #0e93b8;
-  --color-opt-2: #3f5fd0;
-  --color-opt-3: #0e8c7e;
-  --color-opt-4: #cf3d69;
+  --color-opt-1: #22a6c9;
+  --color-opt-2: #0e93b8;
+  --color-opt-3: #0b7795;
+  --color-opt-4: #075c76;
 }
 
 /* شبكة الجهاز وأزمنة الانتقال — متغيرات عادية لا أدوات Tailwind */
@@ -985,6 +995,17 @@ textarea {
  *
  * والنصُّ وحقلُ الرمز يبقيان في الحاوية: المقروءُ له عرضٌ يُقرأ به.
  */
+/*
+ * ذوبانُ الطرفين — قاعدةٌ واحدة لكل مجرىً زينيّ.
+ *
+ * خطٌّ ينتهي فجأةً يُقرأ عنصراً مبتوراً، وذائباً يُقرأ مجرىً يمرّ. وكانت
+ * في ‎.hero-rail‎ وحدها، فاستُخرجت ليأخذها مجرى صفحات الدخول أيضاً.
+ */
+.rail-fade {
+  -webkit-mask-image: linear-gradient(to left, transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(to left, transparent, #000 14%, #000 86%, transparent);
+}
+
 .hero-rail {
   width: 100vw;
   margin-inline: calc(50% - 50vw);
@@ -1807,24 +1828,109 @@ textarea {
   background: color-mix(in srgb, var(--color-danger) 26%, transparent);
 }
 
-/* خبرٌ عابر: ينزل من الحافّة ويستقرّ — ومن طلب سكوناً رآه ساكناً */
+/*
+ * ══════════════ خبرٌ عابر ══════════════
+ *
+ * ينزل من الحافّة ويستقرّ، ثم يرتفع ويذوب. والطلوعُ مقصود: الظهورُ
+ * بانزلاقٍ والاختفاءُ بقطعٍ يُقرأ عطباً — والحركةُ تُقفل كما تُفتح.
+ */
 @keyframes toast-drop {
   from {
     opacity: 0;
-    transform: translateY(-12px);
+    transform: translateY(-14px) scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes toast-lift {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.96);
   }
 }
 .toast-note {
-  animation: toast-drop 0.22s var(--ease-monitor) both;
-  box-shadow: 0 10px 30px rgb(0 0 0 / 0.3);
+  position: relative;
+  overflow: hidden;
+  animation: toast-drop 0.26s var(--ease-monitor) both;
+  box-shadow: 0 12px 34px rgb(0 0 0 / 0.34);
+}
+.toast-note.is-out {
+  animation: toast-lift 0.3s var(--ease-monitor) both;
 }
 @media (prefers-reduced-motion: reduce) {
-  .toast-note {
+  .toast-note,
+  .toast-note.is-out {
     animation: none;
+  }
+  .toast-note.is-out {
+    opacity: 0;
+  }
+}
+
+/*
+ * ══════════════ ملامسُ البطاقات ══════════════
+ *
+ * ثلاثُ بطاقاتٍ تُقرأ بالنظر قبل أن تُقرأ بالحرف: اللاعبُ في جولةٍ وبين
+ * يديه ثوانٍ، فإن لزمه أن يقرأ ثلاثةَ أسطرٍ ليفرّق بينها فقد خسرها.
+ * فلكلٍّ لونُها وملمسُها: صقيعٌ للتجميد، وبريقٌ للمضاعفة، وموجةٌ للوقت.
+ *
+ * وكلُّها طبقاتُ خلفيةٍ لا عناصر: لا تُضيف عقدةً إلى الشجرة ولا تُعاد
+ * رسمُها، وتعمل على أيّ سطحٍ وُضعت عليه.
+ */
+.skin-frost {
+  background-image:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-frost) 22%, transparent) 0%,
+      transparent 46%
+    ),
+    linear-gradient(
+      -45deg,
+      color-mix(in srgb, var(--color-frost) 14%, transparent) 0%,
+      transparent 38%
+    ),
+    repeating-linear-gradient(
+      60deg,
+      color-mix(in srgb, var(--color-frost) 9%, transparent) 0 1px,
+      transparent 1px 11px
+    );
+}
+.skin-gold {
+  background-image: linear-gradient(
+    110deg,
+    transparent 28%,
+    color-mix(in srgb, var(--color-gold) 30%, transparent) 46%,
+    color-mix(in srgb, var(--color-gold) 10%, transparent) 56%,
+    transparent 72%
+  );
+  background-size: 260% 100%;
+  animation: gold-sweep 2.8s var(--ease-monitor) infinite;
+}
+@keyframes gold-sweep {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+.skin-time {
+  background-image: radial-gradient(
+    120% 150% at 92% 50%,
+    color-mix(in srgb, var(--color-safe) 20%, transparent),
+    transparent 58%
+  );
+}
+@media (prefers-reduced-motion: reduce) {
+  .skin-gold {
+    animation: none;
+    background-position: 40% 0;
   }
 }
 
