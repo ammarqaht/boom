@@ -139,7 +139,8 @@ export function useTheme(mode: Theme | 'user') {
     const next = mode === 'user' ? theme : mode;
     document.documentElement.dataset.theme = next;
     const meta = document.querySelector('meta[name="theme-color"]');
-    meta?.setAttribute('content', next === 'light' ? '#F6F8F9' : '#060B12');
+    /* يطابق ‎--color-ground‎ في الوضعين — ولو تخلّف ظهر شريطٌ بلونٍ غريب */
+    meta?.setAttribute('content', next === 'light' ? '#F6F8F9' : '#0F1821');
   }, [mode, theme]);
 
   const toggle = () => {
@@ -1022,15 +1023,18 @@ export function Credit({ className = '' }: { className?: string }) {
 export function FormPage({
   title,
   lead,
+  foot,
   children,
 }: {
   title: string;
   lead: string;
+  /** ما يُوضع تحت النموذج — تمهيدٌ أو تنبيه، تخصّه الصفحةُ لا الإطار */
+  foot?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="flex min-h-full flex-col">
-      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center gap-9 px-5 py-10 lg:flex-row lg:items-center lg:gap-16">
+      <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center gap-7 px-5 py-10 lg:flex-row lg:items-center lg:gap-16">
         <div className="lg:flex-1">
           <div className="flex items-baseline justify-between gap-4 lg:block">
             <Wordmark className="text-4xl lg:text-6xl" />
@@ -1038,11 +1042,17 @@ export function FormPage({
               {title}
             </span>
           </div>
-          <p className="mt-4 hidden max-w-[40ch] leading-relaxed text-muted lg:block lg:text-lg">
+          {/*
+            السطرُ والمجرى يظهران على الجوّال أيضاً.
+            كانا ‎lg:block‎ وحدهما، فيخرج اللاعبُ على هاتفه بوردمارك وحقلين
+            في وسط شاشةٍ فارغة — وهو الجهازُ الذي تُلعب به اللعبةُ كلّها،
+            والحاسبُ استثناء. والسطرُ يقول له ما يحتاجه الآن: من أين الرمز.
+          */}
+          <p className="mt-3 max-w-[40ch] text-[14px] leading-relaxed text-muted lg:mt-4 lg:text-lg">
             {lead}
           </p>
           <div
-            className="lane lane-bare mt-9 hidden h-20 lg:block"
+            className="lane lane-bare mt-5 h-16 lg:mt-9 lg:h-20"
             style={
               {
                 '--state': 'var(--color-signal)',
@@ -1056,7 +1066,10 @@ export function FormPage({
           </div>
         </div>
 
-        <div className="w-full lg:max-w-xl lg:flex-1">{children}</div>
+        <div className="w-full lg:max-w-xl lg:flex-1">
+          {children}
+          {foot}
+        </div>
       </div>
       <Credit className="justify-center self-center px-5 pb-6" />
     </div>

@@ -20,7 +20,16 @@ import {
   useTheme,
   type MenuAction,
 } from '../components/ui';
-import { ExitIcon, HistoryIcon, MoonIcon, OfflineIcon, SunIcon } from '../components/icons';
+import {
+  CheckIcon,
+  ExitIcon,
+  FlatlineIcon,
+  HistoryIcon,
+  MoonIcon,
+  OfflineIcon,
+  PulseIcon,
+  SunIcon,
+} from '../components/icons';
 import {
   CommentCard,
   CountdownGate,
@@ -38,6 +47,37 @@ import { Shop, FreezeOverlay } from '../components/Shop';
 import { playBeat, playCorrect, playFlatline, playWrong, unlockAudio } from '../lib/sound';
 
 const SESSION_KEY = 'nabda:team';
+
+/*
+ * ثلاثُ قواعد تحت باب الدخول.
+ *
+ * من يصل هذه الشاشة أكثرُه لم ير الصفحة التعريفية: الرمزُ يُملى عليه في
+ * القاعة أو يُمسح من الشاشة الكبيرة، فيقفز إلى /play مباشرة. ثم تبدأ
+ * الجولةُ وعنده ثلاثون ثانية ليفهم ويجيب معاً.
+ *
+ * فثلاثةُ أسطرٍ تُقرأ في عشر ثوانٍ وهو ينتظر المنظّم — لا شرحٌ طويل:
+ * الباب هو الغرض، وهذا ما يملأ ما حوله بما ينفع.
+ *
+ * وبلا أرقام: المنظّم يبدّل الثواني والزيادة والخصم من لوحته، فرقمٌ
+ * مكتوبٌ هنا قد يكذب.
+ */
+const PRIMER = [
+  {
+    Icon: PulseIcon,
+    head: 'لكلٍّ نبضُه',
+    text: 'عدّادٌ يجري وحده أمام القاعة، وأنت تجيب',
+  },
+  {
+    Icon: CheckIcon,
+    head: 'الصواب يمدّه والخطأ يقصّه',
+    text: 'فالسرعةُ وحدها لا تكفي',
+  },
+  {
+    Icon: FlatlineIcon,
+    head: 'أوّلُ نبضٍ يسكن يُنهي الجولة',
+    text: 'على الجميع لا على صاحبه وحده',
+  },
+];
 
 /** كم يبقى الصواب مُضاءً بعد الخطأ — أقلّ من ثانية فالوقت يجري */
 const REVEAL_MS = 900;
@@ -256,7 +296,29 @@ export default function Play() {
     return (
       <FormPage
         title="انضمام لاعب"
-        lead="أدخل رمز الغرفة الظاهر على شاشة القاعة. جولتك ثلاثون ثانية لا أكثر — والإجابة الصحيحة وحدها تُطيلها."
+        lead="أدخل رمز الغرفة الظاهر على شاشة القاعة، أو امسح رمزها المعروض عليها."
+        foot={
+          <ul className="mt-4 grid gap-2">
+            {PRIMER.map((rule) => (
+              <li
+                key={rule.head}
+                className="flex items-start gap-3 rounded-card px-4 py-3 shadow-[inset_0_0_0_1px_var(--color-line)]"
+              >
+                <span className="mt-0.5 shrink-0 text-signal" aria-hidden="true">
+                  <rule.Icon size={17} />
+                </span>
+                <span className="min-w-0">
+                  <b className="block text-[13.5px] leading-snug font-black text-ink-2">
+                    {rule.head}
+                  </b>
+                  <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted">
+                    {rule.text}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        }
       >
         <Card className="grid gap-4">
           <Field label="رمز الغرفة">

@@ -64,8 +64,15 @@ const SESSION_KEY = 'nabda:admin';
 type Session = { code: string; adminKey: string };
 
 export default function Admin() {
-  // المنظّم يجلس في ضوء ويحتاج قراءة سريعة لا دراما — هذه اللوحة فاتحة دائماً
-  useTheme('light');
+  /*
+   * غامقةٌ كشاشة اللاعب والعرض.
+   *
+   * كانت فاتحةً على أن المنظّم «يجلس في ضوء»، وهو يجلس في قاعةٍ مُطفأةٍ
+   * بجانب البروجكتر: فلوحٌ أبيضُ هناك مصباحٌ في الوجه، ويُحرق نظرَه كلّما
+   * رفعه إلى الشاشة الكبيرة وأعاده. وهو مع العرض واللاعب شاشةٌ واحدة في
+   * مجلسٍ واحد، فلا تُخالفهما.
+   */
+  useTheme('dark');
   const [params] = useSearchParams();
   const [banks, setBanks] = useState<Bank[]>([]);
   const [room, setRoom] = useState<RoomState | null>(null);
