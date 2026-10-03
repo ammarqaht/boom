@@ -177,7 +177,8 @@ export function Button({
   const skin = {
     primary: 'bg-action text-on-action hover:brightness-110',
     ghost: 'text-ink shadow-[inset_0_0_0_1px_var(--color-line-2)] hover:bg-surface-2',
-    danger: 'text-danger shadow-[inset_0_0_0_1px_var(--color-danger)]/60 hover:bg-danger-2',
+    danger:
+      'text-danger shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_45%,transparent)] hover:bg-danger-2',
   }[variant];
   const box = { lg: 'px-6 py-3 text-lg', md: 'px-4 py-2.5', sm: 'px-3 py-1.5 text-[13px]' }[size];
   return (
@@ -715,6 +716,15 @@ export interface MenuAction {
  * قائمة الخيارات — ومكان الأفعال الخطرة الوحيد.
  * إخفاؤها عن الشاشة يمنع الضغط بالخطأ، والضغط المستمر يمنعه مرة أخرى.
  */
+/**
+ * مقاسُ أقراص الترويسة.
+ *
+ * الترويسةُ صفٌّ واحد، وما استوى فيها ارتفاعاً وحشواً يُقرأ صفّاً؛ وما
+ * اختلف يُقرأ أحدُهما أهمَّ من الآخر بغير قصد. فالمقاسُ هنا ثابتٌ يتشاركه
+ * «خيارات» و«إنهاء» ومن بعدهما.
+ */
+export const CHIP_BTN = 'h-9 shrink-0 gap-1.5 px-2.5 sm:gap-2 sm:px-3.5';
+
 export function Menu({ actions }: { actions: MenuAction[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -741,14 +751,15 @@ export function Menu({ actions }: { actions: MenuAction[] }) {
       {/* على الجوال تكفي الأيقونة: الترويسة ضيّقة والكلمة تُزاحم ما هو أهم */}
       <Button
         variant="ghost"
-        className="px-3 sm:px-4"
+        size="sm"
+        className={CHIP_BTN}
         aria-label="خيارات"
         title="خيارات"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <MenuIcon size={17} />
+        <MenuIcon size={15} />
         <span className="hidden sm:inline">خيارات</span>
       </Button>
 

@@ -4,6 +4,7 @@ import { socket, ask } from '../lib/socket';
 import type { Bank, CardId, FeedItem, PublicTeam, RoomState } from '../lib/types';
 import {
   Button,
+  CHIP_BTN,
   Card,
   CheckAll,
   ErrorNote,
@@ -110,8 +111,12 @@ function BankPicker({
               type="button"
               onClick={() => onToggle(bank.id)}
               aria-pressed={on}
-              /* أضيقُ على الجوّال: قرصان في السطر خيرٌ من واحدٍ وفراغٍ بجانبه */
-              className={`flex items-center gap-2 rounded-chip px-3 py-2 text-[13px] font-bold transition sm:gap-2.5 sm:px-3.5 sm:py-2.5 sm:text-[14px] ${
+              /*
+                grow: القرصُ يأخذ قدرَ اسمه ثم يقتسم فضلةَ السطر مع جيرانه،
+                فينتهي كلُّ سطرٍ عند الحدّ ولا تبقى حافّةٌ مُشرَّمة. والنصّ
+                على حاله — الذي كبُر هو الهدفُ لا الحرف.
+              */
+              className={`flex grow basis-auto items-center gap-2 rounded-chip px-3 py-2.5 text-[13px] font-bold transition sm:gap-2.5 sm:px-4 sm:py-3.5 sm:text-[14px] ${
                 on
                   ? 'bg-signal-2 text-ink shadow-[inset_0_0_0_1.5px_var(--color-signal)]'
                   : 'text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] hover:bg-surface-2'
@@ -127,7 +132,7 @@ function BankPicker({
               >
                 <CheckIcon size={10} strokeWidth={4} />
               </span>
-              <span className="whitespace-nowrap">{bank.name}</span>
+              <span className="grow text-start whitespace-nowrap">{bank.name}</span>
               <span
                 className={`tnum text-[11.5px] font-medium ${on ? 'text-signal-ink' : 'text-faint'}`}
               >
@@ -566,14 +571,15 @@ function Console({
               من ضغطٍ مطوّلٍ لا يقول ماذا سيقع.
             */}
             {room.status !== 'finished' && (
-              <button
-                type="button"
+              <Button
+                variant="danger"
+                size="sm"
+                className={CHIP_BTN}
                 onClick={() => setConfirmEnd(true)}
-                className="flex h-9 shrink-0 items-center gap-1.5 rounded-chip px-2.5 text-[13px] font-bold text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line-2)] transition hover:bg-surface-2 sm:gap-2 sm:px-3.5"
               >
                 <TrophyIcon size={15} />
                 إنهاء
-              </button>
+              </Button>
             )}
 
             <Menu actions={actions} />
@@ -806,14 +812,15 @@ function Console({
               تنتهي اللعبة الآن ويظهر الترتيب النهائي على شاشة العرض وعند اللاعبين جميعاً.
             </p>
 
-            <ul className="grid gap-2 rounded-card px-4 py-3.5 text-[13.5px] leading-relaxed font-medium text-muted shadow-[inset_0_0_0_1px_var(--color-line)]">
-              <li>
-                الجولة الحالية تُغلق، ولا جولةَ بعدها —{' '}
-                <b className="font-black text-ink-2">إلا ببدءٍ من جديد</b>.
-              </li>
-              <li>النقاط والسجلّ يبقيان كما هما في سجلّ المالك.</li>
-              <li>الغرفة تبقى في السجلّ، ويمكن حذفها بعدها من لوحة المالك.</li>
-            </ul>
+            {/*
+              تنبيهٌ واحد: ما يقع الآن ولا يُستردّ. وما وراءَه — مصيرُ السجلّ
+              والغرفة — شأنُ المالك لا المنظّم، ومن قرأ في لحظة القرار ما لا
+              يخصّه لم يقرأ ما يخصّه.
+            */}
+            <p className="rounded-card px-4 py-3.5 text-[13.5px] leading-relaxed font-medium text-muted shadow-[inset_0_0_0_1px_var(--color-line)]">
+              الجولة الحالية تُغلق، ولا جولةَ بعدها —{' '}
+              <b className="font-black text-ink-2">إلا ببدءٍ من جديد</b>.
+            </p>
 
             <div className="flex flex-wrap items-center gap-2.5">
               <Button
