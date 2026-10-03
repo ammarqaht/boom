@@ -6,7 +6,6 @@ import {
   Button,
   Card,
   CheckAll,
-  CheckOption,
   ErrorNote,
   Field,
   HoldButton,
@@ -61,6 +60,86 @@ import {
 } from '../components/game';
 
 const SESSION_KEY = 'nabda:admin';
+
+/**
+ * مُنتقي البنوك — سحابةُ أقراصٍ تلتفّ، لا شبكةٌ ذاتُ عمودين.
+ *
+ * ولماذا تُركت الشبكة؟ أسماءُ البنوك عربيةٌ مختلفةُ الأطوال: «العلوم»
+ * خمسةُ أحرف و«الصحابة رضي الله عنهم» أحدٌ وعشرون. والشبكةُ تفرض على
+ * الاثنين خليّةً واحدة: فيُقَصّ الطويلُ على ثلاثة أسطر، ويبقى تحت القصير
+ * فراغٌ ميّت — وهذا بعينه ما يُقرأ «تراصّاً». والقرصُ يأخذ قدرَ اسمه
+ * ويلتفّ إلى السطر التالي من نفسه، فيستوي الإيقاع.
+ *
+ * والخزّانُ في صدر اللوح لا في ذيله: هو الرقمُ الذي يُبنى عليه القرار —
+ * «أيكفي ما اخترتُ لعشر جولات؟» — فيُرى وهو ينمو مع كل ضغطة، لا بعد أن
+ * يفرغ المنظّم من الاختيار.
+ */
+function BankPicker({
+  banks,
+  chosen,
+  onToggle,
+  onAll,
+}: {
+  banks: Bank[];
+  chosen: string[];
+  onToggle: (id: string) => void;
+  onAll: () => void;
+}) {
+  const total = banks.filter((b) => chosen.includes(b.id)).reduce((sum, b) => sum + b.count, 0);
+
+  return (
+    <>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
+        <span className="tnum text-[13px] font-medium text-muted">
+          <b className="font-black text-ink">{chosen.length}</b> من {banks.length} بنكاً ·{' '}
+          <b className="font-black text-signal">{total}</b> سؤال في الخزّان
+        </span>
+        <CheckAll
+          label="تحديد الكل"
+          checked={chosen.length === banks.length}
+          onToggle={onAll}
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {banks.map((bank) => {
+          const on = chosen.includes(bank.id);
+          return (
+            <button
+              key={bank.id}
+              type="button"
+              onClick={() => onToggle(bank.id)}
+              aria-pressed={on}
+              /* أضيقُ على الجوّال: قرصان في السطر خيرٌ من واحدٍ وفراغٍ بجانبه */
+              className={`flex items-center gap-2 rounded-chip px-3 py-2 text-[13px] font-bold transition sm:gap-2.5 sm:px-3.5 sm:py-2.5 sm:text-[14px] ${
+                on
+                  ? 'bg-signal-2 text-ink shadow-[inset_0_0_0_1.5px_var(--color-signal)]'
+                  : 'text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] hover:bg-surface-2'
+              }`}
+            >
+              <span
+                className={`flex size-[17px] shrink-0 items-center justify-center rounded-[3px] transition ${
+                  on
+                    ? 'bg-signal text-on-signal'
+                    : 'text-transparent shadow-[inset_0_0_0_1.5px_var(--color-line-2)]'
+                }`}
+                aria-hidden="true"
+              >
+                <CheckIcon size={10} strokeWidth={4} />
+              </span>
+              <span className="whitespace-nowrap">{bank.name}</span>
+              <span
+                className={`tnum text-[11.5px] font-medium ${on ? 'text-signal-ink' : 'text-faint'}`}
+              >
+                {bank.count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
 
 type Session = { code: string; adminKey: string };
 
@@ -186,10 +265,10 @@ export default function Admin() {
       setBankIds((current) =>
         current.includes(id) ? current.filter((x) => x !== id) : [...current, id],
       );
-    const total = banks.filter((b) => bankIds.includes(b.id)).reduce((sum, b) => sum + b.count, 0);
 
     return (
       <FormPage
+        wide
         title="غرفة جديدة"
         lead="اختر بنوك الأسئلة الآن — وتُبدَّل لاحقاً من «خيارات». أما ثوابت الجولة فمضبوطة: ثلاثون ثانية، وخمس للصواب، وثلاث للخطأ."
       >
@@ -208,35 +287,16 @@ export default function Admin() {
           </Field>
 
           <Field group label="بنوك الأسئلة — واحد أو أكثر">
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="tnum text-xs font-medium text-muted">
-                {bankIds.length} من {banks.length}
-              </span>
-              <CheckAll
-                label="تحديد الكل"
-                checked={bankIds.length === banks.length}
-                onToggle={() =>
-                  setBankIds(
-                    bankIds.length === banks.length ? [banks[0].id] : banks.map((b) => b.id),
-                  )
-                }
-              />
-            </div>
-            {/* عمودان على كل مقاس: أحد عشر بنكاً في عمودٍ واحد تُطيل البطاقة
-                حتى تخرج عن الشاشة، والعين تمسح صفّين أسرع من عمودٍ طويل */}
-            <div className="grid grid-cols-2 gap-1.5">
-              {banks.map((bank) => (
-                <CheckOption
-                  key={bank.id}
-                  checked={bankIds.includes(bank.id)}
-                  onToggle={() => toggle(bank.id)}
-                  title={bank.name}
-                  hint={`${bank.count}`}
-                />
-              ))}
-            </div>
-            <p className="tnum mt-2 text-sm text-muted">
-              تُخلط أسئلة البنوك المختارة وتُعرض عشوائياً — المجموع {total} سؤال
+            <BankPicker
+              banks={banks}
+              chosen={bankIds}
+              onToggle={toggle}
+              onAll={() =>
+                setBankIds(bankIds.length === banks.length ? [banks[0].id] : banks.map((b) => b.id))
+              }
+            />
+            <p className="mt-3 text-[13px] leading-relaxed text-muted">
+              تُخلط أسئلة البنوك المختارة وتُعرض عشوائياً — ولا يُعاد سؤالٌ على لاعبٍ رآه.
             </p>
           </Field>
 
@@ -309,6 +369,8 @@ function Console({
   const [note, setNote] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [showBanks, setShowBanks] = useState(false);
+  /* نافذةُ تأكيد الإنهاء — آخرُ فعلٍ في الجلسة، فيُقرأ قبل أن يقع */
+  const [confirmEnd, setConfirmEnd] = useState(false);
 
   const key = (JSON.parse(localStorage.getItem(SESSION_KEY) ?? '{}') as Partial<Session>).adminKey;
   const playUrl = `${location.origin}/play?code=${room.code}`;
@@ -423,12 +485,6 @@ function Console({
       onClick: () => send('admin:toggleBlur'),
     },
     { label: 'بنوك الأسئلة', icon: <CardsIcon size={17} />, onClick: () => setShowBanks(true) },
-    {
-      label: 'إنهاء اللعبة وعرض الأوائل',
-      icon: <TrophyIcon size={17} />,
-      hold: 'تنتهي اللعبة ويظهر الترتيب النهائي على كل الشاشات.',
-      onClick: () => send('admin:finishGame'),
-    },
   ];
 
   return (
@@ -497,10 +553,29 @@ function Console({
           )}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2.5">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
             {note && (
               <span className="hidden text-[13px] font-bold text-signal-ink sm:block">{note}</span>
             )}
+
+            {/*
+              الإنهاءُ على الشاشة لا في القائمة.
+              كان سطراً فيها بضغطٍ مطوّل، فيُبحث عنه في آخر المسابقة والقاعةُ
+              تنتظر. وهو آخرُ فعلٍ في كل جلسة — يُفعل مرّةً ويُقصد قصداً —
+              فمكانُه حيث تقع العين. والحراسةُ انتقلت إلى نافذةٍ تُقرأ: أصدقُ
+              من ضغطٍ مطوّلٍ لا يقول ماذا سيقع.
+            */}
+            {room.status !== 'finished' && (
+              <button
+                type="button"
+                onClick={() => setConfirmEnd(true)}
+                className="flex h-9 shrink-0 items-center gap-1.5 rounded-chip px-2.5 text-[13px] font-bold text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line-2)] transition hover:bg-surface-2 sm:gap-2 sm:px-3.5"
+              >
+                <TrophyIcon size={15} />
+                إنهاء
+              </button>
+            )}
+
             <Menu actions={actions} />
           </div>
         </div>
@@ -715,6 +790,49 @@ function Console({
       <CountdownGate ms={room.countdownMs} on={room.status === 'countdown'} />
       {showHistory && <HistoryModal history={room.history} onClose={() => setShowHistory(false)} />}
 
+      {/*
+        تأكيدُ الإنهاء: يُقال ما يقع، لا «هل أنت متأكّد؟».
+        فالسؤالُ المجرّد لا يُضيف علماً — والمنظّم يحتاج أن يعرف أن النقاط
+        تبقى وأن الشاشات كلَّها ستتبدّل، لا أن يُسأل عن يقينه.
+      */}
+      {confirmEnd && (
+        <Modal
+          title="إنهاء المسابقة"
+          icon={<TrophyIcon size={20} className="text-signal" />}
+          onClose={() => setConfirmEnd(false)}
+        >
+          <div className="grid gap-4">
+            <p className="text-[15px] leading-relaxed text-ink-2">
+              تنتهي اللعبة الآن ويظهر الترتيب النهائي على شاشة العرض وعند اللاعبين جميعاً.
+            </p>
+
+            <ul className="grid gap-2 rounded-card px-4 py-3.5 text-[13.5px] leading-relaxed font-medium text-muted shadow-[inset_0_0_0_1px_var(--color-line)]">
+              <li>
+                الجولة الحالية تُغلق، ولا جولةَ بعدها —{' '}
+                <b className="font-black text-ink-2">إلا ببدءٍ من جديد</b>.
+              </li>
+              <li>النقاط والسجلّ يبقيان كما هما في سجلّ المالك.</li>
+              <li>الغرفة تبقى في السجلّ، ويمكن حذفها بعدها من لوحة المالك.</li>
+            </ul>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Button
+                onClick={() => {
+                  send('admin:finishGame');
+                  setConfirmEnd(false);
+                }}
+              >
+                <TrophyIcon size={16} />
+                أنهِ واعرض الأوائل
+              </Button>
+              <Button variant="ghost" onClick={() => setConfirmEnd(false)}>
+                إلغاء
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {showBanks && (
         <Modal title="بنوك الأسئلة ومستواها" onClose={() => setShowBanks(false)}>
           <div className="mb-4">
@@ -724,37 +842,19 @@ function Console({
             <Segmented value={room.difficulty as Level} options={LEVELS} onPick={setLevel} />
           </div>
 
-          <div className="mb-1.5 flex items-center justify-between">
-            <span className="tnum text-xs font-medium text-muted">
-              {room.bankIds.length} من {banks.length}
-            </span>
-            <CheckAll
-              label="تحديد الكل"
-              checked={room.bankIds.length === banks.length}
-              onToggle={() =>
-                send('admin:setBanks', {
-                  bankIds:
-                    room.bankIds.length === banks.length ? [banks[0].id] : banks.map((b) => b.id),
-                })
-              }
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-1.5">
-            {banks.map((bank) => (
-              <CheckOption
-                key={bank.id}
-                checked={room.bankIds.includes(bank.id)}
-                onToggle={() => toggleBank(bank.id)}
-                title={bank.name}
-                hint={`${bank.count} سؤال`}
-              />
-            ))}
-          </div>
-          <p className="tnum mt-3 text-sm text-muted">
-            المختار الآن{' '}
-            {banks.filter((b) => room.bankIds.includes(b.id)).reduce((n, b) => n + b.count, 0)} سؤال
-            — تُخلط وتُعرض عشوائياً
+          <BankPicker
+            banks={banks}
+            chosen={room.bankIds}
+            onToggle={toggleBank}
+            onAll={() =>
+              send('admin:setBanks', {
+                bankIds:
+                  room.bankIds.length === banks.length ? [banks[0].id] : banks.map((b) => b.id),
+              })
+            }
+          />
+          <p className="mt-3 text-[13px] leading-relaxed text-muted">
+            يُبدَّل الخزّان والجولة جارية — وما أُخذ من أسئلةٍ لا يعود.
           </p>
         </Modal>
       )}

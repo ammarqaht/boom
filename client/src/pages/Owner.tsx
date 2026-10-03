@@ -257,8 +257,11 @@ export default function Owner() {
   /* محوُ سجلّ المحرَّرة كلّه — الأرشيف أجمع لا ما يعرضه المرشّح */
   const wipeEdits = async () => {
     const res = await api.send<{ gone?: number }>('DELETE', 'edits');
-    if (!res.ok) return toast('تعذّر محو السجلّ', 'danger');
-    toast(`مُحي السجلّ — ${say(res.data?.gone ?? 0, 'question')}`, 'safe');
+    if (!res.ok) return toast('تعذّر محو السجلّ', { tone: 'danger' });
+    toast('مُحي سجلّ المحرَّرة', {
+      tone: 'safe',
+      note: `${say(res.data?.gone ?? 0, 'question')} ذهبت نسخُها`,
+    });
     refresh();
   };
 
@@ -277,9 +280,12 @@ export default function Owner() {
       { replace: false },
     );
     setImporting(false);
-    if (!res.ok) return toast(res.data?.error ?? 'تعذّر الاستيراد', 'danger');
+    if (!res.ok) return toast(res.data?.error ?? 'تعذّر الاستيراد', { tone: 'danger' });
     const added = (res.data?.banks ?? []).filter((row) => row.action === 'added').length;
-    toast(added ? `أُدخل ${say(added, 'bank')} من الملفّات` : 'لا بنكَ ناقصاً', added ? 'safe' : 'signal');
+    toast(added ? `أُدخل ${say(added, 'bank')}` : 'لا بنكَ ناقصاً', {
+      tone: added ? 'safe' : 'signal',
+      note: added ? 'من ملفّات المستودع إلى القاعدة' : 'كلُّ ملفٍّ في المستودع له بنكٌ في القاعدة',
+    });
     refresh();
   };
 

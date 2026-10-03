@@ -121,10 +121,10 @@
    * فصارت أربعَ درجاتٍ من السماويّ نفسه: من فاتحه إلى عميقه. تتمايز
    * للعين فيُقال «الثالث» ويُعرف، ولا تُدخل لوناً غريباً على الهوية.
    */
-  --color-opt-1: #7fe4ff;
-  --color-opt-2: #4ad5ff;
-  --color-opt-3: #2baedd;
-  --color-opt-4: #1b86ae;
+  --color-opt-1: #d4f6ff;
+  --color-opt-2: #6adcff;
+  --color-opt-3: #28a6dc;
+  --color-opt-4: #1878a3;
 
   /* نصفا قطر لا غير: الشارات والحقول، ثم المجاري والبطاقات */
   --radius-chip: 8px;
@@ -174,10 +174,10 @@
   --color-danger-2: #fbeceb;
   --color-danger-ink: #b3261e;
 
-  --color-opt-1: #22a6c9;
-  --color-opt-2: #0e93b8;
-  --color-opt-3: #0b7795;
-  --color-opt-4: #075c76;
+  --color-opt-1: #7ad0e8;
+  --color-opt-2: #22a6c9;
+  --color-opt-3: #0d7490;
+  --color-opt-4: #084a62;
 }
 
 /* شبكة الجهاز وأزمنة الانتقال — متغيرات عادية لا أدوات Tailwind */
@@ -1521,9 +1521,15 @@ textarea {
   align-items: center;
   text-align: start;
   border-radius: var(--radius-card);
-  /* السطح طبيعيّ كبقية البطاقات — اللون في الحدّ وحده */
+  /*
+   * السطح طبيعيّ كبقية البطاقات — اللون في الحدّ وحده.
+   *
+   * وبخمسةٍ وثمانين بالمئة لا بستّين: الخلطُ بالشفّاف يسحب الدرجاتِ
+   * الأربعَ إلى بعضها، فيصير ما بُني متمايزاً في الرموز متقارباً على
+   * الشاشة. والحدُّ يحمل التمييزَ كلَّه فلا يُخفَّف.
+   */
   background: var(--color-surface);
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--opt) 60%, transparent);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--opt) 85%, transparent);
   transition:
     background-color var(--t-tap) var(--ease-monitor),
     box-shadow var(--t-tap) var(--ease-monitor),
@@ -1854,18 +1860,79 @@ textarea {
     transform: translateY(-14px) scale(0.96);
   }
 }
+/*
+ * بطاقةُ خبرٍ لا شريطٌ مصبوغ.
+ *
+ * كان قرصاً مغموراً بلونٍ واحد: يصيح ولا يقول، ويُقرأ إنذاراً حتى حين
+ * يكون بشرى. فصار بطاقةً من جنس بطاقات الواجهة — سطحُها سطحُ اللوح،
+ * واللونُ في حافّتها وقرصِ أيقونتها ووهجٍ خلفه. والعينُ تقرأ البطاقةَ
+ * ولا تُصدَم باللون.
+ */
 .toast-note {
   position: relative;
   overflow: hidden;
-  animation: toast-drop 0.26s var(--ease-monitor) both;
-  box-shadow: 0 12px 34px rgb(0 0 0 / 0.34);
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  box-shadow:
+    inset 0 0 0 1px var(--color-line-2),
+    0 18px 46px rgb(0 0 0 / 0.42);
+  animation: toast-drop 0.3s var(--ease-monitor) both;
 }
 .toast-note.is-out {
   animation: toast-lift 0.3s var(--ease-monitor) both;
 }
+
+/* وهجٌ خافتٌ من جهة الأيقونة — عمقٌ لا صبغة */
+.toast-note::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    64% 150% at 100% 50%,
+    color-mix(in srgb, var(--tint) 17%, transparent),
+    transparent 64%
+  );
+}
+
+/* حافّةٌ ملوّنة في جهة القراءة: تُعرف نوعُ الخبر قبل أن يُقرأ */
+.toast-edge {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 4px;
+  background: var(--tint);
+}
+
+/*
+ * شريطُ العمر: يقول كم بقي قبل أن يمضي.
+ *
+ * فالخبرُ الذي يختفي بلا نذيرٍ يُفقِد من كان يقرؤه سطرَه، ومن رأى الشريطَ
+ * ينحسر عرف أن عليه أن يُسرع أو أن يدعه.
+ */
+.toast-bar {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--tint);
+  opacity: 0.55;
+  transform-origin: right center;
+  animation: toast-drain var(--life, 4200ms) linear both;
+}
+@keyframes toast-drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .toast-note,
-  .toast-note.is-out {
+  .toast-note.is-out,
+  .toast-bar {
     animation: none;
   }
   .toast-note.is-out {

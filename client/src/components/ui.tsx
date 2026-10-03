@@ -892,23 +892,35 @@ export function HoldButton({
  */
 export type Tone = 'signal' | 'safe' | 'danger' | 'frost' | 'gold';
 
-type Note = { id: number; text: string; tone: Tone; icon?: ReactNode; out?: boolean };
-
-const NOTE_SKIN: Record<Tone, string> = {
-  signal: 'bg-signal text-on-signal',
-  safe: 'bg-safe text-ground',
-  danger: 'bg-danger text-white',
-  frost: 'skin-frost text-ground',
-  gold: 'skin-gold text-ground',
+type Note = {
+  id: number;
+  text: string;
+  tone: Tone;
+  icon?: ReactNode;
+  /** سطرٌ ثانٍ يشرح: ما الذي يقع، أو ما الذي تغيّر */
+  note?: string;
+  out?: boolean;
 };
 
-/* سطحُ الملمسين: اللونُ أرضيةً، والملمسُ طبقةً فوقه من الـCSS */
-const NOTE_BASE: Partial<Record<Tone, string>> = {
+/* لونُ كلِّ نبرة — يُحقن في ‎--tint‎ فتأخذه الحافّةُ والوهجُ والشريط */
+const TINT: Record<Tone, string> = {
+  signal: 'var(--color-signal)',
+  safe: 'var(--color-safe)',
+  danger: 'var(--color-danger)',
   frost: 'var(--color-frost)',
   gold: 'var(--color-gold)',
 };
 
-/* يُقرأ في ثلاثٍ ونصف — وكان في اثنتين ونصف فيمرّ قبل أن يُلتفت إليه */
+/* وقرصُ الأيقونة وحده يحمل ملمسَ البطاقة — فالبطاقةُ كلُّها لا تُصبغ */
+const BADGE: Record<Tone, string> = {
+  signal: 'bg-signal-2 text-signal-ink',
+  safe: 'bg-safe-2 text-safe-ink',
+  danger: 'bg-danger-2 text-danger-ink',
+  frost: 'skin-frost text-frost',
+  gold: 'skin-gold text-gold',
+};
+
+/* يُقرأ في أربعٍ — وكان في اثنتين ونصف فيمرّ قبل أن يُلتفت إليه */
 const NOTE_MS = 4200;
 const NOTE_OUT_MS = 300;
 
@@ -925,8 +937,17 @@ const listeners = new Set<(note: Note) => void>();
  * ووحدةٌ عامّة لا حالٌ في كل صفحة: يُنادى من أي موضعٍ بلا تمرير دوالّ
  * عبر ثلاث طبقات.
  */
-export function toast(text: string, tone: Tone = 'signal', icon?: ReactNode) {
-  const note = { id: ++noteSeq, text, tone, icon };
+export function toast(
+  text: string,
+  options: { tone?: Tone; icon?: ReactNode; note?: string } = {},
+) {
+  const note = {
+    id: ++noteSeq,
+    text,
+    tone: options.tone ?? 'signal',
+    icon: options.icon,
+    note: options.note,
+  };
   for (const listen of listeners) listen(note);
 }
 
@@ -963,23 +984,41 @@ export function Toasts() {
       aria-live="polite"
       className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex flex-col items-center gap-2 px-4 pt-4"
     >
-      {notes.map((note) => (
-        <span
-          key={note.id}
+      {notes.map((item) => (
+        <div
+          key={item.id}
           style={
-            NOTE_BASE[note.tone] ? { backgroundColor: NOTE_BASE[note.tone] } : undefined
+            {
+              '--tint': TINT[item.tone],
+              '--life': `${NOTE_MS}ms`,
+            } as CSSProperties
           }
-          className={`toast-note flex max-w-full items-center gap-2.5 rounded-chip px-4 py-2.5 text-[13.5px] font-black ${
-            NOTE_SKIN[note.tone]
-          } ${note.out ? 'is-out' : ''}`}
+          className={`toast-note flex w-full max-w-[26rem] items-center gap-3 py-3 pe-4 ps-5 ${
+            item.out ? 'is-out' : ''
+          }`}
         >
-          {note.icon && (
-            <span className="relative shrink-0" aria-hidden="true">
-              {note.icon}
+          <span className="toast-edge" aria-hidden="true" />
+
+          {item.icon && (
+            <span
+              className={`relative flex size-10 shrink-0 items-center justify-center rounded-chip ${BADGE[item.tone]}`}
+              aria-hidden="true"
+            >
+              {item.icon}
             </span>
           )}
-          <span className="relative min-w-0 truncate">{note.text}</span>
-        </span>
+
+          <span className="relative min-w-0 flex-1">
+            <b className="block text-[14px] leading-snug font-black text-ink">{item.text}</b>
+            {item.note && (
+              <span className="mt-0.5 block text-[12.5px] leading-relaxed font-medium text-muted">
+                {item.note}
+              </span>
+            )}
+          </span>
+
+          <span className="toast-bar" aria-hidden="true" />
+        </div>
       ))}
     </div>
   );
@@ -1131,12 +1170,20 @@ export function FormPage({
   title,
   lead,
   foot,
+  wide,
   children,
 }: {
   title: string;
   lead: string;
   /** ما يُوضع تحت النموذج — تمهيدٌ أو تنبيه، تخصّه الصفحةُ لا الإطار */
   foot?: ReactNode;
+  /**
+   * عرضٌ أوسع لمن نموذجُه أكثرُ من حقلين.
+   *
+   * اثنتان وثلاثون ريماً عرضُ بابٍ: حقلان وزرّ. وشاشةُ إنشاء الغرفة فيها
+   * أحدَ عشرَ بنكاً تُنتقى، فتنحشر فيه وتتراصّ — فتُعطى سعتَها.
+   */
+  wide?: boolean;
   children: ReactNode;
 }) {
   /*
@@ -1150,7 +1197,11 @@ export function FormPage({
    */
   return (
     <div className="flex min-h-full flex-col">
-      <div className="mx-auto flex w-full max-w-[32rem] flex-1 flex-col justify-center px-5 py-10">
+      <div
+        className={`mx-auto flex w-full flex-1 flex-col justify-center px-5 py-10 ${
+          wide ? 'max-w-[42rem]' : 'max-w-[32rem]'
+        }`}
+      >
         <header className="text-center">
           <Wordmark className="text-5xl sm:text-6xl" />
           <span className="mt-2.5 block text-[12.5px] font-bold tracking-[0.14em] text-muted">

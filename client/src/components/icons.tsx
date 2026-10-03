@@ -296,6 +296,11 @@ export const TrashIcon = (p: IconProps) => (
 );
 
 /** لوحٌ جانبيّ يُطوى — الخطّ هو حافّته، والسهم جهة الطيّ */
+/** تراجعٌ عن فعل: سهمٌ يلتفّ راجعاً */
+export const RestoreIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M3 9h11a5 5 0 1 1 0 10H7" /><path d="M7 5L3 9l4 4" /></Icon>
+);
+
 export const PanelIcon = (p: IconProps) => (
   <Icon {...p}><rect x="3" y="4" width="18" height="16" rx="2.4" /><path d="M14.5 4v16" /></Icon>
 );

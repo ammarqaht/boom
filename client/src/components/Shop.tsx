@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { CardId, Shop as ShopData } from '../lib/types';
 import { ask } from '../lib/socket';
 import { Button, toast, type Tone } from './ui';
-import { CheckIcon, DoubleIcon, SnowflakeIcon, TimePlusIcon } from './icons';
+import { CheckIcon, DoubleIcon, RestoreIcon, SnowflakeIcon, TimePlusIcon } from './icons';
 
 /*
  * لكلّ بطاقةٍ لونُها وملمسُها.
@@ -88,13 +88,11 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
     setPickTarget(false);
     setTarget(null);
     if (!res.ok) return flash(res.error);
-    toast(
-      victim
-        ? `جمّدتَ ${victim} — خمس ثوانٍ في بداية الجولة`
-        : `اشتريتَ «${meta?.name ?? 'البطاقة'}» — تُطبَّق في الجولة القادمة`,
-      look.tone,
-      <look.Icon size={16} />,
-    );
+    toast(victim ? `جمّدتَ ${victim}` : `اشتريتَ «${meta?.name ?? 'البطاقة'}»`, {
+      tone: look.tone,
+      icon: <look.Icon size={19} />,
+      note: victim ? 'يُقفل عن الإجابة خمس ثوانٍ في بداية الجولة' : look.effect,
+    });
   };
 
   /*
@@ -110,7 +108,11 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
     const res = await ask('team:refundCard', { card });
     setBusy(null);
     if (!res.ok) return flash(res.error);
-    toast(`نُقض شراء «${meta?.name ?? 'البطاقة'}» — ورُدّت نقاطُك`, 'signal');
+    toast(`نُقض شراء «${meta?.name ?? 'البطاقة'}»`, {
+      tone: 'signal',
+      icon: <RestoreIcon size={19} />,
+      note: `رُدّت إليك ${meta ? `${meta.price} ${pointsWord(meta.price)}` : 'نقاطُك'}`,
+    });
   };
 
   return (
