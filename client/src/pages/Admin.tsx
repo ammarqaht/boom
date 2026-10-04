@@ -305,7 +305,10 @@ export default function Admin() {
 
         <section className="create-section">
           <div className="create-section-head">
-            <h2>بنوك الأسئلة</h2>
+            <h2>
+              <span className="create-step">١</span>
+              بنوك الأسئلة
+            </h2>
             <MiniAction
               onClick={() =>
                 setBankIds(bankIds.length === banks.length ? [banks[0].id] : banks.map((b) => b.id))
@@ -329,7 +332,10 @@ export default function Admin() {
 
         <section className="create-section">
           <div className="create-section-head">
-            <h2>المرحلة</h2>
+            <h2>
+              <span className="create-step">٢</span>
+              المرحلة
+            </h2>
           </div>
           <LevelPicker value={difficulty} onPick={setDifficulty} large />
         </section>

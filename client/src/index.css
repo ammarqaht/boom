@@ -2445,33 +2445,58 @@ textarea {
 }
 .create-section-head {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 14px;
+  gap: 8px;
+  margin-bottom: 18px;
 }
+/*
+ * العنوانُ في وسط ما تحته، كالبطاقات: كان على الحافّة اليمنى والصفوفُ
+ * متوسّطة، فبدا ملقىً لا موضوعاً. وخطّان يذوبان على جانبيه يربطانه
+ * بعرض الصفحة، ورقمُ الخطوة يقول أين أنت من الإنشاء.
+ */
 .create-section-head h2 {
-  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(100%, 720px);
+  font-size: 19px;
   font-weight: 900;
   color: var(--color-ink);
+  white-space: nowrap;
 }
-/* الزرُّ في ذيلٍ مثبّت — يُرى من أيّ موضعٍ في الصفحة الطويلة */
+.create-section-head h2::before,
+.create-section-head h2::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+}
+.create-section-head h2::before {
+  background: linear-gradient(to left, var(--color-line-2), transparent);
+}
+.create-section-head h2::after {
+  background: linear-gradient(to right, var(--color-line-2), transparent);
+}
+.create-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--color-signal-2);
+  color: var(--color-signal-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-signal) 45%, transparent);
+  font-size: 14px;
+  font-weight: 900;
+}
+/* الزرُّ في آخر الصفحة، ثابتٌ في موضعه — كان يطفو مع التمرير فيشتّت */
 .create-dock {
-  position: sticky;
-  bottom: 0;
-  z-index: 5;
   display: grid;
   gap: 8px;
   width: min(100%, 520px);
-  margin: 36px auto 0;
-  padding: 14px 0 max(18px, env(safe-area-inset-bottom));
-}
-.create-dock::before {
-  content: '';
-  position: absolute;
-  inset: 0 -100vmax;
-  z-index: -1;
-  background: linear-gradient(to top, var(--color-ground) 55%, transparent);
-  pointer-events: none;
+  margin: 44px auto 0;
+  padding-bottom: max(28px, env(safe-area-inset-bottom));
 }
 @media (max-width: 640px) {
   .create {
