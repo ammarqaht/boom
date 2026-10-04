@@ -2215,24 +2215,33 @@ textarea {
  * تُضيء من أعلى، وخلفها هالةٌ سماوية تتّقد إذا اختيرت. وما لم يُختر
  * يخبو قليلاً فيتقدّم المختار، وشريطُ اسمه يصير سماوياً.
  */
+/*
+ * صفوفٌ تلتفّ وتتوسّط: الصفُّ الأخير الناقص يقف في المنتصف لا يلتصق
+ * بحافّةٍ ويترك أخرى خالية — فالشبكةُ تُقرأ لوحةً واحدةً متّزنة.
+ */
 .art-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  --tile: 118px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 10px;
 }
+.art-grid > .art-tile {
+  flex: 0 0 var(--tile);
+}
 .art-grid.is-large {
-  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
-  gap: 16px;
+  --tile: 180px; /* ستٌّ في صفٍّ بعرض الصفحة: أحدَ عشرَ بنكاً صفّان متّزنان، لا صفّان ويتيم */
+  gap: 18px;
 }
 @media (max-width: 640px) {
   .art-grid,
   .art-grid.is-large {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    --tile: calc((100% - 20px) / 3);
     gap: 10px;
   }
   /* المراحلُ أربع: صفٌّ واحدٌ على الجوال لا ثلاثٌ وواحدةٌ يتيمة */
   .art-grid.is-levels {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    --tile: calc((100% - 24px) / 4);
     gap: 8px;
   }
   .art-grid.is-levels .art-label {
@@ -2253,16 +2262,38 @@ textarea {
     transform 0.2s ease,
     box-shadow 0.2s ease;
 }
-/* الهالة خلف الصورة — تخفت حتى يُختار */
+/* الهالةُ خلف الصورة بلونها — خافتةٌ حتى تُختار، فتتّقد */
 .art-tile::before {
   content: '';
   position: absolute;
-  inset: 4% 12% 30%;
+  inset: 2% 6% 24%;
   z-index: -1;
   border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--color-signal) 30%, transparent), transparent);
-  opacity: 0.25;
-  transition: opacity 0.25s ease;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tint, var(--color-signal)) 42%, transparent), transparent);
+  opacity: 0.38;
+  transition:
+    opacity 0.3s ease,
+    transform 0.4s ease;
+}
+/* ومضةٌ تعبر اللوحة عند المرور — لمعانٌ لا حركةٌ تُلهي */
+.art-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgb(255 255 255 / 0.09) 50%, transparent 62%);
+  transform: translateX(-120%);
+}
+@media (hover: hover) {
+  .art-tile:hover::after {
+    transform: translateX(120%);
+    transition: transform 0.7s ease;
+  }
+  .art-tile:hover::before {
+    opacity: 0.7;
+    transform: scale(1.06);
+  }
 }
 @media (hover: hover) {
   .art-tile:hover {
@@ -2275,16 +2306,17 @@ textarea {
     transform: translateY(-3px) scale(1.04);
   }
 }
+/* الصورةُ في قلب مقامها تماماً — حشوٌ متساوٍ من كل جهة */
 .art-stage {
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 1 / 0.84;
-  padding: 12% 18% 8%;
+  aspect-ratio: 1 / 0.86;
+  padding: 13%;
 }
 .art-tile.is-compact .art-stage {
   aspect-ratio: 1 / 0.74;
-  padding: 10% 22% 6%;
+  padding: 14%;
 }
 .art-stage img {
   width: 100%;
@@ -2346,6 +2378,7 @@ textarea {
 }
 .art-tile.is-on::before {
   opacity: 1;
+  transform: scale(1.1);
 }
 .art-tile.is-on .art-stage img {
   filter: drop-shadow(0 14px 16px rgb(0 0 0 / 0.5));
@@ -2447,6 +2480,7 @@ textarea {
 @media (prefers-reduced-motion: reduce) {
   .art-tile,
   .art-tile::before,
+  .art-tile::after,
   .art-stage img,
   .art-check {
     transition: none;
