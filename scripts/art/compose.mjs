@@ -17,7 +17,6 @@ const dest = join(here, '..', '..', 'client', 'public', 'art');
 const single = {
   amma: 'light_bulb',
   anbiya: 'mosque',
-  seerah: 'camel',
   ibadat: 'kaaba',
   hadith: 'scroll',
   science: 'test_tube',
@@ -28,7 +27,7 @@ const single = {
   secondary: 'triangular_ruler',
   university: 'graduation_cap',
 };
-const composed = ['quran', 'lugha', 'sahaba', 'tarikh'];
+const composed = ['quran', 'lugha', 'sahaba', 'tarikh', 'seerah'];
 
 for (const [id, file] of Object.entries(single)) copyFileSync(join(here, 'out', `${file}.png`), join(dest, `${id}.png`));
 copyFileSync(join(here, 'src', 'LICENSE-fluentui-emoji.txt'), join(dest, 'LICENSE-fluentui-emoji.txt'));
