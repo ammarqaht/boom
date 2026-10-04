@@ -306,7 +306,6 @@ export default function Admin() {
         <section className="create-section">
           <div className="create-section-head">
             <h2>
-              <span className="create-step">١</span>
               بنوك الأسئلة
             </h2>
             <MiniAction
@@ -333,7 +332,6 @@ export default function Admin() {
         <section className="create-section">
           <div className="create-section-head">
             <h2>
-              <span className="create-step">٢</span>
               المرحلة
             </h2>
           </div>

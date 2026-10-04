@@ -2453,7 +2453,7 @@ textarea {
 /*
  * العنوانُ في وسط ما تحته، كالبطاقات: كان على الحافّة اليمنى والصفوفُ
  * متوسّطة، فبدا ملقىً لا موضوعاً. وخطّان يذوبان على جانبيه يربطانه
- * بعرض الصفحة، ورقمُ الخطوة يقول أين أنت من الإنشاء.
+ * بعرض الصفحة.
  */
 .create-section-head h2 {
   display: flex;
@@ -2476,19 +2476,6 @@ textarea {
 }
 .create-section-head h2::after {
   background: linear-gradient(to right, var(--color-line-2), transparent);
-}
-.create-step {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 999px;
-  background: var(--color-signal-2);
-  color: var(--color-signal-ink);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-signal) 45%, transparent);
-  font-size: 14px;
-  font-weight: 900;
 }
 /* الزرُّ في آخر الصفحة، ثابتٌ في موضعه — كان يطفو مع التمرير فيشتّت */
 .create-dock {
