@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { socket, ask } from '../lib/socket';
+import { ask, onWake, socket, useConnection, useFreshBuild, watchSession } from '../lib/socket';
+import {
+  clearTeamSession as clearSession,
+  deviceId,
+  loadTeamSession as loadSession,
+  saveTeamSession as saveSession,
+} from '../lib/session';
+import { projectTeam, teamTicking, useProjected } from '../lib/clock';
 import type { PublicTeam, Question, RoomResult, RoomState, TeamState } from '../lib/types';
 import {
   Button,
@@ -44,8 +51,6 @@ import {
 import { Shop, FreezeOverlay } from '../components/Shop';
 import { playBeat, playCorrect, playFlatline, playWrong, unlockAudio } from '../lib/sound';
 
-const SESSION_KEY = 'nabda:team';
-
 /*
  * ثلاثُ قواعد تحت باب الدخول.
  *
@@ -83,51 +88,6 @@ const REVEAL_MS = 900;
 type Reveal = { question: Question; right: number; chosen: number };
 type ResultPayload = { isCorrect: boolean; questionId: string; answer: number };
 
-type Session = { code: string; teamId: string; token: string };
-
-/*
- * الجلسة تُحفظ في القرص وفي الذاكرة معاً.
- *
- * localStorage يرمي استثناءً على بعض الأجهزة — تصفّحٌ خاصّ في iOS، أو
- * حظرُ بيانات الموقع، أو تخزينٌ ممتلئ. وكان الحفظ يُنادى عارياً قبل أن
- * تُعرض الشاشة، فإذا رمى: المجموعةُ مسجّلةٌ في السيرفر واللاعبُ واقفٌ على
- * باب الدخول لا يدري — فيعيد المحاولة فيُقال له «الاسم مستخدم».
- *
- * فصار الحفظ محروساً، ومعه نسخةٌ في الذاكرة: هي وحدها تكفي للرجوع بعد
- * انقطاع الشبكة ما بقيت الصفحة مفتوحة — وذاك أكثرُ ما يحدث في القاعة.
- * ولا يُنجى من تحديث الصفحة على جهازٍ لا يخزّن، فيُنبَّه اللاعب صريحاً.
- */
-let kept: Session | null = null;
-
-function loadSession(): Session | null {
-  if (kept) return kept;
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) ?? 'null');
-  } catch {
-    return null;
-  }
-}
-
-/** يحفظ الجلسة ويقول: هل ثبتت في القرص أم في الذاكرة وحدها؟ */
-function saveSession(session: Session) {
-  kept = session;
-  try {
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function clearSession() {
-  kept = null;
-  try {
-    localStorage.removeItem(SESSION_KEY);
-  } catch {
-    /* ما لم يُكتب لا يُمحى — والذاكرة طُويت قبل قليل */
-  }
-}
-
 export default function Play() {
   const [params] = useSearchParams();
   /*
@@ -141,7 +101,13 @@ export default function Play() {
   useTheme('dark');
   const [state, setState] = useState<TeamState | null>(null);
   /* حالُ الوصل: شاشةٌ مقطوعة لا تلعب، فلا تُترك تبدو سليمة */
-  const [live, setLive] = useState(() => socket.connected);
+  const { live, restarting } = useConnection();
+  /*
+   * جلسةٌ محفوظة ولم تصل حالُها بعد: «نُعيدك إلى غرفتك» لا باب الدخول.
+   * كان الباب يظهر فيظنّ اللاعب أنه طُرد فيدخل من جديد — فيُقال له
+   * «الاسم مستخدم» أو يصير له في القائمة اسمان.
+   */
+  const [returning, setReturning] = useState(() => loadSession() !== null);
   const [room, setRoom] = useState<RoomState | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -202,58 +168,68 @@ export default function Play() {
     };
   }, []);
 
-  // الرجوع التلقائي بعد انقطاع النت أو تحديث الصفحة
   /*
-   * الجلسةُ تُقرأ عند كل وصل لا عند التركيب: من انضمّ في هذه الجلسة لم
-   * تكن له جلسةٌ محفوظة وقت التركيب، فلم يُسجَّل مستمعُ الاتصال — فإذا
-   * انقطع نتُه لحظةً عاد بسوكِتٍ غريب عن الغرفة: لا نبضَ يصله ولا إجابة
-   * تصل عنه، والشاشةُ ساكنةٌ لا تقول شيئاً.
+   * الرجوع بعد انقطاعٍ أو تحديثٍ للصفحة.
+   *
+   * الهويّة تُرسل مع الاتصال نفسه (lib/socket.ts)، والسيرفر يردّ بأحد
+   * خبرين: عادت جلستك بحالها، أو انتهت. ولا تُمحى الجلسة إلا بالثاني —
+   * كانت تُمحى إذا أبطأ ردُّ «رجّعني» ست ثوانٍ، فيُطرد اللاعب وهو لم يُطرد.
    */
   useEffect(() => {
-    const rejoin = async () => {
-      const session = loadSession();
-      if (!session) return;
-      const res = await ask<{ state: TeamState }>('team:rejoin', session);
-      if (!res.ok) return clearSession();
-      /* لعبةٌ انتهت لا يُعاد إليها: الجلسة تُطوى ويبدأ اللاعب من الباب */
-      if (res.state.status === 'finished') return clearSession();
-      setState(res.state);
-    };
-    const onConnect = () => {
-      setLive(true);
-      void rejoin();
-    };
-    const onDrop = () => setLive(false);
-
-    /* حدث connect قد يسبق تسجيل المستمع — فتُقرأ الحال لا تُنتظر */
-    setLive(socket.connected);
-    void rejoin();
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDrop);
-    return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDrop);
-    };
-  }, []);
-
-  // صوت النتيجة + وميض الشاشة
-  useEffect(() => {
-    const onResult = ({ isCorrect, questionId, answer: right }: ResultPayload) => {
-      setFlash({ key: Date.now(), correct: isCorrect });
-      setLockedFor(null);
-      (isCorrect ? playCorrect : playWrong)();
-
-      // الصواب يُكشف عند الخطأ وحده: الإصابة تُكافأ بالمضيّ لا بالانتظار
-      const last = asked.current;
-      if (!isCorrect && last && last.question.id === questionId) {
-        setReveal({ question: last.question, right, chosen: last.choice });
+    const stop = watchSession('team', {
+      resumed: (payload) => {
+        const next = payload.state as TeamState;
+        setReturning(false);
+        /* لعبةٌ انتهت لا يُعاد إليها: الجلسة تُطوى ويبدأ اللاعب من الباب */
+        if (next.status === 'finished') {
+          clearSession();
+          setState(null);
+          return;
+        }
+        setState(next);
+        setRoom(payload.room as RoomState);
+      },
+      invalid: (payload) => {
+        clearSession();
+        setReturning(false);
+        setState(null);
+        setError(payload.error);
+      },
+    });
+    /*
+     * عاد من قفل الشاشة والسوكِت حيّ: قد فاته في نومه ما فاته، فيُسأل عن
+     * حاله كاملة. ومن أزاله المنظّم في غيبته يُقال له ذلك.
+     */
+    const offWake = onWake(async () => {
+      if (!loadSession()) return;
+      const res = await ask<{ state: TeamState; room: RoomState; gone?: boolean }>('session:sync');
+      if (res.ok) {
+        setState(res.state);
+        setRoom(res.room);
+      } else if ('gone' in res && res.gone) {
+        clearSession();
+        setState(null);
+        setError('أزالك المنظّم من الغرفة');
       }
-    };
-    socket.on('team:result', onResult);
+    });
     return () => {
-      socket.off('team:result', onResult);
+      stop();
+      offWake();
     };
   }, []);
+
+  // صوت النتيجة + وميض الشاشة — يُنادى من إقرار الإجابة
+  const onResult = ({ isCorrect, questionId, answer: right }: ResultPayload) => {
+    setFlash({ key: Date.now(), correct: isCorrect });
+    setLockedFor(null);
+    (isCorrect ? playCorrect : playWrong)();
+
+    // الصواب يُكشف عند الخطأ وحده: الإصابة تُكافأ بالمضيّ لا بالانتظار
+    const last = asked.current;
+    if (!isCorrect && last && last.question.id === questionId) {
+      setReveal({ question: last.question, right, chosen: last.choice });
+    }
+  };
 
   useEffect(() => {
     if (!reveal) return;
@@ -268,6 +244,7 @@ export default function Play() {
     const res = await ask<{ teamId: string; token: string; state: TeamState }>('team:join', {
       code: code.trim().toUpperCase(),
       name: name.trim(),
+      device: deviceId(),
     });
     setBusy(false);
     if (!res.ok) return setError(res.error);
@@ -295,8 +272,52 @@ export default function Play() {
     if (!state?.question || locked || reveal) return;
     asked.current = { question: state.question, choice };
     setLockedFor(state.question.id);
-    socket.emit('team:answer', { questionId: state.question.id, choice });
+    /*
+     * بإقرار: إن انقطع الاتصال لحظةَ الضغط بقيت الإجابة في طابور السوكِت
+     * وتُرسل عند عودته — والسيرفر يعرف الجهاز من الاتصال نفسه فلا يرميها.
+     * وإن وصلت متأخرةً بعد أن تبدّل السؤال رُدّت «قديمة» وصُحّحت الشاشة.
+     */
+    socket
+      .timeout(8000)
+      .emit(
+        'team:answer',
+        { questionId: state.question.id, choice },
+        (err: unknown, res?: { ok: boolean } & Partial<ResultPayload>) => {
+          if (err || !res) return; // شبكةُ الأمان تفكّ القفل، وحالُ السيرفر تصل عند العودة
+          if (res.ok) onResult(res as ResultPayload);
+          else setLockedFor(null);
+        },
+      );
   };
+
+  /* حزمةٌ أقدم من السيرفر تُحدَّث بين الجولات — والجلسة تعيده إلى مكانه */
+  useFreshBuild(!state || (state.status !== 'running' && state.status !== 'countdown'));
+  const shown = useProjected(state, projectTeam, teamTicking);
+
+  /*
+   * جلسةٌ محفوظة والحالُ في الطريق: يُطمأن اللاعب أنه عائدٌ إلى غرفته.
+   * وبابٌ لمن أراد غيرها — فلا يُحبس على غرفةٍ لا يريدها.
+   */
+  if (!state && returning) {
+    return (
+      <FormPage title="نُعيدك إلى غرفتك" lead="مجموعتك ونقاطك محفوظة — ثوانٍ ونصلك بها.">
+        <Card className="grid gap-4 text-center">
+          <p className="text-sm font-medium text-muted">
+            {live ? 'جارٍ استرجاع مكانك…' : 'ننتظر الشبكة — نعود فور اتصالها'}
+          </p>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              clearSession();
+              setReturning(false);
+            }}
+          >
+            انضمّ إلى غرفة أخرى
+          </Button>
+        </Card>
+      </FormPage>
+    );
+  }
 
   if (!state) {
     return (
@@ -376,7 +397,7 @@ export default function Play() {
   return (
     <>
       <TeamScreen
-        state={state}
+        state={shown ?? state}
         teams={room?.teams ?? []}
         history={room?.history ?? []}
         flash={flash}
@@ -387,6 +408,7 @@ export default function Play() {
         onAnswer={answer}
         actions={actions}
         live={live}
+        restarting={restarting}
         volatile={volatile}
       />
       {showHistory && (
@@ -405,11 +427,14 @@ function TopBar({
   state,
   actions,
   live,
+  restarting,
   volatile: unsaved,
 }: {
   state: TeamState;
   actions: MenuAction[];
   live: boolean;
+  /** السيرفر قال إنه يتجدّد — نشرٌ جديد، لا عطبٌ في شبكة اللاعب */
+  restarting?: boolean;
   /** جهازٌ رفض حفظ الجلسة — تحديثُ الصفحة يُخرج اللاعب */
   volatile?: boolean;
 }) {
@@ -432,7 +457,7 @@ function TopBar({
           {!live ? (
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-danger">
               <OfflineIcon size={12} />
-              انقطع الاتصال — يُعاد الوصل
+              {restarting ? 'السيرفر يتجدّد — ثوانٍ ونعود' : 'انقطع الاتصال — يُعاد الوصل'}
             </div>
           ) : unsaved ? (
             /*
@@ -475,6 +500,7 @@ function TeamScreen({
   onAnswer,
   actions,
   live,
+  restarting,
   volatile: unsaved,
 }: {
   state: TeamState;
@@ -488,6 +514,7 @@ function TeamScreen({
   onAnswer: (choice: number) => void;
   actions: MenuAction[];
   live: boolean;
+  restarting?: boolean;
   volatile?: boolean;
 }) {
   const shown = useSmoothTime(state.timeMs, state.status === 'running' && !state.flatlined);
@@ -513,7 +540,13 @@ function TeamScreen({
 
   const frame = (children: React.ReactNode) => (
     <div className="relative flex h-full flex-col px-3.5 pb-4">
-      <TopBar state={state} actions={actions} live={live} volatile={unsaved} />
+      <TopBar
+        state={state}
+        actions={actions}
+        live={live}
+        restarting={restarting}
+        volatile={unsaved}
+      />
       {children}
     </div>
   );

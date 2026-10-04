@@ -1,0 +1,3 @@
+#!/bin/sh
+# الدفع إلى main ينشر فوراً — فلا يُدفع والقاعةُ تلعب (scripts/live.mjs)
+exec node "$(git rev-parse --show-toplevel)/scripts/live.mjs" --guard

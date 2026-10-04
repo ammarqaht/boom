@@ -12,6 +12,11 @@ const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // بدون ال�
 const IDLE_ROOM_MS = 2 * 60 * 60 * 1000;
 const COUNTDOWN_MS = 3000;
 const FREEZE_MS = 5000; // مدة قفل الإجابة عند التجميد
+/*
+ * سقفُ المجموعات في الغرفة الواحدة. القاعةُ الحقيقية دونه بكثير، وهو حرزٌ
+ * من رابطٍ يتسرّب فيدخل منه مئات فيثقل البثُّ على القاعة كلّها.
+ */
+export const MAX_TEAMS = 200;
 const TIME_CARD_MS = 10000; // الوقت الإضافي من بطاقة «وقت إضافي»
 const DOUBLE_FACTOR = 2; // مضاعِف بطاقة «مضاعفة»
 
@@ -206,6 +211,20 @@ class Team {
     this.name = name;
     this.score = 0;
     this.connected = true;
+    /*
+     * بصمةُ الجهاز الذي انضمّ منه. بها يعود اللاعب إلى مجموعته باسمه نفسه
+     * لو ضاعت جلسته (خرج ثم دخل، أو مُسحت الجلسة) — كما «Resume as» في
+     * كاهوت — ولا ينتحل اسمَه جهازٌ آخر.
+     */
+    this.deviceId = null;
+    /*
+     * السوكِتات الحيّة لهذا الفريق — لا تُحفظ على القرص.
+     *
+     * «متصل» كان رايةً تُنزلها أيُّ قطيعة: يعود الجهاز بسوكِتٍ جديد ثم
+     * يصل خبرُ موت القديم متأخراً فيُعلَّم الحاضرُ غائباً. فصار العدُّ هو
+     * الحَكَم: متصلٌ ما بقي له سوكِتٌ واحد.
+     */
+    this.sockets = new Set();
     // يبقى عبر الجولات: لا يُعاد سؤال على الفريق حتى ينفد البنك كله
     this.seen = new Set();
     // عدد مرات شراء كل بطاقة — والحدّ في CARDS[id].limit لكل نوع طوال اللعبة
@@ -399,8 +418,9 @@ export class Room {
     return out;
   }
 
-  addTeam(name) {
+  addTeam(name, deviceId = null) {
     const team = new Team(name, this.settings);
+    team.deviceId = deviceId;
     /*
      * من جاء والجولة جارية ينتظر القادمة: لا يُردّ على الباب كما كان —
      * فالمنظّم لا يملك أن يفتح له، واللاعب يقف بلا شاشةٍ ولا خبر — ولا
@@ -823,6 +843,15 @@ export class Room {
     this.touch();
   }
 
+  /** فريقٌ بهذا الاسم انضمّ من هذا الجهاز نفسه — فيُعاد إليه لا يُرفض */
+  teamOfDevice(name, deviceId) {
+    if (!deviceId) return null;
+    for (const team of this.teams.values()) {
+      if (team.name === name && team.deviceId === deviceId) return team;
+    }
+    return null;
+  }
+
   removeTeam(teamId) {
     this.teams.delete(teamId);
     this.touch();
@@ -999,9 +1028,12 @@ export class Room {
       double: team.pendingMultiplier > 1,
     };
     // خصوم يمكن تجميدهم (كل الفرق عداه)
-    const rivals = [...this.teams.values()]
-      .filter((t) => t.id !== team.id)
-      .map((t) => ({ id: t.id, name: t.name }));
+    /* قائمةُ الخصوم لا تُقرأ إلا والمتجر مفتوح — فلا تُحمل في كل بثٍّ أثناء اللعب */
+    const rivals = open
+      ? [...this.teams.values()]
+          .filter((t) => t.id !== team.id)
+          .map((t) => ({ id: t.id, name: t.name }))
+      : [];
     return { open, cards, pending, rivals };
   }
 }
@@ -1038,6 +1070,7 @@ Room.prototype.snapshot = function snapshot() {
     teams: [...this.teams.values()].map((t) => ({
       id: t.id,
       token: t.token,
+      deviceId: t.deviceId,
       name: t.name,
       score: t.score,
       seen: [...t.seen],
@@ -1104,6 +1137,7 @@ export function restoreRoom(snap) {
     const team = new Team(t.name, room.settings);
     team.id = t.id;
     team.token = t.token;
+    team.deviceId = t.deviceId ?? null;
     team.score = t.score;
     team.connected = false; // حتى يعود بجهازه فعلاً
     team.seen = new Set(t.seen ?? []);

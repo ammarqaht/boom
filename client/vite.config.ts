@@ -15,7 +15,20 @@ const BUILD = new Date()
 
 export default defineConfig({
   define: { __BUILD__: JSON.stringify(BUILD) },
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    /*
+     * والختمُ نفسه في ملفٍّ يقرؤه السيرفر: يرسله لكل متّصل، فالصفحةُ التي
+     * ختمُها أقدم تعرف أن نشراً جديداً وقع فتُحدّث نفسها بين الجولات.
+     */
+    {
+      name: 'build-stamp',
+      generateBundle() {
+        this.emitFile({ type: 'asset', fileName: 'build.txt', source: BUILD });
+      },
+    },
+  ],
   server: {
     // أثناء التطوير: الواجهة على 5173 والسيرفر على 3000
     proxy: {

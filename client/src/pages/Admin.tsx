@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { socket, ask } from '../lib/socket';
+import { ask, onWake, socket, useFreshBuild, watchSession } from '../lib/socket';
+import { clearAdminSession, loadAdminSession, saveAdminSession } from '../lib/session';
+import { projectRoom, roomTicking, useProjected } from '../lib/clock';
 import type { Bank, CardId, FeedItem, PublicTeam, RoomState } from '../lib/types';
 import {
   Button,
@@ -201,47 +203,39 @@ export default function Admin() {
    * الأزرار فلا يحدث شيء، ولا خبر يقول لماذا.
    */
   useEffect(() => {
-    const readSession = (): Session | null => {
-      const code = params.get('code');
-      const key = params.get('key');
-      if (code && key) return { code: code.toUpperCase(), adminKey: key };
-      const saved = localStorage.getItem(SESSION_KEY);
-      try {
-        return saved ? (JSON.parse(saved) as Session) : null;
-      } catch {
-        return null;
-      }
-    };
-
-    const rejoin = async () => {
-      const session = readSession();
-      if (!session) return;
-      const res = await ask<{ state: RoomState }>('admin:join', session);
-      if (res.ok) {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-        setRoom(res.state);
-      } else if (!params.get('code')) {
-        localStorage.removeItem(SESSION_KEY);
-      }
-    };
-
-    const onConnect = () => {
-      setLive(true);
-      void rejoin();
-    };
-    const onDrop = () => setLive(false);
-
     /*
-     * مزامنةٌ عند التركيب: السوكِت يتصل عند تحميل الوحدة، فقد يقع حدث
-     * connect قبل أن يُسجَّل المستمع هنا — فتبقى الشارة تقول «انقطع
-     * الاتصال» ولوحةٌ تعمل تحتها. والحالة تُقرأ لا تُنتظر.
+     * المفتاح يُرسل مع الاتصال نفسه (lib/socket.ts) — من الرابط أولاً ثم
+     * من الجلسة المحفوظة — والسيرفر يردّ: عادت لوحتك، أو المفتاح لا يصلح.
+     * ولا تُمحى الجلسة إلا بالثاني: كانت تُمحى إذا أبطأ الردّ، فيجد
+     * المنظّم نفسه أمام «غرفة جديدة» وغرفتُه تجري.
      */
+    const stop = watchSession('admin', {
+      resumed: (payload) => {
+        saveAdminSession({
+          code: payload.code as string,
+          adminKey:
+            params.get('key') ?? loadAdminSession()?.adminKey ?? '',
+        });
+        setRoom(payload.state as RoomState);
+      },
+      invalid: () => {
+        if (!params.get('code')) clearAdminSession();
+      },
+    });
+    const offWake = onWake(async () => {
+      const res = await ask<{ state: RoomState }>('session:sync');
+      if (res.ok) setRoom(res.state);
+    });
+
+    const onConnect = () => setLive(true);
+    const onDrop = () => setLive(false);
     setLive(socket.connected);
-    void rejoin();
     socket.on('connect', onConnect);
     socket.on('disconnect', onDrop);
     socket.on('admin:feed', setFeed);
     return () => {
+      stop();
+      offWake();
       socket.off('connect', onConnect);
       socket.off('disconnect', onDrop);
       socket.off('admin:feed', setFeed);
@@ -261,9 +255,13 @@ export default function Admin() {
       },
     );
     if (!res.ok) return setError(res.error);
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ code: res.code, adminKey: res.adminKey }));
+    saveAdminSession({ code: res.code, adminKey: res.adminKey });
     setRoom(res.state);
   };
+
+  /* الوقتُ يُعدّ هنا بين رسائل السيرفر (lib/clock.ts) */
+  const shown = useProjected(room, projectRoom, roomTicking);
+  useFreshBuild(!room || !roomTicking(room));
 
   if (!room) {
     const toggle = (id: string) =>
@@ -322,7 +320,7 @@ export default function Admin() {
     );
   }
 
-  return <Console room={room} banks={banks} feed={feed} live={live} />;
+  return <Console room={shown ?? room} banks={banks} feed={feed} live={live} />;
 }
 
 /** مستويات المسابقة كما يراها المنظّم — والنسب في السيرفر */

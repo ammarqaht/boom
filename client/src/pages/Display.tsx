@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { socket, ask } from '../lib/socket';
+import { ask, onWake, useFreshBuild, watchSession, socket } from '../lib/socket';
+import { projectRoom, roomTicking, useProjected } from '../lib/clock';
 import type { PublicTeam, RoomState } from '../lib/types';
 import {
   Button,
@@ -65,21 +66,33 @@ export default function Display() {
     setParams({ code: target }, { replace: true });
   };
 
-  // إعادة الاتصال تلقائياً لو انقطع نت شاشة العرض أثناء المسابقة
+  /*
+   * إعادة الاتصال لو انقطع نت شاشة العرض أثناء المسابقة: الرمزُ في
+   * الرابط يُرسل مع الاتصال نفسه، والسيرفر يعيدها إلى غرفتها بحالها.
+   */
   useEffect(() => {
-    if (!room) return;
-    const rejoin = () => void ask('display:join', { code: room.code });
-    socket.on('connect', rejoin);
+    const stop = watchSession('display', {
+      resumed: (payload) => setRoom(payload.state as RoomState),
+    });
+    const offWake = onWake(async () => {
+      const res = await ask<{ state: RoomState }>('session:sync');
+      if (res.ok) setRoom(res.state);
+    });
     return () => {
-      socket.off('connect', rejoin);
+      stop();
+      offWake();
     };
-  }, [room]);
+  }, []);
 
   useEffect(() => {
     const initial = params.get('code');
     if (initial) void connect(initial.toUpperCase());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* الوقتُ يُعدّ هنا بين رسائل السيرفر (lib/clock.ts) */
+  const shown = useProjected(room, projectRoom, roomTicking);
+  useFreshBuild(!room || !roomTicking(room));
 
   if (!room) {
     return (
@@ -114,7 +127,7 @@ export default function Display() {
     );
   }
 
-  return <Board room={room} />;
+  return <Board room={shown ?? room} />;
 }
 
 /**

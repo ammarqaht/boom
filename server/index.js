@@ -28,6 +28,7 @@ import {
   normalizeDifficulty,
   DEFAULT_SETTINGS,
   IDLE_ROOM_MS,
+  MAX_TEAMS,
 } from './game.js';
 import * as store from './store.js';
 
@@ -44,7 +45,39 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const app = express();
 app.use(express.json({ limit: '256kb' }));
 const http = createServer(app);
-const io = new Server(http, { cors: { origin: '*' } });
+/*
+ * إعدادُ السوكِت لقاعةٍ مزدحمة على شبكة جوّالٍ ضعيفة.
+ *
+ * ‎pingTimeout‎ أطول من المعتاد: في الواي فاي المزدحم يتأخّر ردُّ الجوّال
+ * ثوانيَ لا لأنه مات بل لأن الشبكة غارقة، والمهلةُ القصيرة تقطع الحيَّ
+ * فيعيد اتصاله فيزيد الزحام. ومجموعُهما (٤٥ ث) دون مهلة الوسطاء (٦٠ ث).
+ *
+ * والضغط لما فوق الكيلوبايت: حالُ الغرفة نصٌّ تتكرّر فيه الأسماء والحقول،
+ * فينضغط أضعافاً — وهو أثقلُ ما يعبر إلى شاشة القاعة.
+ *
+ * وسقفُ الرسالة الواردة صغير: أكبرُ ما يرسله المتصفّح تعليقٌ من ثلاثمئة
+ * حرف، فما زاد على هذا ليس من اللعبة.
+ */
+const io = new Server(http, {
+  cors: { origin: '*' },
+  pingInterval: 20000,
+  pingTimeout: 25000,
+  perMessageDeflate: { threshold: 1024 },
+  maxHttpBufferSize: 100_000,
+});
+
+/*
+ * ختمُ البناء الذي يخدمه هذا السيرفر — يُكتب في dist/build.txt عند البناء.
+ * يُرسل لكل متصلٍ فيعرف أن حزمته قديمةٌ بعد نشرٍ جديد فيُحدّث نفسه بين
+ * الجولات، بدل أن يكلّم سيرفراً جديداً بلغةٍ قديمة. (في التطوير لا ختم.)
+ */
+const BUILD = (() => {
+  try {
+    return readFileSync(join(root, 'client', 'dist', 'build.txt'), 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+})();
 
 /*
  * معالجٌ لا متزامن في Express 4 لا يُلتقط رفضُه: الوعد يُرفض بلا مستمع،
@@ -849,6 +882,29 @@ async function serve(req, res) {
  */
 const YEAR = 60 * 60 * 24 * 365;
 
+/*
+ * هل في القاعات أحدٌ الآن؟ كلُّ دفعٍ إلى main ينشر فوراً ويعيد تشغيل
+ * السيرفر، فتتوقّف كلُّ جولةٍ جارية. فيُسأل هذا قبل الدفع: ‎npm run live‎.
+ * أعدادٌ لا أسماء — لا يكشف شيئاً عن أحد.
+ */
+app.get('/api/live', (_req, res) => {
+  let rooms = 0;
+  let players = 0;
+  let connected = 0;
+  for (const room of allRooms()) {
+    let here = 0;
+    for (const team of room.teams.values()) if (team.connected) here++;
+    connected += here;
+    /* جولةٌ موقوفة هجرها أهلها (بعد إعادة تشغيلٍ مثلاً) ليست جولةً جارية */
+    if (room.midRound() && here > 0) {
+      rooms++;
+      players += here;
+    }
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({ live: rooms > 0, rooms, players, connected });
+});
+
 app.use(
   express.static(join(root, 'client', 'dist'), {
     index: false, // ليمرّ الجذرُ على بانية البطاقة بدل أن يُرسَل ملفاً خاماً
@@ -910,6 +966,10 @@ const channel = (code) => `room:${code}`;
  * من الشبكة قبل أن يجيب.
  */
 const adminChannel = (code) => `admin:${code}`;
+/* المراقبون — المنظّم وشاشة القاعة: وحدهم يرون مجاري الجميع حيّةً أثناء الجولة */
+const watchChannel = (code) => `watch:${code}`;
+/* اللاعبون: تصلهم حالُ الغرفة العامة بين الجولات، لا مع كل إجابة */
+const playersChannel = (code) => `players:${code}`;
 
 /**
  * يحفظ رأياً ويقول: أَحُفِظ؟
@@ -939,8 +999,54 @@ function pushFeed(room, force = false) {
   io.to(adminChannel(room.code)).emit('admin:feed', room.feedState());
 }
 
-function pushPublic(room) {
-  io.to(channel(room.code)).emit('room:state', room.publicState());
+/*
+ * ══════════════ البثّ ══════════════
+ *
+ * كان السيرفر يبثّ كل ربع ثانية حالَ الغرفة كاملةً (كل الفرق وسجلّ
+ * الجولات) إلى كل جهاز، وحالَ كل فريقٍ إلى صاحبه — والجولة تجري أو لا.
+ * فالحِمل يكبر بمربّع العدد: ثلاثون لاعباً ١٫٤ ميغا في الثانية، ومئةٌ
+ * ١٣٫٦ ميغا. وفي واي فاي القاعة تتكدّس الرسائل فتتأخّر نبضاتُ الاطمئنان
+ * فيُقطع الجوّال وهو حيّ.
+ *
+ * والوقتُ لا يحتاج بثّاً: ينزل عند الجميع بالسرعة نفسها، والمتصفّح يعدّه
+ * بنفسه من آخر قيمةٍ وصلته (lib/clock.ts). فلا يُرسل إلا ما تغيّر فعلاً:
+ *
+ *  - حالُ الفريق إلى صاحبه فور أن تتغيّر (إجابته، شراؤه…).
+ *  - حالُ الغرفة إلى المراقبين، مجموعةً في دفعةٍ كل ربع ثانية على الأكثر.
+ *  - وإلى اللاعبين بين الجولات وحدها، دفعةً كل ثانية على الأكثر — فأثناء
+ *    السؤال لا يُعرض عليهم غيرُ سؤالهم.
+ *  - وتحوّلاتُ الجولة (بدءٌ، نهاية، إيقاف) تُرسل للجميع فوراً.
+ *  - ومزامنةٌ احتياطية كل خمس ثوانٍ أثناء الجولة، لرسالةٍ ضاعت أو ساعةٍ زلّت.
+ */
+const WATCH_MS = 250;
+const PLAYERS_MS = 1000;
+const RESYNC_MS = 5000;
+
+/* ما ينتظر الإرسال لكل غرفة: code → { watch, players, playersAt, teams } */
+const pending = new Map();
+
+function slot(room) {
+  let entry = pending.get(room.code);
+  if (!entry) {
+    entry = { watch: false, players: false, playersAt: 0, teams: new Set() };
+    pending.set(room.code, entry);
+  }
+  return entry;
+}
+
+/* اللاعبون يقرؤون قائمة الفرق بين الجولات — والمنتظِرُ منهم يراها أثناءها */
+function playersNeedPublic(room) {
+  if (room.status !== 'running' && room.status !== 'countdown') return true;
+  for (const team of room.teams.values()) if (team.waiting) return true;
+  return false;
+}
+
+/** يُعلّم ما تغيّر في الغرفة — فيُرسل في الدفعة القادمة مجموعاً */
+function changed(room, { teams = [], players = false } = {}) {
+  const entry = slot(room);
+  entry.watch = true;
+  if (players || playersNeedPublic(room)) entry.players = true;
+  for (const id of teams === 'all' ? room.teams.keys() : teams) if (id) entry.teams.add(id);
 }
 
 function pushTeam(room, teamId) {
@@ -948,14 +1054,170 @@ function pushTeam(room, teamId) {
   if (state) io.to(`team:${teamId}`).emit('team:state', state);
 }
 
+/** كلُّ شيءٍ للجميع الآن — لتحوّلات الجولة وأفعال المنظّم، وهي نادرة */
 function pushAll(room) {
-  pushPublic(room);
+  const state = room.publicState();
+  io.to(watchChannel(room.code)).emit('room:state', state);
+  io.to(playersChannel(room.code)).emit('room:state', state);
   for (const teamId of room.teams.keys()) pushTeam(room, teamId);
+  const entry = pending.get(room.code);
+  if (entry) {
+    entry.watch = false;
+    entry.players = false;
+    entry.playersAt = Date.now();
+    entry.teams.clear();
+  }
 }
+
+/** الدفعة: ما تراكم منذ السابقة يُرسل مرّةً واحدة */
+function flushPending(now = Date.now()) {
+  for (const [code, entry] of pending) {
+    const room = getRoom(code);
+    if (!room) {
+      pending.delete(code);
+      continue;
+    }
+    let state = null;
+    const current = () => (state ??= room.publicState());
+    if (entry.watch) {
+      io.to(watchChannel(code)).emit('room:state', current());
+      entry.watch = false;
+    }
+    if (entry.players && now - entry.playersAt >= PLAYERS_MS) {
+      io.to(playersChannel(code)).emit('room:state', current());
+      entry.players = false;
+      entry.playersAt = now;
+    }
+    for (const teamId of entry.teams) pushTeam(room, teamId);
+    entry.teams.clear();
+  }
+}
+
+/*
+ * حارسُ السيل: لكل اتصالٍ دلوٌ من عشرين حدثاً يمتلئ بعشرةٍ في الثانية.
+ * لا يبلغه لاعبٌ ولا منظّم بيده — وإنما سكربتٌ أو جهازٌ علِق في حلقة،
+ * فيُسقَط ما زاد قبل أن يُثقل السيرفر على القاعة كلّها.
+ */
+const BURST = 20;
+const REFILL_PER_SEC = 10;
 
 io.on('connection', (socket) => {
   // ما يخص هذا الاتصال: أي غرفة، وبأي دور
   let ctx = null;
+
+  let tokens = BURST;
+  let filledAt = Date.now();
+  socket.use((_packet, next) => {
+    const now = Date.now();
+    tokens = Math.min(BURST, tokens + ((now - filledAt) / 1000) * REFILL_PER_SEC);
+    filledAt = now;
+    if (tokens < 1) return; // يُسقط بصمت — ومن ينتظر رداً تنتهي مهلته عنده
+    tokens -= 1;
+    next();
+  });
+
+  /* يفكّ هذا السوكِت عن فريقٍ كان له — فلا يُعدّ حاضراً فيه بعد اليوم */
+  const detach = () => {
+    if (ctx?.role !== 'team') return;
+    const room = getRoom(ctx.code);
+    const team = room?.teams.get(ctx.teamId);
+    socket.leave(`team:${ctx.teamId}`);
+    if (!team) return;
+    team.sockets.delete(socket.id);
+    team.connected = team.sockets.size > 0;
+    changed(room);
+  };
+
+  const attachTeam = (room, team) => {
+    if (ctx?.role === 'team' && ctx.teamId !== team.id) detach();
+    ctx = { role: 'team', code: room.code, teamId: team.id };
+    socket.join(`team:${team.id}`);
+    socket.join(channel(room.code));
+    socket.join(playersChannel(room.code));
+    team.sockets.add(socket.id);
+    team.connected = true;
+    changed(room);
+  };
+
+  const attachAdmin = (room) => {
+    detach();
+    ctx = { role: 'admin', code: room.code };
+    socket.join(channel(room.code));
+    socket.join(adminChannel(room.code));
+    socket.join(watchChannel(room.code));
+  };
+
+  const attachDisplay = (room) => {
+    detach();
+    ctx = { role: 'display', code: room.code };
+    socket.join(channel(room.code));
+    socket.join(watchChannel(room.code));
+  };
+
+  /*
+   * الهويّة تصل مع الاتصال نفسه (handshake.auth) لا في طلبٍ بعده.
+   *
+   * كان الجوّال يتّصل ثم يطلب «رجّعني لفريقي» ويمهل الردَّ ست ثوانٍ، فإن
+   * أبطأ — والوصل عبر الشبكة الموزّعة يأخذ أربعاً وحده — حسب الجلسة منتهيةً
+   * فمحاها: فيُطرد اللاعب إلى الباب، أو تبقى شاشتُه بلا سوكِتٍ في الغرفة
+   * فتعلق. وإجابةٌ ضُغطت أثناء الانقطاع كانت تصل قبل طلب الرجوع فتُرمى بلا
+   * فريق. والآن السيرفر يعرف الجهاز قبل أن يقرأ منه حدثاً واحداً.
+   *
+   * ولا تُمحى جلسةٌ إلا بقولٍ صريح من هنا (session:invalid) — فالمهلةُ
+   * والانقطاع لا يمحوان شيئاً بعد اليوم.
+   */
+  socket.emit('server:hello', { build: BUILD });
+  const auth = socket.handshake.auth ?? {};
+  if (auth.team) {
+    const { code, teamId, token } = auth.team;
+    const room = getRoom(code);
+    const team = room?.teams.get(teamId);
+    if (room && team && team.token === token) {
+      attachTeam(room, team);
+      socket.emit('session:resumed', {
+        role: 'team',
+        state: room.teamState(team.id),
+        room: room.publicState(),
+      });
+    } else {
+      socket.emit('session:invalid', {
+        role: 'team',
+        error: room ? 'انتهت جلستك في هذه الغرفة — انضم من جديد' : 'انتهت هذه الغرفة',
+      });
+    }
+  } else if (auth.admin) {
+    const room = getRoom(auth.admin.code);
+    if (room && room.adminKey === auth.admin.adminKey) {
+      attachAdmin(room);
+      socket.emit('session:resumed', { role: 'admin', code: room.code, state: room.publicState() });
+      pushFeed(room, true);
+    } else {
+      socket.emit('session:invalid', { role: 'admin', error: room ? 'مفتاح المسؤول غير صحيح' : 'الغرفة غير موجودة' });
+    }
+  } else if (auth.display) {
+    const room = getRoom(auth.display.code);
+    if (room) {
+      attachDisplay(room);
+      socket.emit('session:resumed', { role: 'display', state: room.publicState() });
+    } else {
+      socket.emit('session:invalid', { role: 'display', error: 'الغرفة غير موجودة' });
+    }
+  }
+
+  /*
+   * طلبُ مزامنة: يرسله المتصفّح إذا عاد إلى الواجهة بعد أن نام (قفلُ
+   * الشاشة يجمّد الصفحة والسوكِت قد يبدو حيّاً)، فتُعاد إليه حالُه كاملة.
+   */
+  socket.on('session:sync', (_payload, reply) => {
+    const room = ctx && getRoom(ctx.code);
+    if (!room) return reply?.({ ok: false });
+    if (ctx.role === 'team') {
+      const state = room.teamState(ctx.teamId);
+      if (!state) return reply?.({ ok: false, gone: true });
+      return reply?.({ ok: true, state, room: room.publicState() });
+    }
+    reply?.({ ok: true, state: room.publicState() });
+  });
 
   const asAdmin = () => {
     if (ctx?.role !== 'admin') return null;
@@ -969,9 +1231,7 @@ io.on('connection', (socket) => {
       .slice(0, 40);
     if (!clean) return reply?.({ ok: false, error: 'اكتب اسم الغرفة' });
     const room = createRoom(bankIds, settings, difficulty, clean);
-    ctx = { role: 'admin', code: room.code };
-    socket.join(channel(room.code));
-    socket.join(adminChannel(room.code));
+    attachAdmin(room);
     reply?.({
       ok: true,
       code: room.code,
@@ -984,9 +1244,7 @@ io.on('connection', (socket) => {
     const room = getRoom(code);
     if (!room) return reply?.({ ok: false, error: 'الغرفة غير موجودة' });
     if (room.adminKey !== adminKey) return reply?.({ ok: false, error: 'مفتاح المسؤول غير صحيح' });
-    ctx = { role: 'admin', code: room.code };
-    socket.join(channel(room.code));
-    socket.join(adminChannel(room.code));
+    attachAdmin(room);
     reply?.({ ok: true, code: room.code, state: room.publicState() });
     pushFeed(room, true); // المنظّم عاد — يستحقّ السجلّ كاملاً ولو لم يتغيّر
   });
@@ -1012,7 +1270,7 @@ io.on('connection', (socket) => {
     if (!room) return reply?.({ ok: false, error: 'غير مصرح' });
     if (bankIds) room.bankIds = normalizeBankIds(bankIds);
     if (difficulty) room.difficulty = normalizeDifficulty(difficulty);
-    pushPublic(room);
+    changed(room, { players: true });
     reply?.({ ok: true });
   });
 
@@ -1054,12 +1312,12 @@ io.on('connection', (socket) => {
 
   socket.on('admin:adjustTime', ({ teamId, seconds } = {}) => {
     const room = asAdmin();
-    if (room) (room.adjustTime(teamId, Number(seconds) || 0), pushAll(room));
+    if (room) (room.adjustTime(teamId, Number(seconds) || 0), changed(room, { teams: [teamId] }));
   });
 
   socket.on('admin:adjustScore', ({ teamId, points } = {}) => {
     const room = asAdmin();
-    if (room) (room.adjustScore(teamId, Number(points) || 0), pushAll(room));
+    if (room) (room.adjustScore(teamId, Number(points) || 0), changed(room, { teams: [teamId] }));
   });
 
   socket.on('admin:finishGame', (_payload, reply) => {
@@ -1084,7 +1342,7 @@ io.on('connection', (socket) => {
     if (!room) return;
     room.displayBlurred = !room.displayBlurred;
     room.touch();
-    pushPublic(room);
+    changed(room);
   });
 
   socket.on('admin:newRound', () => {
@@ -1102,18 +1360,18 @@ io.on('connection', (socket) => {
     if (!room) return;
     io.to(`team:${teamId}`).emit('team:removed');
     room.removeTeam(teamId);
-    pushPublic(room);
+    /* خصومُ الباقين في متجرهم نقصوا واحداً — فتُعاد حالُ كلٍّ منهم */
+    changed(room, { teams: 'all', players: true });
   });
 
   socket.on('display:join', ({ code } = {}, reply) => {
     const room = getRoom(code);
     if (!room) return reply?.({ ok: false, error: 'الغرفة غير موجودة' });
-    ctx = { role: 'display', code: room.code };
-    socket.join(channel(room.code));
+    attachDisplay(room);
     reply?.({ ok: true, state: room.publicState() });
   });
 
-  socket.on('team:join', ({ code, name } = {}, reply) => {
+  socket.on('team:join', ({ code, name, device } = {}, reply) => {
     const room = getRoom(code);
     if (!room) return reply?.({ ok: false, error: 'رمز الغرفة غير صحيح' });
     /*
@@ -1126,14 +1384,34 @@ io.on('connection', (socket) => {
       .trim()
       .slice(0, 24);
     if (!clean) return reply?.({ ok: false, error: 'اكتب اسم الفريق' });
+    const deviceId = typeof device === 'string' ? device.slice(0, 64) : null;
+
+    /*
+     * الجهازُ نفسه بالاسم نفسه: يعود إلى مجموعته بنقاطها ومكانها — خرج
+     * من اللعبة ثم ندم، أو ضاعت جلسته. وكان يُقال له «الاسم مستخدم» وهو
+     * صاحبُه، فيدخل باسمٍ آخر من الصفر ويبقى اسمُه الأول شبحاً في القائمة.
+     */
+    const mine = room.teamOfDevice(clean, deviceId);
+    if (mine) {
+      attachTeam(room, mine);
+      return reply?.({
+        ok: true,
+        teamId: mine.id,
+        token: mine.token,
+        resumed: true,
+        state: room.teamState(mine.id),
+      });
+    }
+
     const taken = [...room.teams.values()].some((t) => t.name === clean);
     if (taken) return reply?.({ ok: false, error: 'الاسم مستخدم — اختر اسماً آخر' });
+    if (room.teams.size >= MAX_TEAMS) {
+      return reply?.({ ok: false, error: 'الغرفة ممتلئة — راجع المنظّم' });
+    }
 
-    const team = room.addTeam(clean);
-    ctx = { role: 'team', code: room.code, teamId: team.id };
-    socket.join(`team:${team.id}`);
-    socket.join(channel(room.code));
-    pushPublic(room);
+    const team = room.addTeam(clean, deviceId);
+    attachTeam(room, team);
+    changed(room, { teams: 'all', players: true }); // قائمةُ الخصوم في متاجر الباقين زادت واحداً
     reply?.({
       ok: true,
       teamId: team.id,
@@ -1149,11 +1427,7 @@ io.on('connection', (socket) => {
     if (!room || !team || team.token !== token) {
       return reply?.({ ok: false, error: 'انتهت الجلسة — انضم من جديد' });
     }
-    team.connected = true;
-    ctx = { role: 'team', code: room.code, teamId };
-    socket.join(`team:${teamId}`);
-    socket.join(channel(room.code));
-    pushPublic(room);
+    attachTeam(room, team);
     reply?.({ ok: true, teamId, token, state: room.teamState(teamId) });
   });
 
@@ -1271,7 +1545,10 @@ io.on('connection', (socket) => {
     const room = getRoom(ctx.code);
     if (!room) return reply?.({ ok: false, error: 'الغرفة غير موجودة' });
     const result = room.buyCard(ctx.teamId, card, targetId);
-    if (result.ok) pushAll(room); // النقاط تغيّرت، والهدف قد يُنبَّه لاحقاً
+    if (result.ok) {
+      pushTeam(room, ctx.teamId); // متجرُه ونقاطه — فوراً، فهو ينظر إليها
+      changed(room, { players: true });
+    }
     reply?.(result);
   });
 
@@ -1281,44 +1558,68 @@ io.on('connection', (socket) => {
     const room = getRoom(ctx.code);
     if (!room) return reply?.({ ok: false, error: 'الغرفة غير موجودة' });
     const result = room.refundCard(ctx.teamId, card);
-    if (result.ok) pushAll(room); // النقاط عادت، وقد يُرفع قفلٌ عن خصم
+    if (result.ok) {
+      pushTeam(room, ctx.teamId);
+      changed(room, { players: true });
+    }
     reply?.(result);
   });
 
-  socket.on('team:answer', ({ questionId, choice } = {}) => {
-    if (ctx?.role !== 'team') return;
+  /*
+   * الإجابة بإقرار: المتصفّح ينتظر الرد فيعرف أنها وصلت، ولا يبقى زرُّه
+   * معلّقاً على إجابةٍ ضاعت. والحزمةُ القديمة لا تطلب إقراراً — فلها
+   * team:result كما كان.
+   */
+  socket.on('team:answer', ({ questionId, choice } = {}, reply) => {
+    if (ctx?.role !== 'team') return reply?.({ ok: false, error: 'غير مصرح' });
     const room = getRoom(ctx.code);
-    if (!room) return;
+    if (!room) return reply?.({ ok: false, error: 'الغرفة غير موجودة' });
     const outcome = room.answer(ctx.teamId, questionId, Number(choice));
-    if (!outcome) return;
-    socket.emit('team:result', outcome);
-    pushAll(room);
-    pushFeed(room);
+    if (!outcome) {
+      /* متأخرةٌ أو مكرّرة (أُعيد إرسالها بعد انقطاع): تُصحَّح شاشتُه بحاله */
+      reply?.({ ok: false, stale: true });
+      return pushTeam(room, ctx.teamId);
+    }
+    if (typeof reply === 'function') reply({ ok: true, ...outcome });
+    else socket.emit('team:result', outcome);
     // إجابة خاطئة قد تصفّر العداد وتنهي الجولة قبل أن تصلها النبضة
-    if (room.status === 'ended') io.to(channel(room.code)).emit('room:ended', room.result);
+    if (room.status === 'ended') {
+      pushAll(room);
+      io.to(channel(room.code)).emit('room:ended', room.result);
+    } else {
+      pushTeam(room, ctx.teamId); // سؤالُه التالي — فوراً، فوقته يجري
+      changed(room);
+    }
+    pushFeed(room);
   });
 
-  socket.on('disconnect', () => {
-    if (ctx?.role !== 'team') return;
-    const room = getRoom(ctx.code);
-    const team = room?.teams.get(ctx.teamId);
-    if (!team) return;
-    team.connected = false; // نبقيه في اللعبة — عداده يستمر وقد يعود
-    pushPublic(room);
-  });
+  // نبقيه في اللعبة — عداده يستمر وقد يعود
+  socket.on('disconnect', detach);
 });
 
 // النبضة العامة: مصدر الحقيقة الوحيد للوقت
+/*
+ * والوقتُ وحده لا يُبثّ: كلُّ متصفّحٍ يعدّه بنفسه. فلا يخرج من النبضة إلا
+ * تحوّلٌ في حال الغرفة (انتهى الاستعداد، سكن نبضٌ فانتهت الجولة).
+ */
+let resyncAt = Date.now();
 setInterval(() => {
+  const now = Date.now();
+  const resync = now - resyncAt >= RESYNC_MS;
+  if (resync) resyncAt = now;
   for (const room of allRooms()) {
-    const wasRunning = room.status === 'running';
-    if (!room.tick()) continue;
-    pushPublic(room);
-    for (const teamId of room.teams.keys()) pushTeam(room, teamId);
-    if (wasRunning && room.status === 'ended') {
-      io.to(channel(room.code)).emit('room:ended', room.result);
+    const before = room.status;
+    if (!room.tick(now)) continue;
+    if (room.status !== before) {
+      pushAll(room);
+      if (before === 'running' && room.status === 'ended') {
+        io.to(channel(room.code)).emit('room:ended', room.result);
+      }
+    } else if (resync && room.status === 'running') {
+      changed(room, { teams: 'all' });
     }
   }
+  flushPending(now);
 }, TICK_MS);
 
 /*
@@ -1379,6 +1680,7 @@ setInterval(
         console.warn(`⚠ تعذّر نسيان لقطة ${code}: ${err.message}`);
       }
       feedSent.delete(code);
+      pending.delete(code);
     }
     /* وما في السجلّ من خاملاتٍ يُختم منتهياً — ولو كُنست قبل هذا الكود */
     try {
@@ -1413,6 +1715,8 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, async () => {
     if (leaving) return;
     leaving = true;
+    /* يُقال للأجهزة إن السيرفر يتجدّد — فتقول لأصحابها «ثوانٍ ونعود» لا «انقطع» */
+    io.emit('server:restarting');
     const deadline = new Promise((resolve) => setTimeout(resolve, 8000).unref());
     const drain = async () => {
       await flush();
