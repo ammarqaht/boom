@@ -44,7 +44,7 @@ import {
   TrophyIcon,
   UsersIcon,
 } from '../components/icons';
-import { BankArt, LevelArt, bankTint, levelTint } from '../components/art';
+import { BankArt, LevelArt } from '../components/art';
 import {
   CommentCard,
   CountdownGate,
@@ -76,22 +76,18 @@ function ArtTile({
   art,
   onClick,
   compact,
-  tint,
 }: {
   on: boolean;
   label: string;
   art: ReactNode;
   onClick: () => void;
   compact?: boolean;
-  /** لونُ الهالة خلف الصورة — من الصورة نفسها (components/art.tsx) */
-  tint: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      style={{ '--tint': tint } as CSSProperties}
       className={`art-tile tap ${on ? 'is-on' : ''} ${compact ? 'is-compact' : ''}`}
     >
       <span className="art-stage">{art}</span>
@@ -128,7 +124,6 @@ function BankPicker({
             on={chosen.includes(bank.id)}
             label={bank.name}
             art={<BankArt id={bank.id} />}
-            tint={bankTint(bank.id)}
             onClick={() => onToggle(bank.id)}
           />
         ))}
@@ -156,7 +151,6 @@ function LevelPicker({
           on={level.id === value}
           label={level.label}
           art={<LevelArt id={level.id} />}
-          tint={levelTint(level.id)}
           onClick={() => onPick(level.id)}
         />
       ))}
@@ -327,7 +321,6 @@ export default function Admin() {
                 on={bankIds.includes(bank.id)}
                 label={bank.name}
                 art={<BankArt id={bank.id} />}
-            tint={bankTint(bank.id)}
                 onClick={() => toggle(bank.id)}
               />
             ))}

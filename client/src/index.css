@@ -2306,23 +2306,27 @@ textarea {
     transform: translateY(-3px) scale(1.04);
   }
 }
-/* الصورةُ في قلب مقامها تماماً — حشوٌ متساوٍ من كل جهة */
+/*
+ * الصورةُ في قلب مقامها تماماً، بتموضعٍ مطلقٍ لا بمرونة: سفاري كان
+ * يحسب صورةً بعرض ١٠٠٪ داخل حاويةٍ مرنةٍ ذاتِ حشوٍ نسبيّ على غير ما
+ * يحسبه كروم، فتنزاح يساراً وتُقصّ. والمطلقُ بهوامش آليّة يتوسّط في كلٍّ.
+ */
 .art-stage {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  width: 100%;
   aspect-ratio: 1 / 0.86;
-  padding: 13%;
 }
 .art-tile.is-compact .art-stage {
   aspect-ratio: 1 / 0.74;
-  padding: 14%;
 }
 .art-stage img {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 68%;
+  height: 68%;
   object-fit: contain;
-  filter: drop-shadow(0 12px 14px rgb(0 0 0 / 0.45)) saturate(0.78) brightness(0.86);
+  filter: drop-shadow(0 12px 14px rgb(0 0 0 / 0.45)) brightness(0.8);
   transition:
     filter 0.25s ease,
     transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.3);

@@ -12,3 +12,7 @@ server/banks/.backup/
 
 # أسرارٌ محليّة — المفاتيح لا تدخل المستودع
 .env
+
+# ملفُّ كروم المؤقّت لصنع الصور
+scripts/art/.chrome/
+scripts/art/out/
