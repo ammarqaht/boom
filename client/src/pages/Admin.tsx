@@ -8,7 +8,6 @@ import {
   Button,
   CHIP_BTN,
   Card,
-  CheckAll,
   ErrorNote,
   Field,
   HoldButton,
@@ -18,7 +17,6 @@ import {
   Menu,
   MiniAction,
   PulseMark,
-  Segmented,
   formatTime,
   stateStyle,
   teamLevel,
@@ -49,6 +47,7 @@ import {
   TrophyIcon,
   UsersIcon,
 } from '../components/icons';
+import { BankArt, LevelArt } from '../components/art';
 import {
   CommentCard,
   CountdownGate,
@@ -67,18 +66,42 @@ const SESSION_KEY = 'nabda:admin';
 const CROWD = 30;
 
 /**
- * مُنتقي البنوك — سحابةُ أقراصٍ تلتفّ، لا شبكةٌ ذاتُ عمودين.
+ * بطاقةٌ مصوّرة تُنتقى — للبنوك والمراحل.
  *
- * ولماذا تُركت الشبكة؟ أسماءُ البنوك عربيةٌ مختلفةُ الأطوال: «العلوم»
- * خمسةُ أحرف و«الصحابة رضي الله عنهم» أحدٌ وعشرون. والشبكةُ تفرض على
- * الاثنين خليّةً واحدة: فيُقَصّ الطويلُ على ثلاثة أسطر، ويبقى تحت القصير
- * فراغٌ ميّت — وهذا بعينه ما يُقرأ «تراصّاً». والقرصُ يأخذ قدرَ اسمه
- * ويلتفّ إلى السطر التالي من نفسه، فيستوي الإيقاع.
- *
- * والخزّانُ في صدر اللوح لا في ذيله: هو الرقمُ الذي يُبنى عليه القرار —
- * «أيكفي ما اخترتُ لعشر جولات؟» — فيُرى وهو ينمو مع كل ضغطة، لا بعد أن
- * يفرغ المنظّم من الاختيار.
+ * كانت أقراصاً نصّيةً بجانب كلٍّ منها عددُ أسئلته، والمنظّم لا يختار
+ * بالعدد: يختار «الفقه» أو «العلوم» بما يناسب جمهوره. فصارت لوحاتٍ
+ * تُعرف بالنظر — كفئات «سين جيم» — والاسمُ على شريطٍ في ذيلها يتّقد
+ * سماوياً إذا اختيرت، وتخبو لوحةُ ما لم يُختر فيتقدّم المختار.
  */
+function ArtTile({
+  on,
+  label,
+  art,
+  onClick,
+  compact,
+}: {
+  on: boolean;
+  label: string;
+  art: ReactNode;
+  onClick: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={`art-tile tap ${on ? 'is-on' : ''} ${compact ? 'is-compact' : ''}`}
+    >
+      <span className="art-stage">{art}</span>
+      <span className="art-label">{label}</span>
+      <span className="art-check" aria-hidden="true">
+        <CheckIcon size={12} strokeWidth={4} />
+      </span>
+    </button>
+  );
+}
+
 function BankPicker({
   banks,
   chosen,
@@ -90,63 +113,42 @@ function BankPicker({
   onToggle: (id: string) => void;
   onAll: () => void;
 }) {
-  const total = banks.filter((b) => chosen.includes(b.id)).reduce((sum, b) => sum + b.count, 0);
-
   return (
     <>
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1.5">
-        <span className="tnum text-[13px] font-medium text-muted">
-          <b className="font-black text-ink">{chosen.length}</b> من {banks.length} بنكاً ·{' '}
-          <b className="font-black text-signal">{total}</b> سؤال في الخزّان
-        </span>
-        <CheckAll
-          label="تحديد الكل"
-          checked={chosen.length === banks.length}
-          onToggle={onAll}
-        />
+      <div className="mb-3 flex justify-end">
+        <MiniAction onClick={onAll}>
+          {chosen.length === banks.length ? 'إلغاء الكل' : 'تحديد الكل'}
+        </MiniAction>
       </div>
-
-      <div className="flex flex-wrap gap-2">
-        {banks.map((bank) => {
-          const on = chosen.includes(bank.id);
-          return (
-            <button
-              key={bank.id}
-              type="button"
-              onClick={() => onToggle(bank.id)}
-              aria-pressed={on}
-              /*
-                grow: القرصُ يأخذ قدرَ اسمه ثم يقتسم فضلةَ السطر مع جيرانه،
-                فينتهي كلُّ سطرٍ عند الحدّ ولا تبقى حافّةٌ مُشرَّمة. والنصّ
-                على حاله — الذي كبُر هو الهدفُ لا الحرف.
-              */
-              className={`flex grow basis-auto items-center gap-2 rounded-chip px-3 py-2.5 text-[13px] font-bold transition sm:gap-2.5 sm:px-4 sm:py-3.5 sm:text-[14px] ${
-                on
-                  ? 'bg-signal-2 text-ink shadow-[inset_0_0_0_1.5px_var(--color-signal)]'
-                  : 'text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] hover:bg-surface-2'
-              }`}
-            >
-              <span
-                className={`flex size-[17px] shrink-0 items-center justify-center rounded-[3px] transition ${
-                  on
-                    ? 'bg-signal text-on-signal'
-                    : 'text-transparent shadow-[inset_0_0_0_1.5px_var(--color-line-2)]'
-                }`}
-                aria-hidden="true"
-              >
-                <CheckIcon size={10} strokeWidth={4} />
-              </span>
-              <span className="grow text-start whitespace-nowrap">{bank.name}</span>
-              <span
-                className={`tnum text-[11.5px] font-medium ${on ? 'text-signal-ink' : 'text-faint'}`}
-              >
-                {bank.count}
-              </span>
-            </button>
-          );
-        })}
+      <div className="art-grid">
+        {banks.map((bank) => (
+          <ArtTile
+            key={bank.id}
+            on={chosen.includes(bank.id)}
+            label={bank.name}
+            art={<BankArt id={bank.id} />}
+            onClick={() => onToggle(bank.id)}
+          />
+        ))}
       </div>
     </>
+  );
+}
+
+function LevelPicker({ value, onPick }: { value: Level; onPick: (level: Level) => void }) {
+  return (
+    <div className="grid grid-cols-4 gap-2 sm:gap-2.5">
+      {LEVELS.map((level) => (
+        <ArtTile
+          key={level.id}
+          compact
+          on={level.id === value}
+          label={level.label}
+          art={<LevelArt id={level.id} />}
+          onClick={() => onPick(level.id)}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -272,11 +274,7 @@ export default function Admin() {
       );
 
     return (
-      <FormPage
-        wide
-        title="غرفة جديدة"
-        lead="اختر بنوك الأسئلة الآن — وتُبدَّل لاحقاً من «خيارات». أما ثوابت الجولة فمضبوطة: ثلاثون ثانية، وخمس للصواب، وثلاث للخطأ."
-      >
+      <FormPage wide title="غرفة جديدة">
         <Card className="grid gap-4">
           <Field label="اسم الغرفة">
             <Input
@@ -286,12 +284,9 @@ export default function Admin() {
               maxLength={40}
               autoFocus
             />
-            <span className="mt-1.5 block text-xs font-medium text-muted">
-              النشاط أو النادي — به تعرف الغرفة في سجلّك بعد شهر.
-            </span>
           </Field>
 
-          <Field group label="بنوك الأسئلة — واحد أو أكثر">
+          <Field group label="بنوك الأسئلة">
             <BankPicker
               banks={banks}
               chosen={bankIds}
@@ -300,14 +295,11 @@ export default function Admin() {
                 setBankIds(bankIds.length === banks.length ? [banks[0].id] : banks.map((b) => b.id))
               }
             />
-            <p className="mt-3 text-[13px] leading-relaxed text-muted">
-              تُخلط أسئلة البنوك المختارة وتُعرض عشوائياً — ولا يُعاد سؤالٌ على لاعبٍ رآه.
-            </p>
           </Field>
 
           {/* مجموعةٌ لا ‎<label>‎: أربعةُ أزرار، وضغطةٌ في فراغها تُفعّل أوّلها */}
-          <Field group label="مستوى الأسئلة">
-            <Segmented value={difficulty} options={LEVELS} onPick={setDifficulty} />
+          <Field group label="المرحلة">
+            <LevelPicker value={difficulty} onPick={setDifficulty} />
           </Field>
           <ErrorNote>{error}</ErrorNote>
           <Button
@@ -856,9 +848,9 @@ function Console({
         <Modal title="بنوك الأسئلة ومستواها" onClose={() => setShowBanks(false)}>
           <div className="mb-4">
             <span className="mb-2 block text-sm font-bold tracking-[0.08em] text-muted">
-              مستوى الأسئلة
+              المرحلة
             </span>
-            <Segmented value={room.difficulty as Level} options={LEVELS} onPick={setLevel} />
+            <LevelPicker value={room.difficulty as Level} onPick={setLevel} />
           </div>
 
           <BankPicker
@@ -872,9 +864,6 @@ function Console({
               })
             }
           />
-          <p className="mt-3 text-[13px] leading-relaxed text-muted">
-            يُبدَّل الخزّان والجولة جارية — وما أُخذ من أسئلةٍ لا يعود.
-          </p>
         </Modal>
       )}
     </div>

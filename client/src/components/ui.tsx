@@ -1185,7 +1185,8 @@ export function FormPage({
   children,
 }: {
   title: string;
-  lead: string;
+  /** سطرُ تعريفٍ تحت العنوان — يُترك لمن لا يحتاجه الداخل */
+  lead?: string;
   /** ما يُوضع تحت النموذج — تمهيدٌ أو تنبيه، تخصّه الصفحةُ لا الإطار */
   foot?: ReactNode;
   /**
@@ -1218,9 +1219,11 @@ export function FormPage({
           <span className="mt-2.5 block text-[12.5px] font-bold tracking-[0.14em] text-muted">
             {title}
           </span>
-          <p className="mx-auto mt-3.5 max-w-[38ch] text-[14px] leading-relaxed text-muted">
-            {lead}
-          </p>
+          {lead && (
+            <p className="mx-auto mt-3.5 max-w-[38ch] text-[14px] leading-relaxed text-muted">
+              {lead}
+            </p>
+          )}
         </header>
 
         {/* المجرى تحت البطل، ذائبَ الطرفين كمجرى الصفحة التعريفية */}
