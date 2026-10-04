@@ -35,11 +35,11 @@ import * as store from './store.js';
 const PORT = process.env.PORT || 3000;
 const TICK_MS = 250;
 /*
- * دورة الكتابة على القرص. ثانيتان لأنها أقصى ما نقبل ضياعه من جولة،
+ * دورة الكتابة على القرص. ثانيةٌ لأنها أقصى ما نقبل ضياعه من جولة لو سقط السيرفر فجأة،
  * وهي في الوقت نفسه أبطأ من أن تُتعب القرص: الغرفة الواحدة عشرات
  * الكيلوبايتات، والكتابة لا تحجب القراءة في WAL.
  */
-const SAVE_MS = 2000;
+const SAVE_MS = 1000;
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const app = express();
@@ -902,7 +902,7 @@ app.get('/api/live', (_req, res) => {
     }
   }
   res.setHeader('Cache-Control', 'no-store');
-  res.json({ live: rooms > 0, rooms, players, connected });
+  res.json({ live: rooms > 0, rooms, players, connected, instance: INSTANCE });
 });
 
 app.use(
@@ -1098,6 +1098,9 @@ function flushPending(now = Date.now()) {
  * لا يبلغه لاعبٌ ولا منظّم بيده — وإنما سكربتٌ أو جهازٌ علِق في حلقة،
  * فيُسقَط ما زاد قبل أن يُثقل السيرفر على القاعة كلّها.
  */
+/* هويّةُ هذه العملية: تظهر في ‎/api/live‎ — فإن تعدّدت بين طلبين فالمنصّة تشغّل نسختين */
+const INSTANCE = randomBytes(4).toString('hex');
+
 const BURST = 20;
 const REFILL_PER_SEC = 10;
 
@@ -1125,6 +1128,7 @@ io.on('connection', (socket) => {
     if (!team) return;
     team.sockets.delete(socket.id);
     team.connected = team.sockets.size > 0;
+    if (!team.connected) team.disconnectedAt = Date.now();
     changed(room);
   };
 
@@ -1136,6 +1140,7 @@ io.on('connection', (socket) => {
     socket.join(playersChannel(room.code));
     team.sockets.add(socket.id);
     team.connected = true;
+    team.disconnectedAt = null;
     changed(room);
   };
 
@@ -1570,11 +1575,12 @@ io.on('connection', (socket) => {
    * معلّقاً على إجابةٍ ضاعت. والحزمةُ القديمة لا تطلب إقراراً — فلها
    * team:result كما كان.
    */
-  socket.on('team:answer', ({ questionId, choice } = {}, reply) => {
+  socket.on('team:answer', ({ questionId, choice, left } = {}, reply) => {
     if (ctx?.role !== 'team') return reply?.({ ok: false, error: 'غير مصرح' });
     const room = getRoom(ctx.code);
     if (!room) return reply?.({ ok: false, error: 'الغرفة غير موجودة' });
-    const outcome = room.answer(ctx.teamId, questionId, Number(choice));
+    const before = room.status;
+    const outcome = room.answer(ctx.teamId, questionId, Number(choice), Number(left));
     if (!outcome) {
       /* متأخرةٌ أو مكرّرة (أُعيد إرسالها بعد انقطاع): تُصحَّح شاشتُه بحاله */
       reply?.({ ok: false, stale: true });
@@ -1583,9 +1589,13 @@ io.on('connection', (socket) => {
     if (typeof reply === 'function') reply({ ok: true, ...outcome });
     else socket.emit('team:result', outcome);
     // إجابة خاطئة قد تصفّر العداد وتنهي الجولة قبل أن تصلها النبضة
-    if (room.status === 'ended') {
+    if (before !== 'ended' && room.status === 'ended') {
       pushAll(room);
       io.to(channel(room.code)).emit('room:ended', room.result);
+    } else if (outcome.late) {
+      /* متأخرةٌ بعد النهاية: نقاطُه وجائزتُه تبدّلت — يراها هو والقاعة */
+      pushTeam(room, ctx.teamId);
+      changed(room, { players: true });
     } else {
       pushTeam(room, ctx.teamId); // سؤالُه التالي — فوراً، فوقته يجري
       changed(room);

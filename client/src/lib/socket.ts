@@ -16,6 +16,12 @@ function handshake(): Record<string, unknown> {
   const query = new URLSearchParams(location.search);
   if (path.startsWith('/play')) {
     const team = loadTeamSession();
+    /*
+     * رابطٌ إلى غرفةٍ أخرى يغلب الجلسة المحفوظة: من لعب أمس في غرفة ثم
+     * فتح اليوم رابطَ غرفةٍ جديدة كان يُعاد إلى نتائج الأمس بدل باب اليوم.
+     */
+    const wanted = query.get('code')?.toUpperCase();
+    if (team && wanted && wanted !== team.code) return {};
     return team ? { team } : {};
   }
   if (path.startsWith('/admin')) {

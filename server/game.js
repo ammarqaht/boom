@@ -17,6 +17,22 @@ const FREEZE_MS = 5000; // مدة قفل الإجابة عند التجميد
  * من رابطٍ يتسرّب فيدخل منه مئات فيثقل البثُّ على القاعة كلّها.
  */
 export const MAX_TEAMS = 200;
+
+/*
+ * ثلاث مهلٍ تحمي الحسابَ من تأخّر الشبكة — والعرضُ قد يتأخّر، أما الحساب فلا.
+ *
+ * مهلةُ السكون: من بلغ عدّادُه الصفر لا يُسكَّن في الحال. إجابتُه قد تكون
+ * في الطريق — ضغطها وشاشتُه تقول «بقي نصف ثانية» — والشبكةُ المزدحمة
+ * تؤخّرها. فيُنتظر قليلاً: إن وصلت إجابةٌ ضُغطت قبل الصفر حُسبت.
+ *
+ * مهلةُ المتأخّرة: الجولة انتهت بسكون غيره وإجابتُه الصحيحة في الطريق —
+ * تُحسب نقطتُها إن وصلت في ثانيةٍ من النهاية.
+ *
+ * مهلةُ الانقطاع: «منقطع» من غاب أكثر من ثلاث ثوانٍ، لا من رمشت شبكتُه.
+ */
+export const FLATLINE_GRACE_MS = 1500;
+const LATE_ANSWER_MS = 1000;
+const OFFLINE_AFTER_MS = 3000;
 const TIME_CARD_MS = 10000; // الوقت الإضافي من بطاقة «وقت إضافي»
 const DOUBLE_FACTOR = 2; // مضاعِف بطاقة «مضاعفة»
 
@@ -225,6 +241,8 @@ class Team {
      * الحَكَم: متصلٌ ما بقي له سوكِتٌ واحد.
      */
     this.sockets = new Set();
+    /* متى انقطع آخرُ سوكِتٍ له — به يُعرف المنقطع حقاً من الرامش */
+    this.disconnectedAt = null;
     // يبقى عبر الجولات: لا يُعاد سؤال على الفريق حتى ينفد البنك كله
     this.seen = new Set();
     // عدد مرات شراء كل بطاقة — والحدّ في CARDS[id].limit لكل نوع طوال اللعبة
@@ -264,6 +282,9 @@ class Team {
     this.review = []; // أسئلة الجولة بترتيب ظهورها — للمراجعة بعد الانتهاء
     this.lockedMs = 0; // قفل الإجابة المتبقي (تجميد) — يُطبّق عند بدء الجولة
     this.frozenBy = null; // اسم من جمّدك أثناء فترة القفل
+    this.dyingAt = null; // بلغ الصفر هنا — وينتظر مهلةَ السكون
+    this.dropped = false; // سكن نبضُه وهو منقطع — فلم يُنهِ الجولة على غيره
+    this.lateUsed = false; // استُعملت له مهلةُ المتأخّرة في هذه الجولة
   }
 }
 
@@ -553,6 +574,8 @@ export class Room {
     if (this.status !== 'paused') return;
     this.status = 'running';
     this.lastTickAt = Date.now(); // نتجاهل الوقت المنقضي أثناء الإيقاف
+    /* ومهلةُ السكون تُستأنف من أولها: الإيقافُ ليس من وقت أحد */
+    for (const team of this.teams.values()) if (team.dyingAt) team.dyingAt = this.lastTickAt;
     this.touch();
   }
 
@@ -580,11 +603,18 @@ export class Room {
    * يتحقق من إجابة الفريق ويعدّل وقته. التحقق يتم هنا فقط —
    * الخيار الصحيح لا يغادر السيرفر أبداً.
    */
-  answer(teamId, questionId, choice) {
+  answer(teamId, questionId, choice, left = null) {
     const team = this.teams.get(teamId);
+    if (this.status === 'ended') return this.lateAnswer(team, questionId, choice);
     if (this.status !== 'running' || !team || team.flatlined) return null;
     if (team.lockedMs > 0) return null; // مقفلة عن الإجابة (تجميد)
     if (!team.current || team.current.id !== questionId) return null; // إجابة متأخرة أو مكررة
+    /*
+     * في مهلة السكون: لا تُقبل إلا إجابةٌ ضُغطت وشاشةُ صاحبها تقول إن له
+     * وقتاً (left: ما كان باقياً على شاشته لحظةَ الضغط). فالإجابةُ التي
+     * سبقت الصفر وأخّرتها الشبكة تُحسب، والتي جاءت بعده لا.
+     */
+    if (team.timeMs === 0 && !(Number(left) > 0)) return null;
 
     const isCorrect = choice === team.current.answer;
     this.bump(team.current.id, isCorrect ? 'correct' : 'wrong');
@@ -608,6 +638,7 @@ export class Room {
       team.timeMs = this.clampTime(team.timeMs - this.settings.wrongPenalty * 1000);
     }
     team.lastResult = isCorrect ? 'correct' : 'wrong';
+    if (team.timeMs > 0) team.dyingAt = null; // نجا من مهلة السكون
     this.touch();
 
     /*
@@ -624,6 +655,52 @@ export class Room {
 
     this.nextQuestion(team);
     return { isCorrect, flatlined: false, ...reveal };
+  }
+
+  /**
+   * إجابةٌ وصلت بعد نهاية الجولة بأقلّ من مهلة المتأخّرة.
+   *
+   * الجولة انتهت بسكون غيره وإجابتُه في الطريق. لا وقتَ يُعدَّل — الجولة
+   * انتهت — وإنما نقطةُ الصواب تُضاف إلى جائزته ورصيده، مضروبةً في مضاعِفه
+   * كما لو وصلت قبل النهاية. ومرّةً واحدة في الجولة.
+   */
+  lateAnswer(team, questionId, choice) {
+    if (!team || team.flatlined || team.waiting || team.lateUsed) return null;
+    if (!this.endedAt || Date.now() - this.endedAt > LATE_ANSWER_MS) return null;
+    if (!team.current || team.current.id !== questionId) return null;
+    team.lateUsed = true;
+
+    const isCorrect = choice === team.current.answer;
+    this.bump(team.current.id, isCorrect ? 'correct' : 'wrong');
+    const record = this.served.get(team.current.id);
+    if (record) record[isCorrect ? 'right' : 'wrong']++;
+    this.feedVersion++;
+    team.answered++;
+    team.review.push({
+      id: team.current.id,
+      q: team.current.q,
+      options: team.current.options,
+      answer: team.current.answer,
+      choice,
+      isCorrect,
+    });
+    if (isCorrect) {
+      team.correct++;
+      const award = this.result?.awards.find((a) => a.teamId === team.id);
+      if (award) {
+        const factor = award.factor ?? 1;
+        award.points += factor;
+        award.base += 1;
+        award.correct = (award.correct ?? 0) + 1;
+        award.doubled = factor > 1;
+        team.score += factor;
+      }
+    }
+    team.lastResult = isCorrect ? 'correct' : 'wrong';
+    const reveal = { questionId: team.current.id, answer: team.current.answer };
+    team.current = null;
+    this.touch();
+    return { isCorrect, flatlined: false, late: true, ...reveal };
   }
 
   flatline(team) {
@@ -670,12 +747,42 @@ export class Room {
         if (team.lockedMs === 0) team.frozenBy = null;
       }
       team.timeMs = Math.max(0, team.timeMs - elapsed);
-      if (team.timeMs === 0) {
+      if (team.timeMs > 0) continue;
+
+      /*
+       * المنقطعُ يسكن ولا يُنهي الجولة على غيره.
+       *
+       * «أوّلُ نبضٍ يسكن يُنهي الجولة» قاعدةٌ عن اللعب لا عن الشبكة: بمئة
+       * جوّالٍ على واي فاي القاعة يكفي أن ينقطع نتُّ واحدٍ عشرين ثانية
+       * فتنتهي الجولةُ على تسعةٍ وتسعين يلعبون. فمن نفد وقتُه وهو غائبٌ
+       * خرج من الجولة وحده — ولا يُوقَف عدّادُه وهو غائب، وإلا صار
+       * إطفاءُ النت حيلةً لحبس الوقت.
+       */
+      if (this.isOffline(team, now)) {
+        this.stop(team);
+        team.dropped = true;
+        continue;
+      }
+      team.dyingAt ??= now;
+      if (now - team.dyingAt >= FLATLINE_GRACE_MS) {
         this.stop(team);
         stopped = true;
       }
     }
-    if (stopped) this.endRound();
+    if (stopped || this.noneAlive()) this.endRound();
+    return true;
+  }
+
+  /** غائبٌ حقاً: لا سوكِت له منذ أكثر من مهلة الانقطاع */
+  isOffline(team, now = Date.now()) {
+    return !team.connected && team.disconnectedAt !== null && now - team.disconnectedAt > OFFLINE_AFTER_MS;
+  }
+
+  /* لم يبق في الجولة نبضٌ حيّ — سكنوا كلُّهم منقطعين — فلا جولةَ تُنتظر */
+  noneAlive() {
+    for (const team of this.teams.values()) {
+      if (!team.waiting && !team.flatlined) return false;
+    }
     return true;
   }
 
@@ -696,6 +803,7 @@ export class Room {
      */
     if (this.status === 'ended') return;
     this.status = 'ended';
+    this.endedAt = Date.now(); // تبدأ منها مهلةُ المتأخّرة
     /* المنتظِرون لم يلعبوا هذه الجولة: لا جائزةَ لهم ولا يُعدّون في المراكز */
     const teams = [...this.teams.values()].filter((t) => !t.waiting);
     const survivors = teams.filter((t) => !t.flatlined).sort((a, b) => b.timeMs - a.timeMs);
@@ -717,6 +825,8 @@ export class Room {
         base: raw,
         correct: team.correct, // كم منها جاء من الإجابات — يُقرأ في المراجعة
         doubled: factor > 1 && raw > 0,
+        factor, // تُضرب فيه نقطةُ إجابةٍ وصلت متأخرة
+        dropped: team.dropped || undefined, // سكن وهو منقطع — لم يُنهِ الجولة
         ...extra,
       };
     };
@@ -890,6 +1000,7 @@ export class Room {
           timeMs: Math.round(t.timeMs),
           score: t.score,
           flatlined: t.flatlined,
+          dropped: t.dropped, // سكن وهو منقطع — لا يُسمّى فيمن أنهى الجولة
           connected: t.connected,
           answered: t.answered,
           correct: t.correct,
@@ -980,6 +1091,7 @@ export class Room {
       timeMs: Math.round(team.timeMs),
       score: team.score,
       flatlined: team.flatlined,
+      dropped: team.dropped,
       waiting: team.waiting, // دخل والجولة جارية — شاشتُه «انتظر الجولة القادمة»
       lastResult: team.lastResult,
       status: this.status,
@@ -1083,6 +1195,7 @@ Room.prototype.snapshot = function snapshot() {
       roundEntry: t.roundEntry,
       timeMs: Math.round(t.timeMs),
       flatlined: t.flatlined,
+      dropped: t.dropped,
       flatlinedAt: t.flatlinedAt,
       current: t.current,
       answered: t.answered,
@@ -1140,6 +1253,7 @@ export function restoreRoom(snap) {
     team.deviceId = t.deviceId ?? null;
     team.score = t.score;
     team.connected = false; // حتى يعود بجهازه فعلاً
+    team.disconnectedAt = Date.now(); // ومهلةُ الانقطاع تبدأ من عودة السيرفر
     team.seen = new Set(t.seen ?? []);
     team.cardUses = new Map(t.cardUses ?? []);
     team.pendingBonusMs = t.pendingBonusMs ?? 0;
@@ -1151,6 +1265,7 @@ export function restoreRoom(snap) {
     team.roundEntry = t.roundEntry ?? null;
     team.timeMs = t.timeMs;
     team.flatlined = Boolean(t.flatlined);
+    team.dropped = Boolean(t.dropped);
     team.flatlinedAt = t.flatlinedAt ?? null;
     team.queue = []; // يُبنى عند أول حاجة
     team.current = t.current ?? null;

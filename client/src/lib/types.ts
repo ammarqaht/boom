@@ -21,6 +21,8 @@ export interface PublicTeam {
   timeMs: number;
   score: number;
   flatlined: boolean;
+  /** سكن نبضه وهو منقطع — فلم يُنهِ الجولة على غيره */
+  dropped?: boolean;
   connected: boolean;
   answered: number;
   correct: number;
@@ -46,6 +48,9 @@ export interface Award {
   base?: number;
   timeMs: number;
   flatlined?: boolean;
+  dropped?: boolean;
+  /** مضاعِفه في هذه الجولة — تُضرب فيه نقطةُ إجابةٍ وصلت متأخرة */
+  factor?: number;
   /** كم من نقاطه جاء من الإجابات الصحيحة */
   correct?: number;
   /** صاحب أعلى وقت في الجولة */
@@ -141,6 +146,8 @@ export interface TeamState {
   timeMs: number;
   score: number;
   flatlined: boolean;
+  /** سكن نبضه وهو منقطع — فلم يُنهِ الجولة على غيره */
+  dropped?: boolean;
   /** دخل والجولة جارية — شاشته «انتظر الجولة القادمة» */
   waiting: boolean;
   lastResult: 'correct' | 'wrong' | null;

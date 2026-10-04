@@ -468,7 +468,7 @@ function Channel({
             </b>
             <span className="mt-1 flex items-center justify-center gap-2 text-[26px] font-black text-danger">
               <FlatlineIcon size={20} />
-              توقف النبض
+              {team.dropped ? 'انقطع اتصاله' : 'توقف النبض'}
             </span>
           </>
         ) : (
@@ -585,6 +585,8 @@ function useFlatlineMoment(teams: PublicTeam[], round: number) {
     for (const team of teams) {
       if (team.flatlined && !seen.current.has(team.id)) {
         seen.current.add(team.id);
+        /* من سكن وهو منقطع لم يُنهِ الجولة — فلا صفيرَ ولا ستارةَ تقول «انتهت» */
+        if (team.dropped) continue;
         playFlatline();
         setName(team.name);
         setLeaving(false);

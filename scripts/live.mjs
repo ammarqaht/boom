@@ -14,7 +14,22 @@ const guard = process.argv.includes('--guard');
 
 try {
   const res = await fetch(`${URL}/api/live`, { signal: AbortSignal.timeout(6000) });
-  const { live, rooms, players, connected } = await res.json();
+  const { live, rooms, players, connected, instance } = await res.json();
+
+  /*
+   * والمنصّة تشغّل نسخةً واحدة؟ الغرفُ في ذاكرة السيرفر، فلو شغّلت
+   * نسختين لوصل نصفُ اللاعبين إلى نسخةٍ ليست فيها غرفتُهم. فيُسأل مرّات:
+   * إن اختلفت هويّةُ المُجيب فهما اثنتان.
+   */
+  const seen = new Set([instance]);
+  for (let i = 0; i < 6; i++) {
+    const again = await (await fetch(`${URL}/api/live`, { signal: AbortSignal.timeout(6000) })).json();
+    seen.add(again.instance);
+  }
+  if (seen.size > 1) {
+    console.log(`⛔ المنصّة تشغّل ${seen.size} نسخ من السيرفر — اجعلها نسخةً واحدة في إعدادات Cranl، وإلا تفرّقت الغرف.`);
+  }
+
   if (live) {
     console.log(`🔴 جولةٌ جارية الآن: ${rooms} غرفة، ${players} لاعباً متصلاً.`);
     console.log('   الدفع إلى main ينشر فوراً ويوقف جولاتهم — انتظر حتى تنتهي.');

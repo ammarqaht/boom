@@ -107,7 +107,17 @@ export default function Play() {
    * كان الباب يظهر فيظنّ اللاعب أنه طُرد فيدخل من جديد — فيُقال له
    * «الاسم مستخدم» أو يصير له في القائمة اسمان.
    */
-  const [returning, setReturning] = useState(() => loadSession() !== null);
+  const [returning, setReturning] = useState(() => {
+    const saved = loadSession();
+    if (!saved) return false;
+    /* رابطٌ إلى غرفةٍ أخرى: تُطوى جلسةُ القديمة ويُفتح بابُ الجديدة (lib/socket.ts) */
+    const wanted = params.get('code')?.toUpperCase();
+    if (wanted && wanted !== saved.code) {
+      clearSession();
+      return false;
+    }
+    return true;
+  });
   const [room, setRoom] = useState<RoomState | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -281,7 +291,7 @@ export default function Play() {
       .timeout(8000)
       .emit(
         'team:answer',
-        { questionId: state.question.id, choice },
+        { questionId: state.question.id, choice, left: leftNow() },
         (err: unknown, res?: { ok: boolean } & Partial<ResultPayload>) => {
           if (err || !res) return; // شبكةُ الأمان تفكّ القفل، وحالُ السيرفر تصل عند العودة
           if (res.ok) onResult(res as ResultPayload);
@@ -289,6 +299,22 @@ export default function Play() {
         },
       );
   };
+
+  /*
+   * ما بقي على شاشته الآن — يُرسل مع الإجابة. إن وصلت والسيرفر قد بلغ
+   * عنده الصفر (الشبكة أخّرتها) حُسبت ما دامت ضُغطت والشاشة تقول إن له وقتاً.
+   */
+  const clock = useRef({ ms: 0, at: 0 });
+  useEffect(() => {
+    if (state) clock.current = { ms: state.timeMs, at: performance.now() };
+  }, [state]);
+  const leftNow = () => Math.max(0, clock.current.ms - (performance.now() - clock.current.at));
+
+  /*
+   * الشاشةُ لا تنطفئ أثناء الجولة. قفلُ الجوّال الآلي بعد ثلاثين ثانية
+   * يجمّد الصفحة والوقتُ يجري — فيسكن نبضُ لاعبٍ لم يفعل شيئاً.
+   */
+  useWakeLock(state?.status === 'running' || state?.status === 'countdown');
 
   /* حزمةٌ أقدم من السيرفر تُحدَّث بين الجولات — والجلسة تعيده إلى مكانه */
   useFreshBuild(!state || (state.status !== 'running' && state.status !== 'countdown'));
@@ -598,6 +624,9 @@ function TeamScreen({
       <>
         <Centered>
           <p className="font-medium text-muted">استعدّ…</p>
+          <p className="mt-2 text-xs font-medium text-faint">
+            لا تقفل الشاشة ولا تخرج من المتصفح — وقتك يجري ولو غبت
+          </p>
         </Centered>
         <CountdownGate ms={state.countdownMs} on />
       </>,
@@ -612,7 +641,7 @@ function TeamScreen({
         history={history}
         paused={state.status === 'paused'}
         title={`بانتظار بدء الجولة ${state.round}`}
-        note="أبقِ هذه الصفحة مفتوحة ولا تُحدّثها"
+        note="أبقِ هذه الصفحة مفتوحة، ولا تقفل الشاشة أثناء الجولة — وقتك يجري ولو غبت"
       />,
     );
   }
@@ -855,10 +884,13 @@ function RoundEnd({
    * تنتهي على الجميع بتوقّف نبضٍ واحد، فالخبرُ الذي ينقصك: نبضُ مَن.
    * وقد يسكن نبضان في النبضة الواحدة، فالصيغةُ تحتملهما.
    */
-  const stopped = teams.filter((t) => t.flatlined && !t.waiting && t.id !== state.id);
+  /* من سكن منقطعاً لم يُنهِ الجولة — فلا يُسمّى فيمن أنهاها */
+  const stopped = teams.filter((t) => t.flatlined && !t.dropped && !t.waiting && t.id !== state.id);
   const names = stopped.map((t) => t.name);
   const lead = dead
-    ? 'شدّ حيلك في الجولة القادمة'
+    ? state.dropped
+      ? 'انقطع اتصالك حتى نفد وقتك — وخرجتَ وحدك، فلم تنتهِ الجولة على غيرك'
+      : 'شدّ حيلك في الجولة القادمة'
     : names.length === 0
       ? 'صمدت إلى آخر الجولة'
       : names.length === 1
@@ -1022,7 +1054,11 @@ function StandBy({
                 >
                   <span className="tnum w-6 text-center font-light text-faint">{round}</span>
                   <span className={`text-sm ${award!.flatlined ? 'text-danger' : 'text-muted'}`}>
-                    {award!.flatlined ? 'توقف نبضك' : `صمدت ${formatTime(award!.timeMs)} ث`}
+                    {award!.flatlined
+                      ? award!.dropped
+                        ? 'انقطع اتصالك'
+                        : 'توقف نبضك'
+                      : `صمدت ${formatTime(award!.timeMs)} ث`}
                   </span>
                   <span className="tnum font-black text-signal">+{award!.points}</span>
                 </div>
@@ -1208,4 +1244,34 @@ function useFlatlineSound(flatlined: boolean) {
     playFlatline();
     navigator.vibrate?.([200, 80, 400]);
   }, [flatlined]);
+}
+
+/**
+ * يُبقي الشاشة مضاءةً ما دام on (Screen Wake Lock).
+ *
+ * والقفلُ يسقط وحده إذا غابت الصفحة، فيُطلب من جديد عند عودتها. وعلى
+ * جهازٍ لا يدعمه (iOS قبل 16.4) لا شيء يُكسر — يبقى التنبيه المكتوب.
+ */
+function useWakeLock(on: boolean) {
+  useEffect(() => {
+    if (!on || !('wakeLock' in navigator)) return;
+    let lock: WakeLockSentinel | null = null;
+    let done = false;
+    const take = async () => {
+      if (done || document.visibilityState !== 'visible') return;
+      try {
+        lock = await navigator.wakeLock.request('screen');
+        if (done) void lock.release();
+      } catch {
+        /* رفضه المتصفح (بطّاريةٌ منخفضة مثلاً) — فالتنبيه وحده */
+      }
+    };
+    void take();
+    document.addEventListener('visibilitychange', take);
+    return () => {
+      done = true;
+      document.removeEventListener('visibilitychange', take);
+      void lock?.release();
+    };
+  }, [on]);
 }

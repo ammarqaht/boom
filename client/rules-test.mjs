@@ -4,7 +4,19 @@ import { join } from 'node:path';
 import { readFileSync, readdirSync } from 'node:fs';
 
 const serverDir = join(process.cwd(), '..', 'server');
-const { createRoom, DIFFICULTY } = await import(pathToFileURL(join(serverDir, 'game.js')).href);
+const { createRoom, DIFFICULTY, FLATLINE_GRACE_MS } = await import(
+  pathToFileURL(join(serverDir, 'game.js')).href
+);
+
+/*
+ * نبضةٌ يبلغ فيها عدّادٌ الصفر، ثم أخرى بعد مهلة السكون: من بلغه لا يُسكَّن
+ * في الحال — يُنتظر قليلاً لإجابةٍ أخّرتها الشبكة — فالسكونُ في الثانية.
+ * وهذه الاختبارات عن الحساب لا عن المهلة (تلك في grace-test.mjs).
+ */
+function settle(room, at) {
+  room.tick(at);
+  room.tick(at + FLATLINE_GRACE_MS);
+}
 
 const check = (label, ok) => console.log(`${ok ? '✅' : '❌'} ${label}`);
 
@@ -104,7 +116,7 @@ function ladder(n) {
   // أوقاتٌ متباعدة تُثبّت الترتيب، وآخرهم يسقط
   teams.forEach((t, i) => (t.timeMs = (n - i) * 1000));
   teams[n - 1].timeMs = 0;
-  room.tick(now + 100);
+  settle(room, now + 100);
   return room.result.awards.map((a) => a.points); // لا إجابات، فالنقاط هي نقاط المركز
 }
 
@@ -138,7 +150,7 @@ function room3() {
   a.timeMs = 40;
   b.timeMs = 40; // كلاهما ينفد في نبضةٍ واحدة
   c.timeMs = 30000;
-  room.tick(now + 100);
+  settle(room, now + 100);
   const award = (t) => room.result.awards.find((x) => x.teamId === t.id);
   check('نَفادان في نبضةٍ واحدة: كلاهما توقّف', a.flatlined && b.flatlined);
   check('ولا نقطةَ مركزٍ لمن وقته صفر', award(a).points === 0 && award(b).points === 0);
@@ -171,7 +183,7 @@ function room3() {
   let now = room.countdownEndsAt;
   room.tick(now);
   b.timeMs = 0;
-  room.tick(now + 100); // انتهت الجولة الأولى
+  settle(room, now + 100); // انتهت الجولة الأولى
   a.score = 40;
   room.buyCard(a.id, 'time'); // وقتٌ إضافي للجولة الثانية
   room.start(); // الجولة الثانية
@@ -211,7 +223,7 @@ function room3() {
   room.tick(now);
   check('وعدّاده لا ينزل', late.timeMs === timeBefore);
   a.timeMs = 0;
-  room.tick(now + 100);
+  settle(room, now + 100);
   check('ولا جائزةَ له في جولةٍ لم يلعبها', !room.result.awards.find((x) => x.teamId === late.id));
   check('ولا يُعدّ في مراكز غيره', room.result.awards.length === 3);
   room.start();
@@ -228,7 +240,7 @@ function room3() {
   const now = room.countdownEndsAt;
   room.tick(now);
   c.timeMs = 0;
-  room.tick(now + 100);
+  settle(room, now + 100);
   check('السجلّ قبل الإزالة ثلاثة', room.publicState().history[0].awards.length === 3);
   room.removeTeam(b.id);
   const after = room.publicState();

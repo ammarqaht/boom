@@ -350,7 +350,11 @@ export function ResultBars({
                   award.flatlined ? 'text-danger' : 'text-muted'
                 } ${big ? 'text-[28px]' : 'text-xs'}`}
               >
-                {award.flatlined ? 'توقف النبض' : `${formatTime(award.timeMs)} ث`}
+                {award.flatlined
+                  ? award.dropped
+                    ? 'انقطع'
+                    : 'توقف النبض'
+                  : `${formatTime(award.timeMs)} ث`}
               </span>
               <span
                 className={`tnum relative shrink-0 text-left font-black text-signal ${
@@ -531,7 +535,11 @@ export function RoundHistory({
               >
                 <span className="font-bold">{award.name}</span>
                 <span className={`tnum text-sm ${award.flatlined ? 'text-danger' : 'text-muted'}`}>
-                  {award.flatlined ? 'توقف النبض' : `${formatTime(award.timeMs)} ث`}
+                  {award.flatlined
+                  ? award.dropped
+                    ? 'انقطع'
+                    : 'توقف النبض'
+                  : `${formatTime(award.timeMs)} ث`}
                 </span>
                 <span className="tnum w-10 text-left font-black text-signal">+{award.points}</span>
               </div>

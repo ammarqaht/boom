@@ -19,6 +19,7 @@ function playRoundEndingWith(loser, times = []) {
   room.tick(now); // ينتقل إلى running
   for (const [team, ms] of times) team.timeMs = ms;
   loser.timeMs = 0;
+  loser.dyingAt = 0; // مهلةُ السكون انقضت — الاختبار عن البطاقات لا عن المهلة
   now += 100;
   room.tick(now);
   return now;
@@ -48,6 +49,7 @@ const during = a.score;
 a.timeMs = 25000;
 b.timeMs = 15000;
 c.timeMs = 0;
+c.dyingAt = 0; // مهلةُ السكون انقضت — الاختبار عن البطاقات لا عن المهلة
 mid += 100;
 room.tick(mid);
 check('الإجابات الصحيحة لم تُضف أثناء الجولة', during === 0);
@@ -99,6 +101,7 @@ check('انتهى القفل بعد 5 ثوانٍ', b.lockedMs === 0 && b.frozenB
 a.timeMs = 30000;
 b.timeMs = 20000;
 c.timeMs = 0;
+c.dyingAt = 0; // مهلةُ السكون انقضت — الاختبار عن البطاقات لا عن المهلة
 now += 100;
 room.tick(now);
 const bAward = room.result.awards.find((x) => x.teamId === b.id);
@@ -116,6 +119,7 @@ c.correct = 3;
 a.timeMs = 30000;
 b.timeMs = 20000;
 c.timeMs = 0;
+c.dyingAt = 0; // مهلةُ السكون انقضت — الاختبار عن البطاقات لا عن المهلة
 t3 += 100;
 room.tick(t3);
 const cAward = room.result.awards.find((x) => x.teamId === c.id);
