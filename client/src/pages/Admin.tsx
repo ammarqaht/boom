@@ -7,12 +7,8 @@ import type { Bank, CardId, FeedItem, PublicTeam, RoomState } from '../lib/types
 import {
   Button,
   CHIP_BTN,
-  Card,
   ErrorNote,
-  Field,
   HoldButton,
-  Input,
-  FormPage,
   IconButton,
   Menu,
   MiniAction,
@@ -23,6 +19,7 @@ import {
   useTheme,
   useWide,
   type MenuAction,
+  Wordmark,
 } from '../components/ui';
 import {
   ArrowIcon,
@@ -135,13 +132,22 @@ function BankPicker({
   );
 }
 
-function LevelPicker({ value, onPick }: { value: Level; onPick: (level: Level) => void }) {
+function LevelPicker({
+  value,
+  onPick,
+  large,
+}: {
+  value: Level;
+  onPick: (level: Level) => void;
+  large?: boolean;
+}) {
   return (
-    <div className="grid grid-cols-4 gap-2 sm:gap-2.5">
+    /* الكبيرةُ بمقاس لوحات البنوك نفسه: أربعٌ في صفٍّ بعرض الشاشة كانت تبتلع الصفحة */
+    <div className={large ? 'art-grid is-large is-levels' : 'grid grid-cols-4 gap-2 sm:gap-2.5'}>
       {LEVELS.map((level) => (
         <ArtTile
           key={level.id}
-          compact
+          compact={!large}
           on={level.id === value}
           label={level.label}
           art={<LevelArt id={level.id} />}
@@ -274,43 +280,72 @@ export default function Admin() {
       );
 
     return (
-      <FormPage wide title="غرفة جديدة">
-        <Card className="grid gap-4">
-          <Field label="اسم الغرفة">
-            <Input
-              value={roomName}
-              onChange={(event) => setRoomName(event.target.value)}
-              placeholder="نادي الفجر — الحلقة الثالثة"
-              maxLength={40}
-              autoFocus
-            />
-          </Field>
+      /*
+       * صفحةٌ كاملة لا بابٌ ضيّق.
+       *
+       * كانت نموذجاً في بطاقةٍ عرضُها ٤٢ريماً وسط فراغٍ واسع، فتصغر
+       * لوحاتُ البنوك حتى لا تُرى. والإنشاءُ قرارٌ بصريّ — أيُّ الفئات
+       * يناسب جمهوري؟ — فتأخذ اللوحاتُ عرضَ الشاشة، والاسمُ عنوانُ الصفحة،
+       * وزرُّ الإنشاء مثبّتٌ في ذيلها يُرى من أيّ موضعٍ فيها.
+       */
+      <div className="create">
+        <header className="create-head">
+          <Wordmark className="text-4xl sm:text-5xl" />
+          <span className="create-kicker">غرفة جديدة</span>
+          <input
+            value={roomName}
+            onChange={(event) => setRoomName(event.target.value)}
+            placeholder="اسم الغرفة"
+            aria-label="اسم الغرفة"
+            maxLength={40}
+            autoFocus
+            className="create-name"
+          />
+        </header>
 
-          <Field group label="بنوك الأسئلة">
-            <BankPicker
-              banks={banks}
-              chosen={bankIds}
-              onToggle={toggle}
-              onAll={() =>
+        <section className="create-section">
+          <div className="create-section-head">
+            <h2>بنوك الأسئلة</h2>
+            <MiniAction
+              onClick={() =>
                 setBankIds(bankIds.length === banks.length ? [banks[0].id] : banks.map((b) => b.id))
               }
-            />
-          </Field>
+            >
+              {bankIds.length === banks.length ? 'إلغاء الكل' : 'تحديد الكل'}
+            </MiniAction>
+          </div>
+          <div className="art-grid is-large">
+            {banks.map((bank) => (
+              <ArtTile
+                key={bank.id}
+                on={bankIds.includes(bank.id)}
+                label={bank.name}
+                art={<BankArt id={bank.id} />}
+                onClick={() => toggle(bank.id)}
+              />
+            ))}
+          </div>
+        </section>
 
-          {/* مجموعةٌ لا ‎<label>‎: أربعةُ أزرار، وضغطةٌ في فراغها تُفعّل أوّلها */}
-          <Field group label="المرحلة">
-            <LevelPicker value={difficulty} onPick={setDifficulty} />
-          </Field>
+        <section className="create-section">
+          <div className="create-section-head">
+            <h2>المرحلة</h2>
+          </div>
+          <LevelPicker value={difficulty} onPick={setDifficulty} large />
+        </section>
+
+        <footer className="create-dock">
           <ErrorNote>{error}</ErrorNote>
           <Button
             size="lg"
+            className="w-full"
             onClick={createRoom}
             disabled={bankIds.length === 0 || !roomName.trim()}
           >
-            أنشئ الغرفة
+            {roomName.trim() ? 'أنشئ الغرفة' : 'اكتب اسم الغرفة أولاً'}
           </Button>
-        </Card>
-      </FormPage>
+        </footer>
+      </div>
     );
   }
 

@@ -2211,19 +2211,33 @@ textarea {
 /*
  * ══════════════════ البطاقات المصوّرة ══════════════════
  *
- * لوحةٌ لكل بنكٍ ومرحلة (components/art.tsx) على أرضٍ غائرةٍ تُضيء من
- * أعلى، تحتها نسيجُ النجمة الثُّمانية خافتاً — زخرفةٌ تُحسّ ولا تُقرأ.
- * وما لم يُختر تخبو لوحتُه، والمختارُ يتّقد حدُّه وشريطُ اسمه.
+ * صورةٌ لكل بنكٍ ومرحلة (components/art.tsx) تطفو فوق أرضٍ غائرةٍ
+ * تُضيء من أعلى، وخلفها هالةٌ سماوية تتّقد إذا اختيرت. وما لم يُختر
+ * يخبو قليلاً فيتقدّم المختار، وشريطُ اسمه يصير سماوياً.
  */
 .art-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   gap: 10px;
 }
-@media (max-width: 420px) {
-  .art-grid {
+.art-grid.is-large {
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 16px;
+}
+@media (max-width: 640px) {
+  .art-grid,
+  .art-grid.is-large {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  /* المراحلُ أربع: صفٌّ واحدٌ على الجوال لا ثلاثٌ وواحدةٌ يتيمة */
+  .art-grid.is-levels {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
+  }
+  .art-grid.is-levels .art-label {
+    font-size: 13px;
+    padding: 8px 4px;
   }
 }
 .art-tile {
@@ -2232,61 +2246,67 @@ textarea {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: var(--radius-card);
-  background:
-    radial-gradient(120% 85% at 50% 18%, var(--color-surface-2), var(--color-sunk) 78%);
+  border-radius: 18px;
+  background: radial-gradient(130% 90% at 50% 12%, var(--color-surface-2), var(--color-sunk) 80%);
   box-shadow: inset 0 0 0 1px var(--color-line);
   transition:
-    transform 0.18s ease,
+    transform 0.2s ease,
     box-shadow 0.2s ease;
 }
+/* الهالة خلف الصورة — تخفت حتى يُختار */
 .art-tile::before {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: 4% 12% 30%;
   z-index: -1;
-  opacity: 0.07;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cpath d='M9 9h10v10H9zM14 6.9 21.1 14 14 21.1 6.9 14z' fill='none' stroke='%234ad5ff' stroke-width='1'/%3E%3C/svg%3E");
-  background-size: 28px 28px;
-  mask-image: linear-gradient(to bottom, #000 30%, transparent 85%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--color-signal) 30%, transparent), transparent);
+  opacity: 0.25;
+  transition: opacity 0.25s ease;
 }
 @media (hover: hover) {
   .art-tile:hover {
-    transform: translateY(-2px);
-    box-shadow: inset 0 0 0 1px var(--color-line-2);
+    transform: translateY(-3px);
+    box-shadow:
+      inset 0 0 0 1px var(--color-line-2),
+      0 16px 34px -20px #000;
+  }
+  .art-tile:hover .art-stage img {
+    transform: translateY(-3px) scale(1.04);
   }
 }
 .art-stage {
   display: flex;
   align-items: center;
   justify-content: center;
-  aspect-ratio: 1 / 0.86;
-  padding: 11% 13% 7%;
+  aspect-ratio: 1 / 0.84;
+  padding: 12% 18% 8%;
 }
 .art-tile.is-compact .art-stage {
-  aspect-ratio: 1 / 0.72;
-  padding: 9% 18% 5%;
+  aspect-ratio: 1 / 0.74;
+  padding: 10% 22% 6%;
 }
-.art-stage svg {
+.art-stage img {
   width: 100%;
   height: 100%;
-  overflow: visible;
-  filter: saturate(0.6) brightness(0.84);
+  object-fit: contain;
+  filter: drop-shadow(0 12px 14px rgb(0 0 0 / 0.45)) saturate(0.78) brightness(0.86);
   transition:
     filter 0.25s ease,
-    transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+    transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.3);
+  user-select: none;
 }
 .art-label {
   flex: 1; /* يملأ ما بقي حين تتمدّد البطاقة إلى طول جارتها في الصفّ */
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 2.75em;
-  padding: 7px 8px;
+  min-height: 2.8em;
+  padding: 8px 10px;
   border-top: 1px solid var(--color-line);
-  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
-  color: var(--color-ink-2);
-  font-size: 13px;
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  color: var(--color-ink);
+  font-size: 13.5px;
   font-weight: 900;
   line-height: 1.25;
   text-align: center;
@@ -2295,24 +2315,25 @@ textarea {
     background 0.2s ease,
     color 0.2s ease;
 }
-.art-tile.is-compact .art-label {
-  min-height: 2.4em;
-  font-size: 14px;
+.art-grid.is-large .art-label {
+  font-size: 15.5px;
+  padding: 11px 12px;
 }
 .art-check {
   position: absolute;
-  top: 8px;
-  inset-inline-start: 8px;
+  top: 10px;
+  inset-inline-start: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   background: var(--color-signal);
   color: var(--color-on-signal);
+  box-shadow: 0 0 0 3px var(--color-sunk);
   opacity: 0;
-  transform: scale(0.6);
+  transform: scale(0.5);
   transition:
     opacity 0.18s ease,
     transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.4);
@@ -2320,12 +2341,15 @@ textarea {
 .art-tile.is-on {
   box-shadow:
     inset 0 0 0 2px var(--color-signal),
-    0 0 0 4px color-mix(in srgb, var(--color-signal) 13%, transparent),
-    0 14px 32px -16px color-mix(in srgb, var(--color-signal) 70%, transparent);
+    0 0 0 4px color-mix(in srgb, var(--color-signal) 14%, transparent),
+    0 18px 38px -18px color-mix(in srgb, var(--color-signal) 75%, transparent);
 }
-.art-tile.is-on .art-stage svg {
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--color-signal) 40%, transparent));
-  transform: scale(1.05);
+.art-tile.is-on::before {
+  opacity: 1;
+}
+.art-tile.is-on .art-stage img {
+  filter: drop-shadow(0 14px 16px rgb(0 0 0 / 0.5));
+  transform: scale(1.06);
 }
 .art-tile.is-on .art-label {
   border-top-color: transparent;
@@ -2336,9 +2360,94 @@ textarea {
   opacity: 1;
   transform: scale(1);
 }
+
+/* ══════════════════ صفحة إنشاء الغرفة ══════════════════ */
+.create {
+  min-height: 100%;
+  width: 100%;
+  max-width: 1240px;
+  margin-inline: auto;
+  padding: 40px 20px 0;
+}
+.create-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.create-kicker {
+  margin-top: 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--color-muted);
+}
+/* الاسمُ عنوانُ الصفحة: حقلٌ كبيرٌ بلا صندوق، تحته خطُّ الإشارة */
+.create-name {
+  width: min(100%, 640px);
+  margin-top: 28px;
+  padding: 10px 4px 14px;
+  border: 0;
+  border-bottom: 2px solid var(--color-line-2);
+  background: transparent;
+  color: var(--color-ink);
+  font-size: clamp(26px, 4.4vw, 40px);
+  font-weight: 900;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+.create-name::placeholder {
+  color: var(--color-faint);
+}
+.create-name:focus {
+  border-bottom-color: var(--color-signal);
+}
+.create-section {
+  margin-top: 44px;
+}
+.create-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.create-section-head h2 {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--color-ink);
+}
+/* الزرُّ في ذيلٍ مثبّت — يُرى من أيّ موضعٍ في الصفحة الطويلة */
+.create-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: grid;
+  gap: 8px;
+  width: min(100%, 520px);
+  margin: 36px auto 0;
+  padding: 14px 0 max(18px, env(safe-area-inset-bottom));
+}
+.create-dock::before {
+  content: '';
+  position: absolute;
+  inset: 0 -100vmax;
+  z-index: -1;
+  background: linear-gradient(to top, var(--color-ground) 55%, transparent);
+  pointer-events: none;
+}
+@media (max-width: 640px) {
+  .create {
+    padding-top: 28px;
+  }
+  .create-section {
+    margin-top: 32px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .art-tile,
-  .art-stage svg,
+  .art-tile::before,
+  .art-stage img,
   .art-check {
     transition: none;
   }
