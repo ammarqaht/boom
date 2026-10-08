@@ -28,7 +28,7 @@ const single = {
   secondary: 'triangular_ruler',
   university: 'graduation_cap',
 };
-const composed = ['quran', 'lugha', 'sahaba', 'tarikh', 'seerah'];
+const composed = ['quran', 'lugha', 'sahaba', 'tarikh', 'seerah', 'football-world'];
 
 for (const [id, file] of Object.entries(single)) copyFileSync(join(here, 'out', `${file}.png`), join(dest, `${id}.png`));
 copyFileSync(join(here, 'src', 'LICENSE-fluentui-emoji.txt'), join(dest, 'LICENSE-fluentui-emoji.txt'));

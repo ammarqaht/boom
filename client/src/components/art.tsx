@@ -30,13 +30,14 @@ const BANKS = new Set([
   'tarikh',
   'ulum',
   'capitals',
+  'football-world',
 ]);
 
 /*
  * رقمُ نسخة الصور: يُرفع كلما أُعيد صنعُها. ملفاتُ public تُخزَّن ساعةً
  * عند المتصفّح، فلو بقي الاسمُ نفسه لرأى من فتح الصفحة قبلُ الصورَ القديمة.
  */
-const ART_VERSION = 5;
+const ART_VERSION = 6;
 
 function Picture({ name }: { name: string }) {
   return (
