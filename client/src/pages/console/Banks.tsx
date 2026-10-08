@@ -530,8 +530,8 @@ export function Shelf({
     if (!res.ok) return flash(res.data?.error ?? 'تعذّر التبديل');
     flash(
       bank.active
-        ? `أُلغي تفعيل «${bank.name}» — لا يُعرض لمن يُنشئ غرفة`
-        : `فُعِّل «${bank.name}» — وعاد إلى قائمة المنظّم`,
+        ? `أُلغي تفعيل «${bank.name}»`
+        : `فُعِّل «${bank.name}»`,
     );
     onChanged();
   };

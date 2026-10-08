@@ -764,8 +764,8 @@ export function QuestionEditor({
                 <p className="mb-5 rounded-chip bg-signal-2 px-3.5 py-2.5 text-[13px] leading-relaxed font-medium text-signal-ink">
                   يُنقل من «{loaded?.bankName}» إلى «{banks.find((b) => b.id === target)?.name}»
                   {textChanged
-                    ? ' — ويُمحى إحصاؤه لأن نصّه تغيّر أيضاً.'
-                    : ' — وينتقل معه إحصاؤه وبلاغاته، فالنصّ لم يتغيّر.'}
+                    ? ' — ويُمحى إحصاؤه'
+                    : ' — ومعه إحصاؤه'}
                 </p>
               )}
             </>
@@ -857,8 +857,7 @@ export function QuestionEditor({
 
           {textChanged && (
             <p className="rounded-chip bg-signal-2 px-3.5 py-2.5 text-[13px] leading-relaxed font-medium text-signal-ink">
-              بدّلتَ نصّ السؤال أو خياراته — فيُمحى إحصاؤه ويبدأ من جديد، وتُحفظ نسخته القديمة
-              ثلاثين يوماً في «الأسئلة المحرَّرة».
+              يُمحى إحصاؤه وتُحفظ نسخته القديمة في «الأسئلة المحرَّرة»
             </p>
           )}
 

@@ -344,7 +344,7 @@ export default function Admin() {
             onClick={createRoom}
             disabled={bankIds.length === 0 || !roomName.trim()}
           >
-            {roomName.trim() ? 'أنشئ الغرفة' : 'اكتب اسم الغرفة أولاً'}
+            أنشئ الغرفة
           </Button>
         </footer>
       </div>
@@ -1060,7 +1060,6 @@ function QuestionFeed({
             {levelOf(n).label}
           </span>
         ))}
-        <span className="ms-auto text-[11px] font-medium text-faint">التبليغ لا يُوقف السؤال</span>
       </div>
     </Panel>
   );
@@ -1147,11 +1146,6 @@ function RoundPanel({
           variant="ghost"
           className="min-w-0 flex-1"
           disabled={room.status !== 'paused'}
-          title={
-            room.status === 'paused'
-              ? 'تعود العدّادات إلى أولها، ورقم الجولة ونقاطها كما هي — وتُردّ آثار البطاقات'
-              : 'أوقف الجولة أولاً ثم أعِدها'
-          }
           onClick={() => onSend('admin:restartRound')}
         >
           <RestartIcon size={15} />

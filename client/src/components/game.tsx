@@ -985,7 +985,7 @@ function ReportRow({
         /* أخفّ من الأحمر الصريح: دعوةٌ لا إنذار — واللاعب لتوّه خرج من جولة */
         className="mt-3 w-full rounded-chip px-3 py-2 text-right text-xs font-bold text-muted shadow-[inset_0_0_0_1px_var(--color-line-2)] transition hover:bg-danger-2 hover:text-danger"
       >
-        في هذا السؤال خطأ؟ بلّغ عنه
+        بلّغ عن خطأ
       </button>
     );
   }

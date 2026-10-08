@@ -393,7 +393,7 @@ function Lobby({ code, qr, teams }: { code: string; qr: string; teams: PublicTea
         )}
         <div>
           <p className="text-[34px] font-medium text-muted">
-            امسح الرمز أو افتح <span className="font-black text-ink">{location.host}/play</span>
+            <span className="font-black text-ink">{location.host}/play</span>
           </p>
           <div className="tnum mt-6 text-[150px] leading-none font-black tracking-[0.1em] text-signal">
             {code}

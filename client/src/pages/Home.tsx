@@ -332,12 +332,12 @@ const ROLES = [
   {
     to: '/display',
     Icon: ScreenIcon,
-    title: 'شاشة العرض',
+    title: 'اعرض الغرفة',
   },
   {
     to: '/admin',
     Icon: SlidersIcon,
-    title: 'لوحة المنظّم',
+    title: 'أنشئ غرفة',
   },
 ];
 
@@ -458,7 +458,7 @@ export default function Home() {
               <span className="seat-icon">
                 <UsersIcon size={24} />
               </span>
-              <b className="block text-xl font-black">انضمّ كلاعب</b>
+              <b className="block text-xl font-black">انضمّ لغرفة</b>
             </Link>
           </Reveal>
 
