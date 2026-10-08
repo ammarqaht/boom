@@ -753,8 +753,8 @@ export default function Owner() {
           )}
         </header>
 
-        <main className="min-h-0 flex-1 px-6 py-6">
-          <div className="mx-auto w-full max-w-[1180px]">
+        <main className="min-h-0 min-w-0 flex-1 px-3 py-4 sm:px-6 sm:py-6">
+          <div className="console-body mx-auto w-full max-w-[1180px]">
             {door === 'home' && (
               <Dashboard
                 api={api}

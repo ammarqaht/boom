@@ -399,7 +399,10 @@ export default function Home() {
             <Wordmark className="word-beat relative z-10 text-7xl sm:text-8xl" />
           </div>
 
-          <h1 className="hero-line">ثلاثون ثانية… والنبض بين يديك</h1>
+          <h1 className="hero-line">
+            ثلاثون ثانية… <br className="sm:hidden" />
+            والنبض بين يديك
+          </h1>
 
           <form
             className="gate"

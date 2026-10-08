@@ -2502,3 +2502,7 @@ textarea {
     transition: none;
   }
 }
+
+.console-body .grid:not([class*='grid-cols']) {
+  grid-template-columns: minmax(0, 1fr);
+}

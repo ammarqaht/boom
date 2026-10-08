@@ -149,19 +149,29 @@ export default function Display() {
 const BOARD_W = 1440;
 const BOARD_H = 900;
 
+const PHONE_W = 460;
+const isPhone = () => window.innerWidth < 760;
+
 function useBoardScale() {
-  const [scale, setScale] = useState(1);
+  const [fit, setFit] = useState({ scale: 1, phone: false });
   useEffect(() => {
     const fit = () => {
+      if (isPhone()) {
+        setFit({
+          scale: Math.round(Math.min(1.4, window.innerWidth / PHONE_W) * 100) / 100,
+          phone: true,
+        });
+        return;
+      }
       const by = Math.min(window.innerWidth / BOARD_W, window.innerHeight / BOARD_H);
       /* حدٌّ أدنى لئلا تصغر عن القراءة، وأعلى لئلا تتضخّم على جدارٍ كامل */
-      setScale(Math.round(Math.max(0.68, Math.min(2.4, by)) * 100) / 100);
+      setFit({ scale: Math.round(Math.max(0.68, Math.min(2.4, by)) * 100) / 100, phone: false });
     };
     fit();
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
   }, []);
-  return scale;
+  return fit;
 }
 
 /** شاشة العرض تملأ البروجكتر — لا شيء فيها أصغر من ٢٨px */
@@ -169,7 +179,7 @@ function Board({ room }: { room: RoomState }) {
   const joinUrl = `${location.origin}/play?code=${room.code}`;
   /* لونا الرمز من أرضية الوضع الغامق وحبره — فيُمسح من آخر القاعة */
   const qr = useQr(joinUrl, '#0f1821ff', '#e4f0f8ff');
-  const scale = useBoardScale();
+  const { scale, phone } = useBoardScale();
   /*
    * مشهد نهاية الجولة في القاعة على ثلاث لقطات:
    *   ١) ستارةُ السكون تنزل باسم من توقّف نبضه.
@@ -214,7 +224,7 @@ function Board({ room }: { room: RoomState }) {
   return (
     <div className="h-full w-full overflow-hidden">
       <div
-        className="flex flex-col px-14"
+        className={`flex flex-col ${phone ? 'px-4' : 'px-14'}`}
         style={{
           width: `${100 / scale}%`,
           height: `${100 / scale}%`,
@@ -223,103 +233,137 @@ function Board({ room }: { room: RoomState }) {
           transformOrigin: 'top right',
         }}
       >
-      {/*
-       * الترويسة على سطحٍ لا على الأرضية: أبيضُ في الفاتح وأسودُ في الغامق.
-       *
-       * ومقاسُها أُنزل: كانت ٩٦ ارتفاعاً بعلامةٍ في أربعين وشاراتٍ في ستٍّ
-       * وعشرين، فتأخذ من المجاري — وهي المقصودةُ من الشاشة — عُشرَ الطول.
-       * الترويسةُ تقول أين أنت، والمجاري تقول ما يجري: للثانية الأولوية.
-       */}
-      <header className="-mx-14 flex h-[68px] shrink-0 items-center justify-between border-b-2 border-line-2 bg-surface px-14">
-        <Wordmark className="text-[28px]" />
-        <div className="flex items-center gap-3 text-[19px]">
-          <Chip label="الجولة" value={room.round} />
-          <Chip label="الغرفة" value={room.code} signal />
-        </div>
-      </header>
-
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div
-          className={`flex min-h-0 flex-1 flex-col transition duration-500 ${
-            room.displayBlurred ? 'pointer-events-none blur-lg select-none' : ''
+        {/*
+         * الترويسة على سطحٍ لا على الأرضية: أبيضُ في الفاتح وأسودُ في الغامق.
+         *
+         * ومقاسُها أُنزل: كانت ٩٦ ارتفاعاً بعلامةٍ في أربعين وشاراتٍ في ستٍّ
+         * وعشرين، فتأخذ من المجاري — وهي المقصودةُ من الشاشة — عُشرَ الطول.
+         * الترويسةُ تقول أين أنت، والمجاري تقول ما يجري: للثانية الأولوية.
+         */}
+        <header
+          className={`flex shrink-0 items-center justify-between border-b-2 border-line-2 bg-surface ${
+            phone ? '-mx-4 h-[60px] px-4' : '-mx-14 h-[68px] px-14'
           }`}
         >
-          {room.status === 'lobby' ? (
-            <Lobby code={room.code} qr={qr} teams={room.teams} />
-          ) : room.status === 'finished' && room.standings ? (
-            <div className="flex min-h-0 flex-1 items-center overflow-y-auto py-6">
-              <Standings standings={room.standings} />
-            </div>
-          ) : (
-            <div ref={board} className="flex min-h-0 flex-1 flex-col justify-center gap-2.5 py-4">
-              {ranked.map((team, index) => (
-                <Channel
-                  key={team.id}
-                  team={team}
-                  rank={index + 1}
-                  status={room.status}
-                  leader={team.id === leaderId}
-                />
-              ))}
+          <Wordmark className={phone ? 'text-[24px]' : 'text-[28px]'} />
+          <div className={`flex items-center gap-3 ${phone ? 'text-[15px]' : 'text-[19px]'}`}>
+            <Chip label="الجولة" value={room.round} />
+            <Chip label="الغرفة" value={room.code} signal />
+          </div>
+        </header>
+
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            className={`flex min-h-0 flex-1 flex-col transition duration-500 ${
+              room.displayBlurred ? 'pointer-events-none blur-lg select-none' : ''
+            }`}
+          >
+            {room.status === 'lobby' ? (
+              phone ? (
+                <PhoneLobby code={room.code} qr={qr} teams={room.teams} />
+              ) : (
+                <Lobby code={room.code} qr={qr} teams={room.teams} />
+              )
+            ) : room.status === 'finished' && room.standings ? (
+              <div className="flex min-h-0 flex-1 items-center overflow-y-auto py-6">
+                <Standings standings={room.standings} />
+              </div>
+            ) : (
+              <div
+                ref={board}
+                className={`flex min-h-0 flex-1 flex-col gap-2.5 py-4 ${
+                  phone ? 'justify-start overflow-y-auto' : 'justify-center'
+                }`}
+              >
+                {ranked.map((team, index) =>
+                  phone ? (
+                    <PhoneChannel
+                      key={team.id}
+                      team={team}
+                      rank={index + 1}
+                      status={room.status}
+                      leader={team.id === leaderId}
+                    />
+                  ) : (
+                    <Channel
+                      key={team.id}
+                      team={team}
+                      rank={index + 1}
+                      status={room.status}
+                      leader={team.id === leaderId}
+                    />
+                  ),
+                )}
+              </div>
+            )}
+          </div>
+
+          {room.displayBlurred && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="flex items-center gap-4 rounded-card bg-surface px-9 py-6 shadow-[inset_0_0_0_1px_var(--color-line-2)]">
+                <EyeOffIcon size={30} className="text-muted" />
+                <span className="text-3xl font-black">الترتيب مخفي</span>
+              </div>
             </div>
           )}
         </div>
 
-        {room.displayBlurred && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex items-center gap-4 rounded-card bg-surface px-9 py-6 shadow-[inset_0_0_0_1px_var(--color-line-2)]">
-              <EyeOffIcon size={30} className="text-muted" />
-              <span className="text-3xl font-black">الترتيب مخفي</span>
-            </div>
+        {/* الذيلُ مفتاحُ ألوانٍ يُقرأ مرّةً ثم يُنسى — فلا يُعطى قامةَ المجرى */}
+        <footer
+          className={`flex shrink-0 items-center justify-between border-t-2 border-line-2 font-medium text-muted ${
+            phone ? 'h-[52px] text-[15px]' : 'h-[58px] text-[19px]'
+          }`}
+        >
+          <div className={phone ? 'hidden' : 'flex items-center gap-7'}>
+            <Legend color="var(--color-safe)" label="نبض قوي" />
+            <Legend color="var(--color-warn)" label="يضعف" />
+            <Legend color="var(--color-danger)" label="على وشك السكون" />
+          </div>
+          <div className={`tnum flex items-center gap-4 ${phone ? 'w-full justify-between' : ''}`}>
+            <span>
+              {alive} نبضة حيّة من {racing.length}
+            </span>
+            <span className="text-faint">·</span>
+            <span className="font-black text-ink">{location.host}/play</span>
+          </div>
+        </footer>
+
+        <CountdownGate ms={room.countdownMs} on={room.status === 'countdown'} />
+        {room.status === 'countdown' && (room.cardEvents?.length ?? 0) > 0 && (
+          <div className="pointer-events-none fixed inset-x-0 bottom-[6vh] z-[60] flex flex-col items-center gap-[1vh] px-[4vw]">
+            {room.cardEvents!.map((event, i) => {
+              const look =
+                CARD_LOOK[
+                  event.kind === 'hit' ? event.card : event.kind === 'blocked' ? 'fort' : 'mirror'
+                ];
+              return (
+                <div
+                  key={i}
+                  className="rise-in flex items-center gap-[1vw] rounded-card bg-surface/95 px-[2vw] py-[1vh] text-[clamp(18px,2.4vw,42px)] font-black shadow-[inset_0_0_0_1px_var(--color-line-2)]"
+                  style={{ animationDelay: `${i * 0.12}s` }}
+                >
+                  <look.Icon className={look.ink} style={{ width: '1.1em', height: '1.1em' }} />
+                  {describe(event)}
+                </div>
+              );
+            })}
           </div>
         )}
-      </div>
 
-      {/* الذيلُ مفتاحُ ألوانٍ يُقرأ مرّةً ثم يُنسى — فلا يُعطى قامةَ المجرى */}
-      <footer className="flex h-[58px] shrink-0 items-center justify-between border-t-2 border-line-2 text-[19px] font-medium text-muted">
-        <div className="flex items-center gap-7">
-          <Legend color="var(--color-safe)" label="نبض قوي" />
-          <Legend color="var(--color-warn)" label="يضعف" />
-          <Legend color="var(--color-danger)" label="على وشك السكون" />
-        </div>
-        <div className="tnum flex items-center gap-4">
-          <span>
-            {alive} نبضة حيّة من {racing.length}
-          </span>
-          <span className="text-faint">·</span>
-          <span className="font-black text-ink">{location.host}/play</span>
-        </div>
-      </footer>
+        {room.status === 'paused' && (
+          <div className="veil-in fixed inset-0 z-40 flex items-center justify-center bg-ground/92">
+            <PausedMark />
+          </div>
+        )}
 
-      <CountdownGate ms={room.countdownMs} on={room.status === 'countdown'} />
-      {room.status === 'countdown' && (room.cardEvents?.length ?? 0) > 0 && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-[6vh] z-[60] flex flex-col items-center gap-[1vh] px-[4vw]">
-          {room.cardEvents!.map((event, i) => {
-            const look = CARD_LOOK[event.kind === 'hit' ? event.card : event.kind === 'blocked' ? 'fort' : 'mirror'];
-            return (
-              <div
-                key={i}
-                className="rise-in flex items-center gap-[1vw] rounded-card bg-surface/95 px-[2vw] py-[1vh] text-[clamp(18px,2.4vw,42px)] font-black shadow-[inset_0_0_0_1px_var(--color-line-2)]"
-                style={{ animationDelay: `${i * 0.12}s` }}
-              >
-                <look.Icon className={look.ink} style={{ width: '1.1em', height: '1.1em' }} />
-                {describe(event)}
-              </div>
-            );
-          })}
-        </div>
-      )}
+        {curtain.value && (
+          <Results phone={phone} result={curtain.value} leaving={curtain.leaving} />
+        )}
 
-      {room.status === 'paused' && (
-        <div className="veil-in fixed inset-0 z-40 flex items-center justify-center bg-ground/92">
-          <PausedMark />
-        </div>
-      )}
-
-      {curtain.value && <Results result={curtain.value} leaving={curtain.leaving} />}
-
-      {/* فوق النتائج: إعلانُ السكون، ينفرج عنها بعد لحظتين */}
-      {stopped.name && <FlatlineMoment name={stopped.name} leaving={stopped.leaving} />}
+        {/* فوق النتائج: إعلانُ السكون، ينفرج عنها بعد لحظتين */}
+        {stopped.name && (
+          <FlatlineMoment name={stopped.name} leaving={stopped.leaving} phone={phone} />
+        )}
       </div>
     </div>
   );
@@ -527,10 +571,20 @@ function Channel({
  * أول نبض يسكن يُنهي الجولة على الجميع — فليكن حدثاً: ستارةٌ حمراء
  * تنزل باسمه، ثم تنفرج نصفين عن نتائج الجولة تحتها.
  */
-function FlatlineMoment({ name, leaving }: { name: string; leaving: boolean }) {
+function FlatlineMoment({
+  name,
+  leaving,
+  phone,
+}: {
+  name: string;
+  leaving: boolean;
+  phone: boolean;
+}) {
   return (
     <Curtain mode="drop" tone="var(--color-danger)" cut={false} front leaving={leaving}>
-      <div className="relative flex flex-col items-center gap-8 px-20">
+      <div
+        className={`relative flex w-full flex-col items-center ${phone ? 'gap-5 px-6' : 'gap-8 px-20'}`}
+      >
         <div
           className="alarm pointer-events-none absolute inset-x-[-80px] inset-y-[-60px]"
           style={{ '--beat': '0.62s' } as React.CSSProperties}
@@ -538,8 +592,18 @@ function FlatlineMoment({ name, leaving }: { name: string; leaving: boolean }) {
         />
         <span className="relative block h-1.5 w-full rounded-full bg-danger" aria-hidden="true" />
         <div className="relative text-center">
-          <p className="text-[34px] font-bold tracking-[0.2em] text-danger">توقف النبض</p>
-          <h2 className="thump mt-3 text-[132px] leading-none font-black">{name}</h2>
+          <p
+            className={`font-bold tracking-[0.2em] text-danger ${phone ? 'text-[22px]' : 'text-[34px]'}`}
+          >
+            توقف النبض
+          </p>
+          <h2
+            className={`thump mt-3 font-black text-balance break-words ${
+              phone ? 'text-[56px] leading-[1.15]' : 'text-[132px] leading-none'
+            }`}
+          >
+            {name}
+          </h2>
         </div>
         <span className="relative block h-1.5 w-full rounded-full bg-danger" aria-hidden="true" />
       </div>
@@ -551,17 +615,19 @@ function FlatlineMoment({ name, leaving }: { name: string; leaving: boolean }) {
 function Results({
   result,
   leaving,
+  phone,
 }: {
   result: NonNullable<RoomState['result']>;
   leaving: boolean;
+  phone: boolean;
 }) {
   return (
     <Curtain mode="drop" tone="var(--color-signal)" leaving={leaving}>
-      <div className="px-20">
-        <h2 className="mb-9 text-[48px] font-black">
+      <div className={phone ? 'w-full px-5' : 'px-20'}>
+        <h2 className={`font-black ${phone ? 'mb-5 text-[30px]' : 'mb-9 text-[48px]'}`}>
           نتائج الجولة
         </h2>
-        <ResultBars awards={result.awards} big />
+        <ResultBars awards={result.awards} big={!phone} />
       </div>
     </Curtain>
   );
@@ -650,5 +716,144 @@ function describe(event: CardEvent) {
 }
 
 function darkened(team: PublicTeam, status: RoomState['status']) {
-  return Boolean(team.blackout) && !team.flatlined && !team.waiting && status !== 'ended' && status !== 'lobby';
+  return (
+    Boolean(team.blackout) &&
+    !team.flatlined &&
+    !team.waiting &&
+    status !== 'ended' &&
+    status !== 'lobby'
+  );
+}
+
+function PhoneLobby({ code, qr, teams }: { code: string; qr: string; teams: PublicTeam[] }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col items-center gap-6 overflow-y-auto py-8 text-center">
+      {qr && (
+        <div className="rounded-card bg-ink p-3">
+          <img src={qr} alt="امسح للانضمام" className="size-44" />
+        </div>
+      )}
+      <div>
+        <p className="text-[17px] font-medium text-muted">
+          <span className="font-black text-ink">{location.host}/play</span>
+        </p>
+        <div className="tnum mt-2 text-[84px] leading-none font-black tracking-[0.1em] text-signal">
+          {code}
+        </div>
+      </div>
+      <div className="w-full border-t-2 border-line-2 pt-5">
+        <p className="tnum mb-3 text-[17px] font-bold tracking-[0.1em] text-muted">
+          {teams.length === 0 ? 'بانتظار انضمام اللاعبين…' : `انضمّ ${teams.length} لاعباً`}
+        </p>
+        <div className="flex flex-wrap justify-center gap-2">
+          {teams.map((team) => (
+            <span
+              key={team.id}
+              className="rise-in rounded-card bg-surface px-4 py-2 text-[19px] font-black shadow-[inset_0_0_0_1px_var(--color-line-2)]"
+            >
+              {team.name}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PhoneChannel({
+  team,
+  rank,
+  status,
+  leader,
+}: {
+  team: PublicTeam;
+  rank: number;
+  status: RoomState['status'];
+  leader?: boolean;
+}) {
+  const frozen = team.locked && !team.flatlined;
+  const dark = darkened(team, status);
+  const gilded = team.doubled && !team.flatlined && !frozen;
+  const level = teamLevel(team.timeMs, team.flatlined);
+  const dying = level === 'danger' && status === 'running' && !frozen;
+
+  return (
+    <div
+      data-row={team.id}
+      style={dark ? undefined : stateStyle(level, team.timeMs)}
+      className={`relative grid shrink-0 grid-cols-[26px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 overflow-hidden rounded-card px-4 py-3.5 ${
+        frozen
+          ? 'frosted'
+          : gilded
+            ? 'gilded'
+            : team.flatlined
+              ? 'bg-transparent shadow-[inset_0_0_0_1px_var(--color-line)]'
+              : 'bg-surface shadow-[inset_0_0_0_1px_var(--color-line)]'
+      } ${dying ? 'alarm-channel' : ''}`}
+    >
+      <span className="bg-state absolute inset-y-0 start-0 z-[1] w-1" aria-hidden="true" />
+
+      <div
+        className={`tnum relative text-center text-[24px] ${
+          leader && !team.flatlined ? 'font-black text-signal' : 'font-light text-faint'
+        }`}
+      >
+        {rank}
+      </div>
+
+      <div className="relative min-w-0">
+        <div
+          className={`flex items-center gap-1.5 text-[24px] leading-tight font-black ${
+            team.flatlined ? 'text-faint' : ''
+          }`}
+        >
+          {leader && !team.flatlined && <CrownIcon size={17} className="shrink-0 text-signal" />}
+          <span className="truncate">{team.name}</span>
+          {frozen && <SnowflakeIcon size={17} className="shrink-0 text-frost" />}
+          {team.doubled && !team.flatlined && (
+            <span className="shrink-0 text-[17px] font-black text-gold">×٢</span>
+          )}
+          {!team.connected && <OfflineIcon size={16} className="shrink-0 text-faint" />}
+        </div>
+        <div className="tnum mt-0.5 truncate text-[15px] font-medium text-muted">
+          {team.waiting ? (
+            'ينتظر الجولة القادمة'
+          ) : dark ? (
+            `عتّمه ${team.blackoutBy}`
+          ) : frozen && team.frozenBy ? (
+            <span className="text-frost">جمّده {team.frozenBy}</span>
+          ) : team.flatlined ? (
+            <span className="font-bold text-danger">
+              {team.dropped ? 'انقطع اتصاله' : 'توقف النبض'}
+            </span>
+          ) : (
+            <>
+              {team.correct}/{team.answered} صحيحة ·{' '}
+              <RollingNumber value={team.score} className="font-black text-signal" /> نقطة
+            </>
+          )}
+        </div>
+      </div>
+
+      <b
+        className={`tnum relative text-[34px] leading-none font-black ${
+          team.waiting || dark ? 'text-faint' : team.flatlined ? 'text-danger' : 'ink-state'
+        }`}
+      >
+        {team.waiting ? '—' : dark ? '؟' : formatTime(team.timeMs)}
+      </b>
+
+      {dark ? (
+        <div className="relative col-span-3 h-[38px] rounded-card bg-sunk" />
+      ) : (
+        <Lane
+          timeMs={team.timeMs}
+          running={status === 'running'}
+          flatlined={team.flatlined}
+          size="md"
+          className="relative col-span-3 h-[38px]"
+        />
+      )}
+    </div>
+  );
 }
