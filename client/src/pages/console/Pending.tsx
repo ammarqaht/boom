@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AutoTextarea, CheckAll, Flag, HoldButton, Select, toast } from '../../components/ui';
+import { AutoTextarea, Flag, Select, toast } from '../../components/ui';
 import { CheckIcon, PenIcon, PlusIcon, TrashIcon } from '../../components/icons';
 import {
   type Api,
@@ -107,39 +107,6 @@ export default function PendingPage({ api, sift, banks, onCounts, reloadKey, onC
 
   const paged = usePaged(shown);
 
-  const [picked, setPicked] = useState<Set<number>>(new Set());
-  const [target, setTarget] = useState('');
-  useEffect(() => {
-    const alive = new Set((rows ?? []).map((row) => row.id));
-    setPicked((current) => new Set([...current].filter((id) => alive.has(id))));
-  }, [rows]);
-  const allPicked = shown.length > 0 && shown.every((row) => picked.has(row.id));
-  const pick = (id: number) =>
-    setPicked((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const pickAll = () => setPicked(allPicked ? new Set() : new Set(shown.map((row) => row.id)));
-  const bulk = async (body: { bank?: string; drop?: boolean }) => {
-    const ids = [...picked];
-    const res = await api.send<{ error?: string; moved?: number; dropped?: number }>(
-      'POST',
-      'pending/bulk',
-      { ids, ...body },
-    );
-    if (!res.ok) return toast(res.data?.error ?? 'تعذّر التنفيذ', { tone: 'danger' });
-    toast(
-      body.drop
-        ? `حُذف ${say(res.data?.dropped ?? ids.length, 'question')}`
-        : `نُقل ${say(res.data?.moved ?? ids.length, 'question')} إلى «${banks.find((b) => b.id === body.bank)?.name ?? ''}»`,
-      { tone: body.drop ? 'danger' : 'safe' },
-    );
-    setPicked(new Set());
-    onChanged();
-  };
-
   const drop = async (row: Pending) => {
     setBusy(row.id);
     const res = await api.send<{ error?: string }>('DELETE', `pending/${row.id}`);
@@ -176,43 +143,6 @@ export default function PendingPage({ api, sift, banks, onCounts, reloadKey, onC
         }
         flush
       >
-        {shown.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-line-soft px-5 py-2.5">
-            <CheckAll
-              checked={allPicked}
-              onToggle={pickAll}
-              label={picked.size ? `${say(picked.size, 'question')} محدَّدة` : 'تحديد الكل'}
-            />
-            {picked.size > 0 && (
-              <>
-                <Select
-                  value={target}
-                  onChange={setTarget}
-                  choices={[
-                    { value: '', label: 'اختر البنك' },
-                    ...banks.map((b) => ({ value: b.id, label: b.name })),
-                  ]}
-                  className="min-w-[12rem]"
-                />
-                <button
-                  type="button"
-                  disabled={!target}
-                  onClick={() => void bulk({ bank: target })}
-                  className="h-9 rounded-chip bg-action px-4 text-[13px] font-black text-on-action transition hover:brightness-110 disabled:opacity-40"
-                >
-                  انقل إلى البنك
-                </button>
-                <HoldButton
-                  bare
-                  tone="chip"
-                  glyph={<TrashIcon size={14} />}
-                  label={`احذف ${say(picked.size, 'question')}`}
-                  onConfirm={() => void bulk({ drop: true })}
-                />
-              </>
-            )}
-          </div>
-        )}
         {shown.length === 0 ? (
           <Empty
             title={mine.length === 0 ? 'لا سؤال معلَّق' : 'لا سؤال يطابق التصفية'}
@@ -222,8 +152,6 @@ export default function PendingPage({ api, sift, banks, onCounts, reloadKey, onC
             <Line
               key={row.id}
               row={row}
-              picked={picked.has(row.id)}
-              onPick={() => pick(row.id)}
               busy={busy === row.id}
               onOpen={() => setEditing(row)}
               onDrop={() => void drop(row)}
@@ -263,15 +191,11 @@ export default function PendingPage({ api, sift, banks, onCounts, reloadKey, onC
  */
 function Line({
   row,
-  picked,
-  onPick,
   busy,
   onOpen,
   onDrop,
 }: {
   row: Pending;
-  picked: boolean;
-  onPick: () => void;
   busy: boolean;
   onOpen: () => void;
   onDrop: () => void;
@@ -288,19 +212,6 @@ function Line({
 
   return (
     <div className="flex items-center gap-x-3 border-b border-line-soft px-5 py-2.5 last:border-0">
-      <button
-        type="button"
-        onClick={onPick}
-        aria-pressed={picked}
-        aria-label="حدّد"
-        className={`flex size-[18px] shrink-0 items-center justify-center rounded-[4px] transition ${
-          picked
-            ? 'bg-signal text-on-signal'
-            : 'text-transparent shadow-[inset_0_0_0_1.5px_var(--color-line-2)] hover:shadow-[inset_0_0_0_1.5px_var(--color-signal)]'
-        }`}
-      >
-        <CheckIcon size={11} strokeWidth={4} />
-      </button>
       <button
         type="button"
         onClick={onOpen}

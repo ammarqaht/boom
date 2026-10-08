@@ -999,16 +999,6 @@ export async function updatePending(id, { bank, q: text, answer, wrongs, level, 
   return rowCount;
 }
 
-export async function setPendingBank(ids, bank) {
-  const { rowCount } = await q('UPDATE pending SET bank_id = $1 WHERE id = ANY($2::bigint[])', [bank, ids]);
-  return rowCount;
-}
-
-export async function forgetPendingMany(ids) {
-  const { rowCount } = await q('DELETE FROM pending WHERE id = ANY($1::bigint[])', [ids]);
-  return rowCount;
-}
-
 export async function forgetPending(id) {
   const { rowCount } = await q('DELETE FROM pending WHERE id = $1', [Number(id)]);
   return rowCount;

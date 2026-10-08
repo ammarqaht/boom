@@ -979,20 +979,6 @@ app.put('/api/console/pending/:id', owner, async (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/api/console/pending/bulk', owner, async (req, res) => {
-  const ids = (Array.isArray(req.body?.ids) ? req.body.ids : [])
-    .map(Number)
-    .filter(Number.isInteger)
-    .slice(0, 5000);
-  if (ids.length === 0) return res.status(400).json({ error: 'لم يُحدَّد سؤال' });
-  if (req.body?.drop === true) {
-    return res.json({ ok: true, dropped: await store.forgetPendingMany(ids) });
-  }
-  const bank = typeof req.body?.bank === 'string' ? req.body.bank : '';
-  if (!allBanks().some((b) => b.id === bank)) return res.status(400).json({ error: 'بنك غير معروف' });
-  res.json({ ok: true, moved: await store.setPendingBank(ids, bank) });
-});
-
 app.delete('/api/console/pending/:id', owner, async (req, res) => {
   const gone = await store.forgetPending(req.params.id);
   if (!gone) return res.status(404).json({ error: 'لا سؤال معلَّقٌ بهذا الرقم' });
