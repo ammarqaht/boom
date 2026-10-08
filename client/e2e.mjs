@@ -1,7 +1,7 @@
 // اختبار شامل: مسؤول + 3 فرق عبر سوكِت حقيقي على السيرفر الفعلي
 import { io } from 'socket.io-client';
 
-const URL = 'http://localhost:3000';
+const URL = process.env.NABDA_TEST_URL || 'http://localhost:3000';
 const connect = () => io(URL, { transports: ['websocket'] });
 const ask = (s, event, payload = {}) => new Promise((resolve) => s.emit(event, payload, resolve));
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -401,8 +401,8 @@ const mine = adminState.history.flatMap((r) => r.awards.filter((a) => a.teamId =
 const CONSOLE_PATHS = ['summary', 'rooms', 'health', 'feedback', 'edits', 'dashboard'];
 const codes = [];
 for (const path of CONSOLE_PATHS) {
-  const bare = await fetch(`http://localhost:3000/api/console/${path}`);
-  const wrong = await fetch(`http://localhost:3000/api/console/${path}`, {
+  const bare = await fetch(`${URL}/api/console/${path}`);
+  const wrong = await fetch(`${URL}/api/console/${path}`, {
     headers: { 'x-nabda-key': encodeURIComponent('مفتاح-مختلق') },
   });
   codes.push(bare.status, wrong.status);
@@ -413,7 +413,7 @@ check(
 );
 check(
   'ولا تُسرّب شيئاً في جسم الردّ',
-  !(await (await fetch('http://localhost:3000/api/console/rooms')).text()).includes('code'),
+  !(await (await fetch(`${URL}/api/console/rooms`)).text()).includes('code'),
 );
 
 /*
@@ -427,15 +427,15 @@ const OWNER_KEY = process.env.NABDA_OWNER_KEY || '';
 if (!OWNER_KEY) {
   console.log('   ⚠ تُخطّى فحوصُ حذف البنك: مرّر NABDA_OWNER_KEY نفسه الذي شغّلتَ به السيرفر');
 } else {
-  const banksBefore = (await (await fetch('http://localhost:3000/api/banks')).json()).length;
-  const busyDelete = await fetch('http://localhost:3000/api/console/bank/quran', {
+  const banksBefore = (await (await fetch(`${URL}/api/banks`)).json()).length;
+  const busyDelete = await fetch(`${URL}/api/console/bank/quran`, {
     method: 'DELETE',
     headers: { 'x-nabda-key': encodeURIComponent(OWNER_KEY) },
   });
   check('لا يُحذف بنكٌ تستعمله غرفةٌ قائمة', busyDelete.status === 400);
   check(
     'والبنك باقٍ في مكانه',
-    (await (await fetch('http://localhost:3000/api/banks')).json()).length === banksBefore,
+    (await (await fetch(`${URL}/api/banks`)).json()).length === banksBefore,
   );
 }
 

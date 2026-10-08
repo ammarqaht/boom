@@ -132,8 +132,10 @@ export function auditAll(banks) {
   const duplicates = [];
   for (const bank of list) {
     for (const question of bank.questions ?? []) {
-      const key = normalizeText(question.q);
-      if (!key) continue;
+      /* سؤالُ العلم يُقارن بنصّه وعلمه معاً: نصٌّ واحدٌ بعشرين علماً ليس تكراراً */
+      const base = normalizeText(question.q);
+      if (!base) continue;
+      const key = question.flag ? `${base}#${question.flag}` : base;
       const first = seen.get(key);
       if (first) {
         duplicates.push({

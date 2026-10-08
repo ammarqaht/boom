@@ -1248,3 +1248,20 @@ export function FormPage({
     </div>
   );
 }
+
+/**
+ * علمُ دولة — من flag-icons (رخصة MIT) في public/flags باسم رمزها.
+ *
+ * وإطارٌ رقيق حوله: أعلامٌ بيضاءُ الأطراف (اليابان، كوريا) تذوب في
+ * البطاقة الفاتحة بلا حدّ، والحدُّ يردّها علماً.
+ */
+export function Flag({ code, className = '' }: { code: string; className?: string }) {
+  return (
+    <img
+      src={`/flags/${code}.svg`}
+      alt=""
+      draggable={false}
+      className={`flag aspect-[4/3] shrink-0 rounded-[4px] object-cover shadow-[0_0_0_1px_rgb(255_255_255_/_0.14),0_6px_16px_-6px_rgb(0_0_0_/_0.6)] ${className}`}
+    />
+  );
+}

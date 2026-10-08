@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { HoldButton } from '../../components/ui';
+import { Flag, HoldButton } from '../../components/ui';
 import { LockIcon, PenIcon, RestoreIcon, TrashIcon, UnlockIcon } from '../../components/icons';
 import {
   type Api,
@@ -72,6 +72,7 @@ type Q = {
   q: string;
   options: string[];
   level: number;
+  flag?: string | null;
   shown: number;
   correct: number;
   wrong: number;
@@ -262,6 +263,7 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
                 <Cell className="flex items-center gap-2.5 font-bold">
                   <Dot level={row.level} />
                   <span className="truncate">{row.q}</span>
+                  {row.flag && <Flag code={row.flag} className="h-[16px]" />}
                   {row.issues.length > 0 && (
                     <Badge
                       tone={row.issues.some((i) => i.severity === 'error') ? 'danger' : 'warn'}

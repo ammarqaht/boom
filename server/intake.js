@@ -2,14 +2,15 @@
  * قارئُ الأسئلة الملصوقة — سطرٌ لكل سؤال، عمودان فأكثر.
  *
  * والعمودان هما العهد: سؤالٌ ثم جوابُه الصحيح. وما زاد عليهما قُرئ ولم
- * يُطلب — ثلاثةُ أخطاءٍ ثم مستوًى — فمن لصق سطرين دخل سؤالُه ناقصاً
+ * يُطلب — ثلاثةُ أخطاءٍ ثم مستوًى ثم علمُ دولةٍ يُعرض مع السؤال (رمزُها
+ * بحرفين: jp) — فمن لصق سطرين دخل سؤالُه ناقصاً
  * يُكمَل في اللوحة، ومن لصق ملفّاً كاملاً دخل سؤالُه جاهزاً للاعتماد.
  *
  * وقارئٌ واحدٌ للطريقين: اللصقُ في الصندوق وملفُّ CSV كلاهما نصٌّ يُرسل
  * في الحقل نفسه، فلا يختلف الفهمُ بينهما ولا تُكتب قاعدةٌ مرّتين.
  */
 
-import { arabizeDigits } from './banks.js';
+import { arabizeDigits, flagCode } from './banks.js';
 
 /** حدٌّ للدفعة: مئةُ ألف حرفٍ تُقرأ، وما زاد يُقطع فلا تُخنق دورةُ الحدث */
 export const MAX_TEXT = 100_000;
@@ -153,7 +154,7 @@ export function parseIntake(text) {
       .map((cell) => arabizeDigits(cell))
       .filter(Boolean);
 
-    rows.push({ q, answer, wrongs, level: readLevel(parts[5]) });
+    rows.push({ q, answer, wrongs, level: readLevel(parts[5]), flag: flagCode(parts[6]) });
   }
 
   return { rows, skipped };

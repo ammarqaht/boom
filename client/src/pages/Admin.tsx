@@ -20,6 +20,7 @@ import {
   useWide,
   type MenuAction,
   Wordmark,
+  Flag,
 } from '../components/ui';
 import {
   ArrowIcon,
@@ -982,6 +983,9 @@ function QuestionFeed({
                   />
                   <span className="min-w-0 flex-1 text-[13px] leading-snug font-medium">
                     {item.q}
+                    {item.flag && (
+                      <Flag code={item.flag} className="ms-1.5 inline-block h-[14px] align-[-2px]" />
+                    )}
                   </span>
                   {/* النسبة بلونها: الكامل أخضر، والصفر أحمر، وما بينهما حبرٌ عاديّ */}
                   <span

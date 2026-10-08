@@ -361,6 +361,7 @@ export class Room {
         options: question.options,
         answer: question.answer,
         level: question.level,
+        ...(question.flag ? { flag: question.flag } : {}),
         at: Date.now(), // أول عرضٍ له — عليه يُرتَّب السجلّ
         shown: 0,
         right: 0,
@@ -392,6 +393,7 @@ export class Room {
         options: r.options,
         answer: r.answer,
         level: r.level,
+        flag: r.flag ?? null,
         shown: r.shown ?? 0,
         right: r.right ?? 0,
         wrong: r.wrong ?? 0,
@@ -628,6 +630,7 @@ export class Room {
       q: team.current.q,
       options: team.current.options,
       answer: team.current.answer,
+      flag: team.current.flag ?? null,
       choice,
       isCorrect,
     });
@@ -681,6 +684,7 @@ export class Room {
       q: team.current.q,
       options: team.current.options,
       answer: team.current.answer,
+      flag: team.current.flag ?? null,
       choice,
       isCorrect,
     });
@@ -1109,7 +1113,12 @@ export class Room {
       roundDoubled: Boolean(award?.doubled),
       question:
         this.status === 'running' && team.current
-          ? { id: team.current.id, q: team.current.q, options: team.current.options }
+          ? {
+              id: team.current.id,
+              q: team.current.q,
+              options: team.current.options,
+              flag: team.current.flag ?? null,
+            }
           : null,
       // المراجعة تحمل الإجابات الصحيحة — لا تُرسل إلا بعد انتهاء الجولة
       review: this.status === 'ended' ? team.review : null,

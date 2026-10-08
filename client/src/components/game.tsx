@@ -12,6 +12,7 @@ import {
   Button,
   barPercent,
   beatSeconds,
+  Flag,
   formatTime,
   levelVar,
   prefersReducedMotion,
@@ -1066,6 +1067,7 @@ export function ReviewList({
             <p className="flex-1 leading-relaxed font-bold">
               <span className="tnum text-faint">{index + 1}. </span>
               {item.q}
+              {item.flag && <Flag code={item.flag} className="ms-2 inline-block h-[18px] align-[-3px]" />}
             </p>
           </div>
 

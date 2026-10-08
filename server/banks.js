@@ -30,7 +30,13 @@ let banks = new Map();
  * اللاعب سجلّ ما رآه كلما حُرِّر البنك. أما النصّ فثابت ما دام السؤال
  * هو هو. (FNV-1a — قصيرٌ وسريع، ولا يُراد به أمان.)
  */
-function idFor(bankId, text) {
+function idFor(bankId, text, flag) {
+  /*
+   * وسؤالُ العلم يدخل علمُه في معرّفه: «علمُ أيّ دولةٍ هذا؟» نصٌّ واحدٌ
+   * لعشرين سؤالاً، ولو اشتُقّ المعرّف من النصّ وحده لصارت سؤالاً واحداً.
+   * وما لا علمَ له يبقى معرّفُه كما كان حرفاً بحرف.
+   */
+  if (flag) text = `${text}#flag:${flag}`;
   let hash = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     hash ^= text.charCodeAt(i);
@@ -76,7 +82,8 @@ function dress(bank) {
       options: item.options,
       answer: item.answer ?? 0,
       level: item.level ?? 2,
-      id: idFor(bank.id, item.q),
+      ...(item.flag ? { flag: item.flag } : {}),
+      id: idFor(bank.id, item.q, item.flag),
     })),
   };
 }
@@ -101,6 +108,7 @@ function bare(bank) {
         options: [item.options[at], ...item.options.filter((_, i) => i !== at)],
         answer: 0,
         level: item.level ?? 2,
+        ...(item.flag ? { flag: item.flag } : {}),
       };
     }),
   };
@@ -115,12 +123,41 @@ function remember(payload) {
 
 /** يُنظّف ما جاء من اللوحة: أرقامٌ عربية، والصوابُ أوّلاً، ومستوى صالح */
 function clean(item) {
+  const flag = flagCode(item.flag);
   return {
     q: arabizeDigits(String(item.q).trim()),
     options: item.options.map((option) => arabizeDigits(String(option).trim())),
     answer: 0,
     level: Number(item.level) || 2,
+    ...(flag ? { flag } : {}),
   };
+}
+
+/**
+ * علمُ دولةٍ يُعرض مع السؤال — رمزُها بحرفين لاتينيين (ISO 3166: sa, jp, br).
+ * وصورتُه في client/public/flags باسمه. وما لم يكن رمزاً من حرفين لا يُقبل علماً.
+ */
+export function flagCode(value) {
+  const code = String(value ?? '').trim().toLowerCase();
+  if (!/^[a-z]{2}$/.test(code)) return null;
+  /* ولا يُقبل رمزٌ لا صورةَ له — «xx» يصير علماً مكسوراً في وجه لاعب */
+  return !FLAGS || FLAGS.has(code) ? code : null;
+}
+
+/* الأعلامُ الموجودة فعلاً — تُقرأ مرّةً عند الإقلاع (flag-icons، رخصة MIT) */
+const FLAGS = (() => {
+  try {
+    const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'client', 'public', 'flags');
+    return new Set(readdirSync(dir).filter((f) => f.endsWith('.svg')).map((f) => f.slice(0, -4)));
+  } catch {
+    return null;
+  }
+})();
+
+/** مفتاحُ المقارنة: النصُّ مُطبَّعاً ومعه علمُه — فأسئلةُ الأعلام لا يُعدّ بعضُها مكرّرَ بعض */
+export function questionKey(text, flag) {
+  const key = normalizeText(text);
+  return key && flag ? `${key}#${flag}` : key;
 }
 
 function total(map) {

@@ -95,6 +95,8 @@ export interface FeedItem {
   id: string;
   q: string;
   options: string[];
+  /** علمُ دولةٍ يُعرض مع السؤال — رمزُها بحرفين، وصورتُه في public/flags */
+  flag?: string | null;
   answer: number;
   level: number;
   shown: number;
@@ -128,6 +130,8 @@ export interface ReviewItem {
   id: string;
   q: string;
   options: string[];
+  /** علمُ دولةٍ يُعرض مع السؤال — رمزُها بحرفين، وصورتُه في public/flags */
+  flag?: string | null;
   answer: number;
   choice: number;
   isCorrect: boolean;
@@ -138,6 +142,8 @@ export interface Question {
   id: string;
   q: string;
   options: string[];
+  /** علمُ دولةٍ يُعرض مع السؤال — رمزُها بحرفين، وصورتُه في public/flags */
+  flag?: string | null;
 }
 
 export interface TeamState {

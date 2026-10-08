@@ -248,6 +248,12 @@ await pool.query(`
 `);
 
 /*
+ * ترقيةٌ في مكانها: علمُ الدولة في السؤال المعلَّق (رمزٌ من حرفين، فارغٌ لما لا علمَ له).
+ * عمودٌ يُضاف ولا يمسّ ما قبله — فكلُّ معلَّقٍ قديمٍ يبقى كما كان بلا علم.
+ */
+await pool.query('ALTER TABLE pending ADD COLUMN IF NOT EXISTS flag TEXT');
+
+/*
  * ترقيةٌ في مكانها: «متى قُرئ».
  *
  * القواعد التي أُنشئت قبل العمود لا تعرفه. وبوستجرس يحتمل ADD COLUMN IF
@@ -931,6 +937,7 @@ const readPending = (r) => ({
   answer: r.answer,
   wrongs: JSON.parse(r.wrongs),
   level: r.level === null ? null : Number(r.level),
+  flag: r.flag ?? null,
   source: r.source,
   at: Number(r.at),
 });
@@ -962,7 +969,7 @@ export async function addPending(rows) {
   const at = Date.now();
   const values = [];
   const holes = rows.map((row, i) => {
-    const base = i * 6;
+    const base = i * 7;
     values.push(
       row.bank || null,
       row.q,
@@ -970,11 +977,12 @@ export async function addPending(rows) {
       JSON.stringify(row.wrongs ?? []),
       row.level ?? null,
       row.source ?? 'manual',
+      row.flag || null,
     );
-    return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, ${at})`;
+    return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, ${at})`;
   });
   const { rows: out } = await q(
-    `INSERT INTO pending (bank_id, q, answer, wrongs, level, source, at)
+    `INSERT INTO pending (bank_id, q, answer, wrongs, level, source, flag, at)
      VALUES ${holes.join(', ')} RETURNING id`,
     values,
   );
@@ -982,11 +990,11 @@ export async function addPending(rows) {
 }
 
 /** يُحدِّث معلّقاً بتمامه — المحرّر يُرسل الحالَ كلّه لا الفروق */
-export async function updatePending(id, { bank, q: text, answer, wrongs, level }) {
+export async function updatePending(id, { bank, q: text, answer, wrongs, level, flag }) {
   const { rowCount } = await q(
-    `UPDATE pending SET bank_id = $2, q = $3, answer = $4, wrongs = $5, level = $6
+    `UPDATE pending SET bank_id = $2, q = $3, answer = $4, wrongs = $5, level = $6, flag = $7
      WHERE id = $1`,
-    [Number(id), bank || null, text, answer, JSON.stringify(wrongs ?? []), level ?? null],
+    [Number(id), bank || null, text, answer, JSON.stringify(wrongs ?? []), level ?? null, flag || null],
   );
   return rowCount;
 }

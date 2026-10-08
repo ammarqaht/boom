@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Select, toast } from '../../components/ui';
+import { Flag, Select, toast } from '../../components/ui';
 import { ImportIcon } from '../../components/icons';
 import { type Api, Badge, Dot, LEVELS, Modal, say, unit } from './shared';
 import type { BankInfo } from './Banks';
@@ -251,6 +251,7 @@ export default function Intake({
                 >
                   {row.level ? <Dot level={row.level} /> : null}
                   <b className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{row.q}</b>
+                  {row.flag && <Flag code={row.flag} className="h-[15px]" />}
                   <span className="shrink-0 text-[13px] font-black text-signal-ink">
                     {row.answer}
                   </span>

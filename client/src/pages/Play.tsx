@@ -21,6 +21,7 @@ import {
   PulseMark,
   beatSeconds,
   dangerLevel,
+  Flag,
   formatTime,
   stateStyle,
   teamLevel,
@@ -765,7 +766,9 @@ function TeamScreen({
          */}
         {/* pb يرفع الكتلة فوق المنتصف قليلاً: البصر يستقرّ أعلى من مركز الشاشة */}
         <div className="flex min-h-0 flex-1 flex-col justify-center gap-2.5 pt-10 pb-8">
-          <div className="tile flex min-h-[7.5rem] shrink-0 items-center justify-center px-4 py-4">
+          <div className="tile flex min-h-[7.5rem] shrink-0 flex-col items-center justify-center gap-3 px-4 py-4">
+            {/* سؤالُ العلم: العلمُ هو السؤال — كبيرٌ فوق نصّه */}
+            {asking?.flag && <Flag key={asking.flag} code={asking.flag} className="h-[92px]" />}
             <p className="text-center text-[19px] leading-relaxed font-bold text-balance">
               {asking?.q}
             </p>

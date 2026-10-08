@@ -18,6 +18,8 @@ import {
   setActive,
   initBanks,
   arabizeDigits,
+  flagCode,
+  questionKey,
 } from './banks.js';
 import { auditQuestion, auditAll, normalizeText } from './audit.js';
 import { parseIntake, MAX_ROWS } from './intake.js';
@@ -483,6 +485,7 @@ app.get('/api/console/bank/:id', owner, async (req, res) => {
         options: q.options,
         answer: q.answer,
         level: q.level,
+        flag: q.flag ?? null,
         shown: stat?.shown ?? 0,
         /* صح وخطأ: كانا في الإحصاء ولا يُرسلان، فيقرأ الجدول شرطةً أبداً */
         correct: stat?.correct ?? 0,
@@ -530,6 +533,7 @@ app.get('/api/console/question/:id', owner, async (req, res) => {
     options: question.options,
     answer: question.answer,
     level: question.level,
+    flag: question.flag ?? null,
     shown: stat?.shown ?? 0,
     correct: stat?.correct ?? 0,
     wrong: stat?.wrong ?? 0,
@@ -553,11 +557,13 @@ function readQuestion(body) {
   const options = (Array.isArray(body?.options) ? body.options : []).map((o) =>
     String(o ?? '').trim(),
   );
+  const flag = flagCode(body?.flag);
   return {
     q: String(body?.q ?? '').trim(),
     options,
     answer: 0, // الصواب أوّل الخيارات — والخلط يقع عند التوزيع
     level: Number(body?.level) || 2,
+    ...(flag ? { flag } : {}),
   };
 }
 
@@ -596,6 +602,8 @@ app.put('/api/console/question/:id', owner, async (req, res) => {
   if (issues.some((i) => i.severity === 'error')) return res.status(400).json({ issues });
 
   const before = found.question;
+  /* المحرّرُ لا يعرف العلم بعد: ما لم يُرسَل علمٌ بقي علمُ السؤال كما كان */
+  if (!('flag' in (req.body ?? {})) && before.flag) question.flag = before.flag;
   const fromBank = found.bank;
 
   /* بنكُ الوجهة: إن لم يُرسَل أو كان مجهولاً بقي السؤال في مكانه */
@@ -610,7 +618,10 @@ app.put('/api/console/question/:id', owner, async (req, res) => {
     return res.status(400).json({ error: 'لا يُترك البنك فارغاً' });
   }
   /* ولا يُنقل سؤالٌ إلى بنكٍ فيه نصُّه ذاته — فيلتبس معرّفاه */
-  if (moving && toBank.questions.some((q) => q.q === question.q)) {
+  if (
+    moving &&
+    toBank.questions.some((q) => q.q === question.q && (q.flag ?? null) === (question.flag ?? null))
+  ) {
     return res.status(400).json({ error: 'في البنك الهدف سؤالٌ بالنصّ نفسه' });
   }
 
@@ -627,7 +638,7 @@ app.put('/api/console/question/:id', owner, async (req, res) => {
   if (moving) {
     const toFresh = allBanks().find((b) => b.id === toBank.id);
     await saveBank(toBank.id, [...toFresh.questions, question]);
-    const newId = newIdOf(toBank.id, question.q);
+    const newId = newIdOf(toBank.id, question.q, question.flag);
     if (!changed) {
       if (newId) await store.moveQuestionStats(before.id, newId, toBank.id);
       return res.json({ ok: true, issues, statsReset: false, moved: true });
@@ -673,9 +684,9 @@ app.put('/api/console/question/:id', owner, async (req, res) => {
 });
 
 /** معرّفُ السؤال بعد الحفظ — يُقرأ من البنك لا يُحسب هنا */
-function newIdOf(bankId, text) {
+function newIdOf(bankId, text, flag) {
   const bank = allBanks().find((b) => b.id === bankId);
-  return bank?.questions.find((q) => q.q === text)?.id ?? null;
+  return bank?.questions.find((q) => q.q === text && (q.flag ?? null) === (flag ?? null))?.id ?? null;
 }
 
 /** الحذف كالتحرير: يمحو ما قِيس، ويُحفظ في الأرشيف ليُرجَع إن نُدم عليه */
@@ -823,6 +834,7 @@ function asQuestion(row) {
     options: [row.answer, ...(row.wrongs ?? []).filter((text) => String(text ?? '').trim())],
     answer: 0,
     level: row.level ?? 2,
+    ...(row.flag ? { flag: row.flag } : {}),
   };
 }
 
@@ -843,7 +855,7 @@ function describePending(rows, banks) {
   const inBanks = new Map();
   for (const bank of banks) {
     for (const question of bank.questions) {
-      const key = normalizeText(question.q);
+      const key = questionKey(question.q, question.flag);
       if (key && !inBanks.has(key)) {
         inBanks.set(key, { bank: bank.id, bankName: bank.name, id: question.id });
       }
@@ -854,7 +866,7 @@ function describePending(rows, banks) {
   const seen = new Map();
   const twinOf = new Map();
   for (const row of [...rows].sort((a, b) => a.id - b.id)) {
-    const key = normalizeText(row.q);
+    const key = questionKey(row.q, row.flag);
     if (!key) continue;
     if (seen.has(key)) twinOf.set(row.id, seen.get(key));
     else seen.set(key, row.id);
@@ -862,7 +874,7 @@ function describePending(rows, banks) {
 
   return rows.map((row) => {
     const missing = missingOf(row);
-    const key = normalizeText(row.q);
+    const key = questionKey(row.q, row.flag);
     return {
       ...row,
       bankName: row.bank ? (names.get(row.bank) ?? row.bank) : null,
@@ -892,6 +904,8 @@ function readPendingBody(body) {
     answer: arabizeDigits(String(body?.answer ?? '').trim()),
     wrongs,
     level: [1, 2, 3].includes(level) ? level : null,
+    /* العلمُ إن أُرسل — وما لم يُرسَل يبقى undefined فيُبقي التحديثُ العلمَ القائم */
+    ...('flag' in (body ?? {}) ? { flag: flagCode(body.flag) } : {}),
   };
 }
 
@@ -960,6 +974,7 @@ app.put('/api/console/pending/:id', owner, async (req, res) => {
     return res.status(400).json({ error: 'بنك غير معروف' });
   }
 
+  if (row.flag === undefined) row.flag = have.flag;
   await store.updatePending(have.id, row);
   res.json({ ok: true });
 });

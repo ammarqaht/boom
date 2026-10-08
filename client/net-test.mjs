@@ -6,7 +6,7 @@
  */
 import { io } from 'socket.io-client';
 
-const URL = 'http://localhost:3000';
+const URL = process.env.NABDA_TEST_URL || 'http://localhost:3000';
 let failed = 0;
 const check = (ok, label) => {
   console.log(`${ok ? '✅' : '❌'} ${label}`);

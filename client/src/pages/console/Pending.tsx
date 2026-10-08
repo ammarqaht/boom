@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AutoTextarea, Select, toast } from '../../components/ui';
+import { AutoTextarea, Flag, Select, toast } from '../../components/ui';
 import { CheckIcon, PenIcon, PlusIcon, TrashIcon } from '../../components/icons';
 import {
   type Api,
@@ -45,6 +45,7 @@ export type Pending = {
   answer: string;
   wrongs: string[];
   level: number | null;
+  flag?: string | null;
   source: string;
   at: number;
   missing: string[];
@@ -224,6 +225,7 @@ function Line({
       >
         {row.level ? <Dot level={row.level} /> : null}
         <b className="min-w-0 flex-1 truncate text-[14px] font-bold">{row.q}</b>
+        {row.flag && <Flag code={row.flag} className="h-[16px]" />}
         <span className="min-w-0 max-w-[14rem] truncate text-[13px] font-black text-signal-ink">
           {row.answer}
         </span>

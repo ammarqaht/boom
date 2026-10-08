@@ -21,6 +21,7 @@ const single = {
   hadith: 'scroll',
   science: 'test_tube',
   ulum: 'books',
+  capitals: 'globe_with_meridians',
   other: 'sparkles',
   primary: 'pencil',
   middle: 'backpack',
