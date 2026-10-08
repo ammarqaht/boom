@@ -38,7 +38,7 @@ const BANKS = new Set([
  * رقمُ نسخة الصور: يُرفع كلما أُعيد صنعُها. ملفاتُ public تُخزَّن ساعةً
  * عند المتصفّح، فلو بقي الاسمُ نفسه لرأى من فتح الصفحة قبلُ الصورَ القديمة.
  */
-const ART_VERSION = 7;
+const ART_VERSION = 8;
 
 function Picture({ name }: { name: string }) {
   return (
