@@ -541,7 +541,7 @@ function PendingEditor({
             type="button"
             onClick={() => void approve()}
             disabled={busy || !ready || errors.length > 0}
-            title={ready ? undefined : 'لا يُعتمد ناقصٌ — أكمِل التفاصيل أولاً'}
+            title={ready ? undefined : 'لا يُعتمد ناقصٌ، أكمِل التفاصيل أولاً'}
             className={`flex h-10 items-center gap-2 rounded-chip px-5 text-[14px] font-black transition ${
               busy || !ready || errors.length > 0
                 ? 'cursor-not-allowed bg-line-2 text-white'
@@ -571,7 +571,7 @@ function PendingEditor({
     >
       {row.duplicate && (
         <p className="mb-5 rounded-chip bg-warn-2 px-3.5 py-2.5 text-[13px] leading-relaxed font-medium text-warn-ink">
-          نصُّ هذا السؤال في بنك «{row.duplicate.bankName}» — فاعتمادُه يُثنّيه.
+          نصُّ هذا السؤال في بنك «{row.duplicate.bankName}»، فاعتمادُه يُثنّيه.
         </p>
       )}
 

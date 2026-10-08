@@ -56,7 +56,7 @@ export function auditQuestion(question) {
   const options = Array.isArray(question?.options) ? question.options : [];
 
   if (!text) issues.push(err('السؤال فارغ'));
-  else if (text.length < 8) issues.push(warn('السؤال قصيرٌ جداً — أمتأكّد أنه مكتمل؟'));
+  else if (text.length < 8) issues.push(warn('السؤال قصيرٌ جداً، أمتأكّد أنه مكتمل؟'));
 
   if (options.length !== 4) {
     issues.push(err(`الخيارات ${options.length} والمطلوب أربعة`));
@@ -76,7 +76,7 @@ export function auditQuestion(question) {
   }
 
   if (question?.answer !== 0) {
-    issues.push(err('الصواب يكون أوّل الخيارات دائماً — والخلط يقع عند التوزيع'));
+    issues.push(err('الصواب يكون أوّل الخيارات دائماً، والخلط يقع عند التوزيع'));
   }
 
   if (![1, 2, 3].includes(question?.level)) {
@@ -91,9 +91,9 @@ export function auditQuestion(question) {
       const inRight = right.includes(tell);
       const inWrong = wrong.filter((option) => option.includes(tell)).length;
       if (inRight && inWrong === 0) {
-        issues.push(warn(`«${tell}» في الصواب وحده — يدلّ عليه`));
+        issues.push(warn(`«${tell}» في الصواب وحده، يدلّ عليه`));
       } else if (!inRight && inWrong === 1) {
-        issues.push(warn(`«${tell}» في خطأٍ واحد — يُستبعَد به`));
+        issues.push(warn(`«${tell}» في خطأٍ واحد، يُستبعَد به`));
       }
     }
 

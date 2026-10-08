@@ -279,7 +279,7 @@ function DeleteRoom({
             type="button"
             onClick={remove}
             disabled={busy || live}
-            title={live ? 'الغرفة تعمل الآن — أنهِ المسابقة ثم احذفها' : undefined}
+            title={live ? 'الغرفة تعمل الآن، أنهِ المسابقة ثم احذفها' : undefined}
             className="h-10 rounded-chip bg-danger px-4 text-[14px] font-black text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy ? 'يُحذف…' : 'احذف نهائياً'}
@@ -309,7 +309,7 @@ function DeleteRoom({
 
         {live ? (
           <p className="rounded-card bg-warn-2 px-5 py-4 text-[14px] leading-relaxed font-bold text-warn-ink">
-            الغرفة تعمل الآن ولاعبوها متّصلون. أنهِ المسابقة من شاشة المنظّم ثم احذفها — ولو مُحي
+            الغرفة تعمل الآن ولاعبوها متّصلون. أنهِ المسابقة من شاشة المنظّم ثم احذفها، ولو مُحي
             سجلُّها من تحتهم لانقطعوا بلا خبر.
           </p>
         ) : (
@@ -317,7 +317,7 @@ function DeleteRoom({
             <div className="rounded-card px-5 py-4 shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_25%,transparent)]">
               <b className="block text-[13px] font-black text-danger">يُمحى نهائياً</b>
               <ul className="mt-2 grid gap-1.5 text-[13px] leading-relaxed font-medium text-ink-2">
-                <li>سجلُّ الغرفة — لاعبوها وجولاتها ومدّتها</li>
+                <li>سجلُّ الغرفة: لاعبوها وجولاتها ومدّتها</li>
                 <li>لقطتُها المحفوظة، فلا تُستأنف بعدها</li>
                 {/* «ما كُتب فيها» يستقيم مع أيّ عدد — ولا يُجبرنا على مطابقة الفعل */}
                 <li>
@@ -418,7 +418,7 @@ export function Comments({ api, sift, onCounts, reloadKey }: Props) {
         />
         <Stat
           label="متوسط التقييم"
-          value={average === null ? '—' : average.toFixed(1)}
+          value={average === null ? '-' : average.toFixed(1)}
           unit={average === null ? '' : 'من 5'}
           tone={average !== null && average >= 4 ? 'safe' : undefined}
         />
@@ -471,7 +471,7 @@ export function Comments({ api, sift, onCounts, reloadKey }: Props) {
                 <p className="mt-2.5 flex-1 text-[13px] text-faint">تقييمٌ بلا نصّ</p>
               )}
               <div className="mt-3 border-t border-line-soft pt-2.5 text-[12.5px] font-medium text-muted">
-                {row.byRole === 'admin' ? 'منظّم' : `لاعب · ${row.byName ?? '—'}`}
+                {row.byRole === 'admin' ? 'منظّم' : `لاعب · ${row.byName ?? '-'}`}
                 {row.roomName && ` · غرفة ${row.roomName}`}
               </div>
             </article>

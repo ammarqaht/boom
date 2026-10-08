@@ -186,10 +186,10 @@ export async function initBanks() {
     if (files.size === 0) throw new Error('لا بنوك في القاعدة ولا في الملفّات');
     for (const bank of files.values()) await store.putBank(bare(bank));
     banks = files;
-    console.log(`🌱 زُرعت ${banks.size} بنكاً من الملفّات — ${total(banks)} سؤالاً`);
+    console.log(`🌱 زُرعت ${banks.size} بنكاً من الملفّات، ${total(banks)} سؤالاً`);
   } else {
     banks = new Map(rows.map((row) => [row.id, dress(row)]));
-    console.log(`📚 ${banks.size} بنكاً من القاعدة — ${total(banks)} سؤالاً`);
+    console.log(`📚 ${banks.size} بنكاً من القاعدة، ${total(banks)} سؤالاً`);
   }
   report(banks);
   return banks.size;
@@ -365,9 +365,9 @@ export async function writeBank({ id, name, questions }) {
   const raw = String(id ?? '').trim().toLowerCase();
   if (!raw) throw new Error('معرّف البنك فارغ');
   const bad = raw.replace(/[a-z0-9_-]/g, '');
-  if (bad) throw new Error(`المعرّف بالإنجليزية والأرقام والشرطة — وفيه «${[...new Set(bad)].join('')}»`);
+  if (bad) throw new Error(`المعرّف بالإنجليزية والأرقام والشرطة، وفيه «${[...new Set(bad)].join('')}»`);
   const slug = raw;
-  if (banks.has(slug)) throw new Error('المعرّف مأخوذ — اختر غيره');
+  if (banks.has(slug)) throw new Error('المعرّف مأخوذ، اختر غيره');
 
   const label = String(name ?? '').trim().replace(/\s+/g, ' ').slice(0, 40);
   if (!label) throw new Error('اسم البنك فارغ');
@@ -380,7 +380,7 @@ export async function writeBank({ id, name, questions }) {
    * normalizeText فلا يمرّ «السيرةُ النبويّة» بتشكيله ولا «السيره» بهائها.
    */
   const twin = [...banks.values()].find((b) => normalizeText(b.name) === normalizeText(label));
-  if (twin) throw new Error(`الاسم مأخوذ — يحمله بنك «${twin.name}»`);
+  if (twin) throw new Error(`الاسم مأخوذ، يحمله بنك «${twin.name}»`);
 
   const payload = {
     id: slug,

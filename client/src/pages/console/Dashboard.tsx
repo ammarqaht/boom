@@ -308,7 +308,7 @@ export default function Dashboard({
                     {row.reports > 0 ? (
                       <Badge tone="danger">{row.reports}</Badge>
                     ) : (
-                      <span className="text-faint">—</span>
+                      <span className="text-faint">-</span>
                     )}
                   </Cell>
                 </Row>
@@ -341,7 +341,7 @@ export default function Dashboard({
                 {bank.total}
               </Cell>
               <Cell align="center" className="tnum text-muted">
-                {bank.seen || '—'}
+                {bank.seen || '-'}
               </Cell>
               <Cell align="center">
                 <Rate value={bank.rate} />
@@ -350,7 +350,7 @@ export default function Dashboard({
                 {bank.reports > 0 ? (
                   <Badge tone="danger">{bank.reports}</Badge>
                 ) : (
-                  <span className="text-faint">—</span>
+                  <span className="text-faint">-</span>
                 )}
               </Cell>
             </Row>
@@ -370,7 +370,7 @@ export default function Dashboard({
             </Cell>
             <Cell />
             <Cell align="center" className="tnum font-black text-danger">
-              {totals.reports || '—'}
+              {totals.reports || '-'}
             </Cell>
           </Row>
         </Grid>
@@ -418,7 +418,7 @@ export default function Dashboard({
                   <div className="flex items-center gap-2.5 text-[12.5px]">
                     {comment.stars && <Stars n={comment.stars} />}
                     <span className="font-medium text-muted">
-                      {comment.byRole === 'admin' ? 'منظّم' : `لاعب · ${comment.byName ?? '—'}`}
+                      {comment.byRole === 'admin' ? 'منظّم' : `لاعب · ${comment.byName ?? '-'}`}
                     </span>
                     <span className="tnum ms-auto font-medium text-faint">
                       {stamp(comment.createdAt)}
@@ -576,7 +576,7 @@ function Activity({ days, peak }: { days: Day[]; peak: number }) {
       <div className="mt-2 flex justify-between text-[12px] font-medium text-faint">
         <span>قبل 14 يوماً</span>
         <span className="tnum font-bold text-signal-ink">
-          اليوم — {days[days.length - 1].rooms} {unit(days[days.length - 1].rooms, 'room')}
+          اليوم: {days[days.length - 1].rooms} {unit(days[days.length - 1].rooms, 'room')}
         </span>
       </div>
     </div>

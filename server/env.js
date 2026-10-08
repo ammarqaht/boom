@@ -84,7 +84,7 @@ export function readEnvFile(file = ENV_FILE) {
     if (!NAME.test(key)) {
       skipped.push({
         line: index + 1,
-        why: `اسمٌ غير صالح «${key}» — الحروف اللاتينية والأرقام والشرطة السفلية فقط`,
+        why: `اسمٌ غير صالح «${key}»، الحروف اللاتينية والأرقام والشرطة السفلية فقط`,
       });
       return;
     }
@@ -119,10 +119,10 @@ export function announce(result, label = '.env') {
     console.log(`   📄 ${label}: ${result.loaded.join('، ')}`);
   }
   for (const key of result.shadowed) {
-    console.log(`   ↷ ${key} في ${label} لكنّ البيئة تغلبه — القيمة من أمر التشغيل`);
+    console.log(`   ↷ ${key} في ${label} لكنّ البيئة تغلبه، القيمة من أمر التشغيل`);
   }
   for (const bad of result.skipped) {
-    console.warn(`   ⚠ ${label}:${bad.line} تُخطّي — ${bad.why}`);
+    console.warn(`   ⚠ ${label}:${bad.line} تُخطّي، ${bad.why}`);
   }
 }
 

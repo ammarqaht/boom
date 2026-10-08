@@ -526,7 +526,7 @@ function Channel({
         {team.waiting ? (
           /* عدّادٌ لم يبدأ لا يُعرض رقماً — الشرطةُ أصدق من ثلاثين ثانيةً لم تُنفَق */
           <>
-            <b className="tnum block text-[50px] leading-none font-black text-faint">—</b>
+            <b className="tnum block text-[50px] leading-none font-black text-faint">-</b>
             <span className="mt-1 block text-[28px] font-medium text-muted">ينتظر</span>
           </>
         ) : team.flatlined ? (
@@ -840,7 +840,7 @@ function PhoneChannel({
           team.waiting || dark ? 'text-faint' : team.flatlined ? 'text-danger' : 'ink-state'
         }`}
       >
-        {team.waiting ? '—' : dark ? '؟' : formatTime(team.timeMs)}
+        {team.waiting ? '-' : dark ? '؟' : formatTime(team.timeMs)}
       </b>
 
       {dark ? (

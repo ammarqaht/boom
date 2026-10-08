@@ -239,7 +239,7 @@ function SceneCut({ active }: { active: boolean }) {
       </div>
       <div className="scene-foot">
         <span className={`scene-verdict ${cut ? 'is-on' : ''}`}>
-          {cut ? 'سكن نبضٌ واحد — فانتهت الجولة على الثلاث' : 'الجولة جارية'}
+          {cut ? 'سكن نبضٌ واحد، فانتهت الجولة على الثلاث' : 'الجولة جارية'}
         </span>
       </div>
     </div>
@@ -297,7 +297,7 @@ const RULES = [
   {
     n: '٠٣',
     title: 'أول من يبلغ الصفر',
-    desc: 'يستقيم خطّه، وتنتهي الجولة على الجميع في اللحظة نفسها — لا على صاحبه وحده.',
+    desc: 'يستقيم خطّه، وتنتهي الجولة على الجميع في اللحظة نفسها، لا على صاحبه وحده.',
     Scene: SceneCut,
   },
   {
@@ -454,22 +454,19 @@ export default function Home() {
         {/* ══ المكان: اللاعب أوّلاً، وما سواه لمن معه شاشة ══ */}
         <section className="py-14">
           <Reveal>
-            <Link to="/play" className="tap seat-main" onClick={tap}>
-              <span className="seat-icon">
-                <UsersIcon size={24} />
-              </span>
-              <b className="block text-xl font-black">انضمّ لغرفة</b>
-            </Link>
-          </Reveal>
-
-          <Reveal delay={100}>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3 sm:gap-4">
+              <Link to="/play" className="tap seat seat-lead" onClick={tap}>
+                <span className="seat-icon">
+                  <UsersIcon size={24} />
+                </span>
+                <b className="seat-title">انضمّ لغرفة</b>
+              </Link>
               {ROLES.map(({ to, Icon, title }) => (
-                <Link key={to} to={to} className="tap seat-side" onClick={tap}>
-                  <span className="seat-side-icon">
-                    <Icon size={20} />
+                <Link key={to} to={to} className="tap seat" onClick={tap}>
+                  <span className="seat-icon">
+                    <Icon size={22} />
                   </span>
-                  <b className="block font-black">{title}</b>
+                  <b className="seat-title">{title}</b>
                 </Link>
               ))}
             </div>

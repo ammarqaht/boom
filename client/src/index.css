@@ -1357,73 +1357,56 @@ textarea {
 }
 
 /* ── المكان: اللاعب أوّلاً ── */
-.seat-main {
-  position: relative;
+.seat {
   display: flex;
   align-items: center;
   gap: 1rem;
-  overflow: hidden;
   border: 1px solid var(--color-line-2);
   border-radius: var(--radius-card);
   background: var(--color-surface);
-  padding: 1.5rem;
+  padding: 1.25rem 1.5rem;
   transition:
     background 0.2s ease,
+    border-color 0.2s ease,
     transform 0.12s ease;
 }
-.seat-main::before {
-  content: '';
-  position: absolute;
-  inset-block: 0;
-  inset-inline-start: 0;
-  width: 3px;
-  background: var(--color-signal);
-}
-.seat-main:hover {
+.seat:hover {
   background: var(--color-surface-2);
 }
 .seat-icon {
   display: flex;
-  height: 3.25rem;
-  width: 3.25rem;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-chip);
-  background: var(--color-signal-2);
-  color: var(--color-signal);
-}
-.seat-aside {
-  margin-block: 2.5rem 0.875rem;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--color-faint);
-}
-.seat-side {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-chip);
-  background: var(--color-surface);
-  padding: 1rem;
-  transition:
-    background 0.2s ease,
-    transform 0.12s ease;
-}
-.seat-side:hover {
-  background: var(--color-surface-2);
-}
-.seat-side-icon {
-  display: flex;
-  height: 2.5rem;
-  width: 2.5rem;
+  height: 3rem;
+  width: 3rem;
   flex-shrink: 0;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-chip);
   background: var(--color-surface-2);
   color: var(--color-muted);
+}
+.seat-title {
+  font-size: 1.125rem;
+  font-weight: 900;
+}
+.seat-lead {
+  border-color: color-mix(in srgb, var(--color-signal) 55%, transparent);
+}
+.seat-lead .seat-icon {
+  background: var(--color-signal-2);
+  color: var(--color-signal);
+}
+@media (min-width: 640px) {
+  .seat {
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.875rem;
+    padding: 2rem 1.25rem;
+    text-align: center;
+  }
+  .seat-icon {
+    height: 3.5rem;
+    width: 3.5rem;
+  }
 }
 
 /*

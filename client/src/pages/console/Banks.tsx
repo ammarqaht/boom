@@ -224,7 +224,7 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
         />
         <Stat
           label="وسيط الصواب"
-          value={middle === null ? '—' : `${middle}%`}
+          value={middle === null ? '-' : `${middle}%`}
         />
         <Stat
           label="ضعيفة الصواب"
@@ -277,13 +277,13 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
                   {row.options.slice(1).map((o) => ` · ${o}`)}
                 </Cell>
                 <Cell align="center" className="tnum text-[13.5px] text-ink-2">
-                  {row.shown || '—'}
+                  {row.shown || '-'}
                 </Cell>
                 <Cell align="center" className="tnum text-[13.5px] font-bold text-safe">
-                  {row.correct || '—'}
+                  {row.correct || '-'}
                 </Cell>
                 <Cell align="center" className="tnum text-[13.5px] font-bold text-danger">
-                  {row.wrong || '—'}
+                  {row.wrong || '-'}
                 </Cell>
                 <Cell align="center">
                   <Rate value={row.rate} plain />
@@ -292,7 +292,7 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
                   {row.reports > 0 ? (
                     <span className="tnum text-[13.5px] font-black text-danger">{row.reports}</span>
                   ) : (
-                    <span className="text-faint">—</span>
+                    <span className="text-faint">-</span>
                   )}
                 </Cell>
               </Row>
@@ -329,7 +329,7 @@ export function Reports({ api, sift, banks, onEdit, onCounts, reloadKey }: Share
   const [rows] = useFeed(load, reloadKey);
 
   const bankOf = useCallback(
-    (id: string | null) => banks.find((b) => id?.startsWith(`${b.id}:`))?.name ?? '—',
+    (id: string | null) => banks.find((b) => id?.startsWith(`${b.id}:`))?.name ?? '-',
     [banks],
   );
 
@@ -363,7 +363,7 @@ export function Reports({ api, sift, banks, onEdit, onCounts, reloadKey }: Share
   const groups = new Map<string, { question: string; rows: Report[] }>();
   for (const row of shown) {
     const key = row.questionId ?? `~${row.id}`;
-    if (!groups.has(key)) groups.set(key, { question: row.question ?? '—', rows: [] });
+    if (!groups.has(key)) groups.set(key, { question: row.question ?? '-', rows: [] });
     groups.get(key)!.rows.push(row);
   }
   const ordered = [...groups.entries()].sort((a, b) => b[1].rows.length - a[1].rows.length);
@@ -541,7 +541,7 @@ export function Shelf({
     const res = await api.send<{ error?: string }>('DELETE', `bank/${bank.id}`);
     setBusy(null);
     if (res.ok) {
-      flash(`حُذف «${bank.name}» — ويُرجَع من المحذوفة أدناه`);
+      flash(`حُذف «${bank.name}»، ويُرجَع من المحذوفة أدناه`);
       onChanged();
     } else flash(res.data?.error ?? 'تعذّر الحذف');
   };
@@ -561,7 +561,7 @@ export function Shelf({
     const res = await api.send<{ error?: string }>('DELETE', `trash/${row.id}`);
     setBusy(null);
     if (res.ok) {
-      flash(`نُسي «${row.name}» — ولا رجعة`);
+      flash(`نُسي «${row.name}»، ولا رجعة`);
       onChanged();
     } else flash(res.data?.error ?? 'تعذّر النسيان');
   };
@@ -674,8 +674,8 @@ export function Shelf({
                       glyph={<TrashIcon size={15} />}
                       label={
                         bank.count
-                          ? `احذف «${bank.name}» — ${say(bank.count, 'question')} تُحفظ ثلاثين يوماً`
-                          : `احذف «${bank.name}» — وهو فارغ`
+                          ? `احذف «${bank.name}»، ${say(bank.count, 'question')} تُحفظ ثلاثين يوماً`
+                          : `احذف «${bank.name}»، وهو فارغ`
                       }
                       onConfirm={() => void remove(bank)}
                     />
@@ -720,7 +720,7 @@ export function Shelf({
                     bare
                     tone="icon"
                     glyph={<TrashIcon size={15} />}
-                    label={`انسَ «${row.name}» نهائياً — لا رجعة بعده`}
+                    label={`انسَ «${row.name}» نهائياً، لا رجعة بعده`}
                     onConfirm={() => void forget(row)}
                   />
                 </div>
@@ -842,8 +842,8 @@ export function Edits({
                   <>
                     <span className="text-[12.5px] font-medium text-muted">
                       {row.kind === 'delete'
-                        ? 'يعود إلى البنك بلا إحصاء —'
-                        : 'يحلّ القديم محلّ الجديد —'}
+                        ? 'يعود إلى البنك بلا إحصاء'
+                        : 'يحلّ القديم محلّ الجديد'}
                     </span>
                     <button
                       type="button"
@@ -864,7 +864,7 @@ export function Edits({
                 ) : (
                   <>
                     <span className="text-[12.5px] font-medium text-danger">
-                      يُحذف السجلّ نهائياً — ولا يُرجَع القديم بعده —
+                      يُحذف السجلّ نهائياً، ولا يُرجَع القديم بعده
                     </span>
                     <button
                       type="button"

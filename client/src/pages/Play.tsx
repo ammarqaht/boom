@@ -319,7 +319,7 @@ export default function Play() {
       <FormPage title="نُعيدك إلى غرفتك">
         <Card className="grid gap-4 text-center">
           <p className="text-sm font-medium text-muted">
-            {live ? 'جارٍ استرجاع مكانك…' : 'ننتظر الشبكة — نعود فور اتصالها'}
+            {live ? 'جارٍ استرجاع مكانك…' : 'ننتظر الشبكة، نعود فور اتصالها'}
           </p>
           <Button
             variant="ghost"
@@ -447,7 +447,7 @@ function TopBar({
           {!live ? (
             <div className="flex items-center gap-1.5 text-[11px] font-bold text-danger">
               <OfflineIcon size={12} />
-              {restarting ? 'السيرفر يتجدّد — ثوانٍ ونعود' : 'انقطع الاتصال — يُعاد الوصل'}
+              {restarting ? 'السيرفر يتجدّد، ثوانٍ ونعود' : 'انقطع الاتصال، يُعاد الوصل'}
             </div>
           ) : unsaved ? (
             /*
@@ -456,7 +456,7 @@ function TopBar({
              * له ما يملك أن يتجنّبه، لا ما لا يفهمه.
              */
             <div className="text-[11px] font-bold text-warn">
-              لا تُحدّث الصفحة — جهازك لا يحفظ الجلسة
+              لا تُحدّث الصفحة، جهازك لا يحفظ الجلسة
             </div>
           ) : null}
         </div>

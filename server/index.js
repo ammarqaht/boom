@@ -164,7 +164,7 @@ function owner(req, res, next) {
     key = ''; // ترميزٌ تالف — كمفتاحٍ خاطئ سواء
   }
   if (keyMatches(key)) return next();
-  if (throttled(req.ip)) return res.status(429).json({ error: 'محاولات كثيرة — انتظر دقيقة' });
+  if (throttled(req.ip)) return res.status(429).json({ error: 'محاولات كثيرة، انتظر دقيقة' });
   return res.status(401).json({ error: 'مفتاح غير صحيح' });
 }
 
@@ -416,7 +416,7 @@ app.delete('/api/console/room/:code', owner, async (req, res) => {
   const code = String(req.params.code).toUpperCase();
   const live = getRoom(code);
   if (live && live.status !== 'finished') {
-    return res.status(409).json({ error: 'الغرفة تعمل الآن — أنهِ المسابقة ثم احذفها' });
+    return res.status(409).json({ error: 'الغرفة تعمل الآن، أنهِ المسابقة ثم احذفها' });
   }
   const gone = await store.forgetRoom(code);
   if (!gone) return res.status(404).json({ error: 'غرفة غير موجودة' });
@@ -1189,8 +1189,8 @@ async function serve(req, res) {
       const name = esc(room.name);
       card = '/og-play.png';
       path = `/play?code=${code}`;
-      html = html.replace('<title>نبضة</title>', `<title>انضمّ إلى «${name}» — نبضة</title>`);
-      html = meta(html, 'title', `انضمّ إلى «${name}» — نبضة`);
+      html = html.replace('<title>نبضة</title>', `<title>انضمّ إلى «${name}»، نبضة</title>`);
+      html = meta(html, 'title', `انضمّ إلى «${name}» · نبضة`);
       html = meta(html, 'description', `رمز الغرفة ${code} · افتح الرابط واكتب اسم فريقك`);
       html = meta(html, 'image:alt', `دعوةٌ للانضمام إلى مسابقة ${name}`);
     }
@@ -1290,7 +1290,7 @@ for (const snap of revived) {
     console.warn(`⚠ تعذّر بعث الغرفة ${snap?.code}: ${err.message}`);
   }
 }
-if (revived.length) console.log(`↺ عادت ${revived.length} غرفة من القرص — كلّها موقوفة`);
+if (revived.length) console.log(`↺ عادت ${revived.length} غرفة من القرص، كلّها موقوفة`);
 await store.sweepOld();
 
 const channel = (code) => `room:${code}`;
@@ -1319,7 +1319,7 @@ async function keepFeedback(entry, reply) {
     return true;
   } catch (err) {
     console.warn('⚠ تعذّر حفظ الرأي:', err.message);
-    reply?.({ ok: false, error: 'تعذّر الحفظ — حاول مرّة أخرى' });
+    reply?.({ ok: false, error: 'تعذّر الحفظ، حاول مرّة أخرى' });
     return false;
   }
 }
@@ -1521,7 +1521,7 @@ io.on('connection', (socket) => {
     } else {
       socket.emit('session:invalid', {
         role: 'team',
-        error: room ? 'انتهت جلستك في هذه الغرفة — انضم من جديد' : 'انتهت هذه الغرفة',
+        error: room ? 'انتهت جلستك في هذه الغرفة، انضم من جديد' : 'انتهت هذه الغرفة',
       });
     }
   } else if (auth.admin) {
@@ -1743,9 +1743,9 @@ io.on('connection', (socket) => {
     }
 
     const taken = [...room.teams.values()].some((t) => t.name === clean);
-    if (taken) return reply?.({ ok: false, error: 'الاسم مستخدم — اختر اسماً آخر' });
+    if (taken) return reply?.({ ok: false, error: 'الاسم مستخدم، اختر اسماً آخر' });
     if (room.teams.size >= MAX_TEAMS) {
-      return reply?.({ ok: false, error: 'الغرفة ممتلئة — راجع المنظّم' });
+      return reply?.({ ok: false, error: 'الغرفة ممتلئة، راجع المنظّم' });
     }
 
     const team = room.addTeam(clean, deviceId);
@@ -1764,7 +1764,7 @@ io.on('connection', (socket) => {
     const room = getRoom(code);
     const team = room?.teams.get(teamId);
     if (!room || !team || team.token !== token) {
-      return reply?.({ ok: false, error: 'انتهت الجلسة — انضم من جديد' });
+      return reply?.({ ok: false, error: 'انتهت الجلسة، انضم من جديد' });
     }
     attachTeam(room, team);
     reply?.({ ok: true, teamId, token, state: room.teamState(teamId) });
@@ -1849,7 +1849,7 @@ io.on('connection', (socket) => {
    */
   socket.on('feedback:comment', async ({ stars, text } = {}, reply) => {
     if (!ctx) return reply?.({ ok: false, error: 'غير مصرح' });
-    if (ctx.commented) return reply?.({ ok: false, error: 'وصلنا رأيك — شكراً لك' });
+    if (ctx.commented) return reply?.({ ok: false, error: 'وصلنا رأيك، شكراً لك' });
     const room = getRoom(ctx.code);
     if (!room) return reply?.({ ok: false, error: 'الغرفة غير موجودة' });
 
@@ -2085,16 +2085,16 @@ http.listen(PORT, async () => {
   console.log(`   الذاكرة: ${(await store.listRooms()).length} غرفة في السجلّ`);
   announce(envResult);
   if (usingFallback()) {
-    console.log(`   🔑 مفتاح لوحة المالك (مؤقّت — اكتب NABDA_OWNER_KEY في .env ليثبت):`);
+    console.log(`   🔑 مفتاح لوحة المالك (مؤقّت، اكتب NABDA_OWNER_KEY في .env ليثبت):`);
     console.log(`      ${FALLBACK_KEY}`);
   } else {
-    console.log(`   🔑 لوحة المالك على /console — المفتاح من NABDA_OWNER_KEY`);
+    console.log(`   🔑 لوحة المالك على /console، المفتاح من NABDA_OWNER_KEY`);
   }
 
   /* تحريرُ .env يصل حالاً — بلا إعادة تشغيل */
   watchEnv((result) => {
     if (result.loaded.includes('NABDA_OWNER_KEY')) {
-      console.log('   🔑 بُدِّل مفتاح لوحة المالك — الجلسات المفتوحة تُطالَب بالجديد');
+      console.log('   🔑 بُدِّل مفتاح لوحة المالك، الجلسات المفتوحة تُطالَب بالجديد');
     }
   });
 });

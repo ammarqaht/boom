@@ -224,13 +224,13 @@ export default function Intake({
           {report.skipped.length > 0 && (
             <div className="mb-4 rounded-card bg-danger-2 px-4 py-3">
               <b className="block text-[13px] font-black text-danger-ink">
-                سطورٌ لم تُفهم — ولن تدخل
+                سطورٌ لم تُفهم، ولن تدخل
               </b>
               <ul className="mt-2 grid gap-1">
                 {report.skipped.slice(0, 12).map((row) => (
                   <li key={row.line} className="text-[12.5px] leading-snug font-medium text-danger-ink">
                     <span className="tnum">سطر {row.line}</span> · {row.why}
-                    {row.text && <span className="text-faint"> — {row.text}</span>}
+                    {row.text && <span className="text-faint">: {row.text}</span>}
                   </li>
                 ))}
                 {report.skipped.length > 12 && (

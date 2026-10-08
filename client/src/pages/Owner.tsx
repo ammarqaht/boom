@@ -703,7 +703,7 @@ export default function Owner() {
             <Act
               icon={CheckIcon}
               label={approving ? 'يُعتمد…' : 'اعتمد الجاهز'}
-              title={`اعتمد ${say(counts.ready ?? 0, 'question')} تمَّت تفاصيلُها — والناقصُ يبقى`}
+              title={`اعتمد ${say(counts.ready ?? 0, 'question')} تمَّت تفاصيلُها، والناقصُ يبقى`}
               tone="solid"
               count={counts.ready}
               disabled={approving}
@@ -1024,7 +1024,7 @@ function Tip({ children }: { children: React.ReactNode }) {
 function Gate({ current, onKey }: { current: string; onKey: (key: string) => void }) {
   useTheme('light');
   const [value, setValue] = useState('');
-  const [error, setError] = useState(current ? 'انتهت الجلسة — أدخل المفتاح' : '');
+  const [error, setError] = useState(current ? 'انتهت الجلسة، أدخل المفتاح' : '');
 
   const submit = async () => {
     const key = value.trim();
@@ -1061,7 +1061,7 @@ function Gate({ current, onKey }: { current: string; onKey: (key: string) => voi
         <span className="mx-auto flex size-11 items-center justify-center rounded-chip bg-signal-ink text-white">
           <PulseIcon size={24} />
         </span>
-        <h1 className="mt-4 text-center text-[19px] font-black">نبضة — لوحة المالك</h1>
+        <h1 className="mt-4 text-center text-[19px] font-black">نبضة · لوحة المالك</h1>
 
         <label className="mt-6 block text-[12.5px] font-bold text-ink-2">المفتاح السرّي</label>
         <input

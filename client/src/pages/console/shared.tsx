@@ -105,7 +105,7 @@ export const say = (n: number, kind: Unit) => `${n} ${unit(n, kind)}`;
 
 /** مدّةٌ تُقرأ بلمحة: «٢٤ د» لا «١٤٤٠ ثانية» */
 export function span(ms: number | null) {
-  if (ms === null || ms === undefined) return '—';
+  if (ms === null || ms === undefined) return '-';
   const minutes = Math.round(ms / 60000);
   if (minutes < 1) return 'أقلّ من دقيقة';
   if (minutes < 60) return `${minutes} د`;
@@ -187,7 +187,7 @@ export const rateTone = (value: number | null): Tone =>
   value === null ? 'mute' : value < 40 ? 'danger' : value > 90 ? 'warn' : 'safe';
 
 export function Rate({ value, plain }: { value: number | null; plain?: boolean }) {
-  if (value === null) return <span className="text-faint">—</span>;
+  if (value === null) return <span className="text-faint">-</span>;
   if (plain) {
     const ink =
       value < 40
@@ -594,7 +594,7 @@ export function QuestionEditor({
   useEffect(() => {
     if (!questionId) return;
     void api.get<Loaded>(`question/${questionId}`).then((data) => {
-      if (!data) return setError('لم يُعثر على السؤال — لعلّه حُرِّر أو حُذف');
+      if (!data) return setError('لم يُعثر على السؤال، لعلّه حُرِّر أو حُذف');
       setLoaded(data);
       setTarget(data.bankId);
       setDraft({ q: data.q, options: [...data.options], level: data.level });
@@ -648,7 +648,7 @@ export function QuestionEditor({
       ? await api.send('PUT', `question/${questionId}`, { ...draft, bank: target })
       : await api.send('POST', `bank/${target}/question`, draft);
     setBusy(false);
-    if (!res.ok) return setError('لم يُحفظ — راجع الملاحظات أعلاه');
+    if (!res.ok) return setError('لم يُحفظ، راجع الملاحظات أعلاه');
     onSaved();
     onClose();
   };
@@ -697,7 +697,7 @@ export function QuestionEditor({
           {questionId &&
             (confirmDelete ? (
               <>
-                <span className="text-[13px] font-bold text-danger">يُحذف نهائياً مع إحصائه —</span>
+                <span className="text-[13px] font-bold text-danger">يُحذف نهائياً مع إحصائه</span>
                 <button
                   type="button"
                   onClick={remove}
@@ -741,7 +741,7 @@ export function QuestionEditor({
               </span>
               <span>
                 صواب{' '}
-                <b className="tnum text-ink">{loaded.rate === null ? '—' : `${loaded.rate}%`}</b>
+                <b className="tnum text-ink">{loaded.rate === null ? '-' : `${loaded.rate}%`}</b>
               </span>
               <span>
                 صح <b className="tnum text-safe">{loaded.correct}</b> · خطأ{' '}
@@ -764,8 +764,8 @@ export function QuestionEditor({
                 <p className="mb-5 rounded-chip bg-signal-2 px-3.5 py-2.5 text-[13px] leading-relaxed font-medium text-signal-ink">
                   يُنقل من «{loaded?.bankName}» إلى «{banks.find((b) => b.id === target)?.name}»
                   {textChanged
-                    ? ' — ويُمحى إحصاؤه'
-                    : ' — ومعه إحصاؤه'}
+                    ? '، ويُمحى إحصاؤه'
+                    : '، ومعه إحصاؤه'}
                 </p>
               )}
             </>
@@ -779,7 +779,7 @@ export function QuestionEditor({
             autoFocus
           />
 
-          <Label>الخيارات — الأول هو الصواب</Label>
+          <Label>الخيارات (الأول هو الصواب)</Label>
           <div className="mb-5 grid gap-2.5 sm:grid-cols-2">
             {draft.options.map((option, i) => (
               <div
@@ -840,7 +840,7 @@ export function QuestionEditor({
                   className="flex items-center gap-2.5 rounded-chip bg-danger-2 px-3.5 py-2.5 text-[13.5px] leading-snug font-bold text-danger-ink shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_22%,transparent)]"
                 >
                   <b className="shrink-0">✖</b>
-                  <span>{issue.message} — يمنع الحفظ</span>
+                  <span>{issue.message} (يمنع الحفظ)</span>
                 </li>
               ))}
               {warns.map((issue, i) => (
@@ -849,7 +849,7 @@ export function QuestionEditor({
                   className="flex items-center gap-2.5 rounded-chip bg-warn-2 px-3.5 py-2.5 text-[13.5px] leading-snug font-medium text-warn-ink shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-warn)_25%,transparent)]"
                 >
                   <b className="shrink-0">⚠</b>
-                  <span>{issue.message} — تنبيهٌ يمرّ</span>
+                  <span>{issue.message} (تنبيه)</span>
                 </li>
               ))}
             </ul>

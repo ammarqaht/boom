@@ -456,7 +456,7 @@ export function Select({
           open ? 'shadow-[inset_0_0_0_1.5px_var(--color-signal)]' : ''
         }`}
       >
-        <span className="min-w-0 flex-1 truncate text-right">{current?.label ?? '—'}</span>
+        <span className="min-w-0 flex-1 truncate text-right">{current?.label ?? '-'}</span>
         <ChevronIcon
           size={15}
           className={`shrink-0 text-muted transition ${open ? 'rotate-180' : ''}`}
@@ -859,7 +859,7 @@ export function HoldButton({
         onPointerUp={stop}
         onPointerLeave={stop}
         onPointerCancel={stop}
-        title={glyph ? `${label} — استمر بالضغط` : undefined}
+        title={glyph ? `${label}، استمر بالضغط` : undefined}
         aria-label={glyph ? label : undefined}
         style={{ '--held': held } as CSSProperties}
         className={
@@ -875,7 +875,7 @@ export function HoldButton({
         <span className="hold-fill" aria-hidden="true" />
         {/* القرصُ والرمزُ في موضعٍ ضيّق: الشرحُ في title لا في سطرٍ يكسر الصفّ */}
         <span className="relative flex items-center gap-2">
-          {glyph ?? (tone === 'chip' ? label : `${label} — استمر بالضغط`)}
+          {glyph ?? (tone === 'chip' ? label : `${label}، استمر بالضغط`)}
         </span>
       </button>
       {hint && (

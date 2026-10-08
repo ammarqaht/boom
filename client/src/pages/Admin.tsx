@@ -578,7 +578,7 @@ function Console({
           {!online && (
             <span className="flex items-center gap-1.5 rounded-chip bg-danger-2 px-2 py-0.5 text-[11.5px] font-bold text-danger sm:gap-2 sm:px-2.5 sm:py-1 sm:text-[12.5px]">
               <OfflineIcon size={14} />
-              انقطع الاتصال — يُعاد الوصل
+              انقطع الاتصال، يُعاد الوصل
             </span>
           )}
           </div>
@@ -769,7 +769,7 @@ function Console({
                       <IconButton
                         title={
                           team.score === 0
-                            ? `${team.name} عند الصفر — لا نقطة تُخصم`
+                            ? `${team.name} عند الصفر، لا نقطة تُخصم`
                             : `اخصم نقطة من ${team.name}`
                         }
                         size={8}
@@ -969,7 +969,7 @@ function QuestionFeed({
                             : 'text-ink-2'
                     }`}
                   >
-                    {answered === 0 ? '—' : `${item.right}/${answered}`}
+                    {answered === 0 ? '-' : `${item.right}/${answered}`}
                   </span>
                   <ArrowIcon
                     size={13}
@@ -1205,7 +1205,7 @@ function CardsPanel({
                 return (
                   <span
                     key={card.id}
-                    title={`${card.name} — بقيت ${left} من ${card.limit}`}
+                    title={`${card.name}: بقيت ${left} من ${card.limit}`}
                     aria-label={`${card.name} ${left}`}
                     className={`flex h-9 items-center justify-center gap-1.5 rounded-chip text-[13px] font-black ${
                       left === 0
@@ -1368,7 +1368,7 @@ function TeamRow({
       <b
         className={`tnum text-xl font-black sm:text-2xl ${team.flatlined ? 'text-danger' : team.waiting || dark ? 'text-faint' : 'ink-state'}`}
       >
-        {team.waiting ? '—' : dark ? '؟' : formatTime(team.timeMs)}
+        {team.waiting ? '-' : dark ? '؟' : formatTime(team.timeMs)}
       </b>
       <span className="mt-0.5 block text-[10.5px] font-medium text-muted sm:mt-1 sm:text-[11px]">
         {team.waiting ? 'ينتظر' : team.flatlined ? 'توقف' : 'ثانية'}
@@ -1393,7 +1393,7 @@ function TeamRow({
       <IconButton title="اخصم ٥ ثوانٍ" onClick={() => onAdjust(-5)}>
         <MinusIcon size={14} strokeWidth={2.6} />
       </IconButton>
-      <HoldIconButton title={`اطرد ${team.name} — استمر بالضغط`} onConfirm={onRemove}>
+      <HoldIconButton title={`اطرد ${team.name}، استمر بالضغط`} onConfirm={onRemove}>
         <CloseIcon size={14} strokeWidth={2.6} />
       </HoldIconButton>
     </div>

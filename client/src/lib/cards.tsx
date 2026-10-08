@@ -45,7 +45,7 @@ export const CARD_LOOK: Record<CardId, CardLook> = {
   },
   revive: {
     Icon: ReviveIcon,
-    effect: 'إذا وصل عدّادك صفراً يعود نبضك بعشر ثوانٍ — مرّة واحدة',
+    effect: 'إذا وصل عدّادك صفراً يعود نبضك بعشر ثوانٍ، مرّة واحدة',
     skin: '',
     ink: 'text-danger',
     tone: 'danger',
@@ -87,7 +87,7 @@ export const CARD_LOOK: Record<CardId, CardLook> = {
   },
   double: {
     Icon: DoubleIcon,
-    effect: 'نقاط جولتك القادمة ×٢ — تسقط إن توقف نبضك',
+    effect: 'نقاط جولتك القادمة ×٢، تسقط إن توقف نبضك',
     skin: 'skin-gold',
     ink: 'text-gold',
     tone: 'gold',

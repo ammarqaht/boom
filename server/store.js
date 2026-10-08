@@ -35,7 +35,7 @@ export const RETENTION_DAYS = 60;
 const url = process.env.DATABASE_URL || process.env.POSTGRES_URL || process.env.PG_URL;
 if (!url) {
   throw new Error(
-    'DATABASE_URL غير مضبوط — النبضة تحفظ سجلّها في PostgreSQL.\n' +
+    'DATABASE_URL غير مضبوط، النبضة تحفظ سجلّها في PostgreSQL.\n' +
       '  محلياً: DATABASE_URL=postgres://localhost/nabda npm start\n' +
       '  على المنصّة: أنشئ قاعدة مُدارة واربطها بالتطبيق فتُحقن من نفسها.',
   );
@@ -480,7 +480,7 @@ export async function loadSnapshots(maxIdleMs) {
     try {
       out.push(JSON.parse(row.snapshot));
     } catch (err) {
-      console.warn('⚠ لقطة غرفة تالفة — أُهملت:', err.message);
+      console.warn('⚠ لقطة غرفة تالفة، أُهملت:', err.message);
     }
   }
   return out;

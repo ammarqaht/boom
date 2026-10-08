@@ -762,7 +762,7 @@ export function Standings({
               className="font-bold tracking-[0.2em] text-signal"
               style={{ fontSize: px(11, 0.85, 20) }}
             >
-              الأول{champion.teamId === meId ? ' — أنت' : ''}
+              الأول{champion.teamId === meId ? ' · أنت' : ''}
             </div>
             <div
               className="truncate font-black"
@@ -858,12 +858,12 @@ const REPORT_REASONS = ['الإجابة خاطئة', 'السؤال غامض', '�
  * مضى. والاعتراضُ على فرحة النتيجة يشتري تعليقاً ويخسر لحظة.
  */
 const THANKS: Record<number, string> = {
-  0: 'وصل رأيك — شكراً لك',
-  1: 'سمعناك — وشكراً لصراحتك',
-  2: 'شكراً — الرسالة وصلت',
-  3: 'شكراً لك — رأيك في مكانه',
-  4: 'يسعدنا هذا — شكراً لك',
-  5: 'نبضةٌ كاملة — شكراً لك',
+  0: 'وصل رأيك، شكراً لك',
+  1: 'سمعناك، وشكراً لصراحتك',
+  2: 'شكراً، الرسالة وصلت',
+  3: 'شكراً لك، رأيك في مكانه',
+  4: 'يسعدنا هذا، شكراً لك',
+  5: 'نبضةٌ كاملة، شكراً لك',
 };
 
 export function CommentCard({
@@ -966,7 +966,7 @@ function ReportRow({
   if (reported) {
     return (
       <p className="mt-3 border-t border-line pt-2.5 text-xs font-black text-danger">
-        شكراً — وصلت ملاحظتك عن هذا السؤال
+        شكراً، وصلت ملاحظتك عن هذا السؤال
       </p>
     );
   }
@@ -1078,7 +1078,7 @@ export function ReviewList({
                   <span>{option}</span>
                   <span className="shrink-0 text-xs opacity-80">
                     {isAnswer && isChoice
-                      ? 'إجابتك — صحيحة'
+                      ? 'إجابتك صحيحة'
                       : isAnswer
                         ? 'الإجابة الصحيحة'
                         : 'إجابتك'}
