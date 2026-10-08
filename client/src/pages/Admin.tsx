@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ask, onWake, socket, useFreshBuild, watchSession } from '../lib/socket';
 import { clearAdminSession, loadAdminSession, saveAdminSession } from '../lib/session';
 import { projectRoom, roomTicking, useProjected } from '../lib/clock';
-import type { Bank, CardId, FeedItem, PublicTeam, RoomState } from '../lib/types';
+import type { Bank, FeedItem, PublicTeam, RoomState } from '../lib/types';
 import {
   Button,
   CHIP_BTN,
@@ -40,7 +40,6 @@ import {
   RestartIcon,
   ScreenIcon,
   SnowflakeIcon,
-  TimePlusIcon,
   TrophyIcon,
   UsersIcon,
 } from '../components/icons';
@@ -1180,9 +1179,6 @@ function RoundPanel({
   );
 }
 
-const CARD_ICON = Object.fromEntries(
-  Object.entries(CARD_LOOK).map(([id, look]) => [id, look.Icon]),
-) as Record<CardId, typeof TimePlusIcon>;
 
 /**
  * بطاقات اللاعبين: لكل لاعبٍ سطرٌ وفيه قرصٌ عن كل بطاقة يقول ما بقي له.
@@ -1206,40 +1202,25 @@ function CardsPanel({
     <Panel title="بطاقات اللاعبين">
       <div className="grid">
         {teams.map((team) => (
-          <div
-            key={team.id}
-            className="flex items-center gap-2 border-b border-line-soft py-2 last:border-0"
-          >
-            <b className="min-w-0 flex-1 truncate text-[13.5px] font-bold">{team.name}</b>
-            {/*
-              القرصُ يقول اسمَ البطاقة لا رمزَها وحده.
-              كان رمزاً ورقماً في قرصٍ بارتفاع ٢٤px، فيُسأل المنظّم «كم بقي
-              له من المضاعفة؟» فيحتاج أن يمرّ بالفأرة ليقرأ التلميح — وهو
-              واقفٌ في قاعة. فصار الاسم مكتوباً والعددُ إلى جانبه.
-              والاسمُ يُخفى دون ٦٤٠px وحدها حيث لا يسع الصفَّ.
-            */}
-            <div className="flex shrink-0 items-center gap-1.5">
+          <div key={team.id} className="grid gap-2 border-b border-line-soft py-2.5 last:border-0">
+            <b className="truncate text-[13.5px] font-bold">{team.name}</b>
+            <div className="grid grid-cols-5 gap-1.5">
               {cards.map((card) => {
                 const left = team.cardsLeft?.[card.id] ?? card.limit;
-                const Glyph = CARD_ICON[card.id];
+                const look = CARD_LOOK[card.id];
                 return (
                   <span
                     key={card.id}
                     title={`${card.name} — بقيت ${left} من ${card.limit}`}
-                    className={`flex h-8 items-center gap-1.5 rounded-chip px-2.5 text-[12px] font-bold ${
+                    aria-label={`${card.name} ${left}`}
+                    className={`flex h-9 items-center justify-center gap-1.5 rounded-chip text-[13px] font-black ${
                       left === 0
-                        ? 'text-faint opacity-55 shadow-[inset_0_0_0_1px_var(--color-line)]'
-                        : 'text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line-2)]'
+                        ? 'text-faint opacity-45 shadow-[inset_0_0_0_1px_var(--color-line)]'
+                        : 'text-ink shadow-[inset_0_0_0_1px_var(--color-line-2)]'
                     }`}
                   >
-                    <Glyph size={14} />
-                    {/*
-                      الاسمُ يظهر على الجوّال أيضاً: كان ‎max-sm:hidden‎ فيعود
-                      القرصُ رمزاً ورقماً حيث يُقرأ أكثر — ولوحةُ المنظّم
-                      تُدار من هاتفٍ في القاعة قبل أن تُدار من حاسب.
-                    */}
-                    <span>{card.name}</span>
-                    <b className="tnum font-black">{left}</b>
+                    <look.Icon size={16} className={left === 0 ? '' : look.ink} />
+                    <b className="tnum">{left}</b>
                   </span>
                 );
               })}
