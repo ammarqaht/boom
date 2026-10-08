@@ -96,10 +96,7 @@ export default function Display() {
 
   if (!room) {
     return (
-      <FormPage
-        title="شاشة العرض"
-        lead="افتحها على البروجكتر وأدخل رمز الغرفة. تتابع القاعة من هنا نبض كل لاعب، ولحظة سكون أول نبض."
-      >
+      <FormPage title="شاشة العرض">
         <Card className="grid gap-4">
           <Field label="رمز الغرفة">
             <Input
@@ -294,7 +291,7 @@ function Board({ room }: { room: RoomState }) {
 
       {room.status === 'paused' && (
         <div className="veil-in fixed inset-0 z-40 flex items-center justify-center bg-ground/92">
-          <PausedMark note="سيستأنف المنظّم بعد لحظات — أبقِ جهازك كما هو" />
+          <PausedMark />
         </div>
       )}
 
@@ -435,7 +432,7 @@ function Channel({
           className={`tnum text-[28px] font-medium ${team.flatlined ? 'text-faint' : 'text-muted'}`}
         >
           {team.waiting ? (
-            'دخل الآن — ينتظر الجولة القادمة'
+            'ينتظر الجولة القادمة'
           ) : frozen && team.frozenBy ? (
             /* القاعة تحبّ أن تعرف من جمّد من — والمجمَّد يُقرأ له عذرُه */
             <span className="text-frost">جمّده {team.frozenBy}</span>

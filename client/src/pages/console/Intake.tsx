@@ -87,7 +87,7 @@ export default function Intake({
     const added = res.data?.added ?? 0;
     toast(added ? `أُدخل ${say(added, 'question')}` : 'لا سؤالَ صالحاً في النصّ', {
       tone: added ? 'safe' : 'danger',
-      note: added ? 'في قائمة المعلّقة — تنتظر المراجعة' : 'راجع الفواصل بين العمودين',
+      note: added ? undefined : 'راجع الفواصل بين العمودين',
     });
     onDone();
     onClose();
@@ -142,7 +142,7 @@ export default function Intake({
         </>
       }
     >
-      <Label>البنك — يُسنَد إليه ما يُستورَد</Label>
+      <Label>البنك</Label>
       <Select
         value={target}
         onChange={(next) => {
@@ -150,7 +150,7 @@ export default function Intake({
           setReport(null);
         }}
         choices={[
-          { value: '', label: 'بلا بنك — يُختار لكلٍّ عند المراجعة' },
+          { value: '', label: 'بلا بنك' },
           ...banks.map((b) => ({
             value: b.id,
             label: b.active ? b.name : `${b.name} (مُلغى)`,

@@ -29,12 +29,9 @@ import {
   type MenuAction,
 } from '../components/ui';
 import {
-  CheckIcon,
   ExitIcon,
-  FlatlineIcon,
   HistoryIcon,
   OfflineIcon,
-  PulseIcon,
 } from '../components/icons';
 import {
   CommentCard,
@@ -52,36 +49,6 @@ import {
 import { Shop, FreezeOverlay } from '../components/Shop';
 import { playBeat, playCorrect, playFlatline, playWrong, unlockAudio } from '../lib/sound';
 
-/*
- * ثلاثُ قواعد تحت باب الدخول.
- *
- * من يصل هذه الشاشة أكثرُه لم ير الصفحة التعريفية: الرمزُ يُملى عليه في
- * القاعة أو يُمسح من الشاشة الكبيرة، فيقفز إلى /play مباشرة. ثم تبدأ
- * الجولةُ وعنده ثلاثون ثانية ليفهم ويجيب معاً.
- *
- * فثلاثةُ أسطرٍ تُقرأ في عشر ثوانٍ وهو ينتظر المنظّم — لا شرحٌ طويل:
- * الباب هو الغرض، وهذا ما يملأ ما حوله بما ينفع.
- *
- * وبلا أرقام: المنظّم يبدّل الثواني والزيادة والخصم من لوحته، فرقمٌ
- * مكتوبٌ هنا قد يكذب.
- */
-const PRIMER = [
-  {
-    Icon: PulseIcon,
-    head: 'لكلٍّ نبضُه',
-    text: 'عدّادٌ يجري وحده أمام القاعة، وأنت تجيب',
-  },
-  {
-    Icon: CheckIcon,
-    head: 'الصواب يمدّه والخطأ يقصّه',
-    text: 'فالسرعةُ وحدها لا تكفي',
-  },
-  {
-    Icon: FlatlineIcon,
-    head: 'أوّلُ نبضٍ يسكن يُنهي الجولة',
-    text: 'على الجميع لا على صاحبه وحده',
-  },
-];
 
 /** كم يبقى الصواب مُضاءً بعد الخطأ — أقلّ من ثانية فالوقت يجري */
 const REVEAL_MS = 900;
@@ -327,7 +294,7 @@ export default function Play() {
    */
   if (!state && returning) {
     return (
-      <FormPage title="نُعيدك إلى غرفتك" lead="مجموعتك ونقاطك محفوظة — ثوانٍ ونصلك بها.">
+      <FormPage title="نُعيدك إلى غرفتك">
         <Card className="grid gap-4 text-center">
           <p className="text-sm font-medium text-muted">
             {live ? 'جارٍ استرجاع مكانك…' : 'ننتظر الشبكة — نعود فور اتصالها'}
@@ -348,33 +315,7 @@ export default function Play() {
 
   if (!state) {
     return (
-      <FormPage
-        title="انضمام لاعب"
-        lead="أدخل رمز الغرفة الظاهر على شاشة القاعة، أو امسح رمزها المعروض عليها."
-        foot={
-          /*
-            لوحٌ واحدٌ بثلاثة سطور، لا ثلاثةُ صناديق.
-            الصناديقُ الثلاثة تُقرأ ثلاثَ بطاقاتٍ تُنافس بطاقةَ الدخول
-            فوقها، والقواعدُ حاشيةٌ لا ندٌّ لها. والحدُّ الواحد يجمعها
-            فيُقرأ السطرُ الواحد بعد السطر.
-          */
-          <ul className="mt-4 overflow-hidden rounded-card shadow-[inset_0_0_0_1px_var(--color-line)]">
-            {PRIMER.map((rule) => (
-              <li
-                key={rule.head}
-                className="flex items-center gap-3 border-b border-line-soft px-4 py-2.5 last:border-0"
-              >
-                <span className="shrink-0 text-signal" aria-hidden="true">
-                  <rule.Icon size={15} />
-                </span>
-                <span className="min-w-0 text-[12.5px] leading-relaxed text-muted">
-                  <b className="font-black text-ink-2">{rule.head}</b> — {rule.text}
-                </span>
-              </li>
-            ))}
-          </ul>
-        }
-      >
+      <FormPage title="انضمام لاعب">
         <Card className="grid gap-4">
           <Field label="رمز الغرفة">
             <Input
@@ -611,11 +552,6 @@ function TeamScreen({
         teams={teams}
         history={history}
         title="انتظر الجولة القادمة"
-        note={
-          state.status === 'ended' || state.status === 'lobby'
-            ? 'مجموعتك مسجّلة — تبدأ معك الجولة القادمة'
-            : 'دخلتَ والجولة جارية — تدخل اللعب مع بدء الجولة القادمة'
-        }
       />,
     );
   }
@@ -625,9 +561,6 @@ function TeamScreen({
       <>
         <Centered>
           <p className="font-medium text-muted">استعدّ…</p>
-          <p className="mt-2 text-xs font-medium text-faint">
-            لا تقفل الشاشة ولا تخرج من المتصفح — وقتك يجري ولو غبت
-          </p>
         </Centered>
         <CountdownGate ms={state.countdownMs} on />
       </>,
@@ -642,7 +575,6 @@ function TeamScreen({
         history={history}
         paused={state.status === 'paused'}
         title={`بانتظار بدء الجولة ${state.round}`}
-        note="أبقِ هذه الصفحة مفتوحة، ولا تقفل الشاشة أثناء الجولة — وقتك يجري ولو غبت"
       />,
     );
   }
@@ -891,11 +823,9 @@ function RoundEnd({
   const stopped = teams.filter((t) => t.flatlined && !t.dropped && !t.waiting && t.id !== state.id);
   const names = stopped.map((t) => t.name);
   const lead = dead
-    ? state.dropped
-      ? 'انقطع اتصالك حتى نفد وقتك — وخرجتَ وحدك، فلم تنتهِ الجولة على غيرك'
-      : 'شدّ حيلك في الجولة القادمة'
+    ? null
     : names.length === 0
-      ? 'صمدت إلى آخر الجولة'
+      ? null
       : names.length === 1
         ? `${names[0]} توقّف نبضه — فانتهت الجولة`
         : names.length === 2
@@ -922,7 +852,7 @@ function RoundEnd({
           className="mb-4 h-11"
         />
         <h2 className="ink-state text-2xl font-black">{dead ? 'توقف نبضك' : 'نبضك مستمر'}</h2>
-        <p className="mt-1.5 text-sm font-medium text-muted">{lead}</p>
+        {lead && <p className="mt-1.5 text-sm font-medium text-muted">{lead}</p>}
 
         <div className="mt-5 grid grid-cols-2 gap-2.5">
           {/* العدّاد لا يغيب وإن سكن النبض: صفرٌ خبرٌ، والشرطة لا تقول شيئاً */}
@@ -987,14 +917,12 @@ function StandBy({
   teams,
   history,
   title,
-  note,
   paused,
 }: {
   state: TeamState;
   teams: PublicTeam[];
   history: RoomResult[];
   title: string;
-  note: string;
   /** الجولة موقوفة: العلامة تتصدّر منتصف الشاشة والسجلّ يتنحّى */
   paused?: boolean;
 }) {
@@ -1027,7 +955,7 @@ function StandBy({
           <Lane timeMs={state.timeMs} size="md" className="h-14" />
         </section>
         <div className="flex flex-1 items-center justify-center py-8">
-          <PausedMark note="عدّادك متوقّف تماماً — لا تُغلق الصفحة ولا تُحدّثها" />
+          <PausedMark />
         </div>
         <div className="shrink-0 pb-1">{readout}</div>
       </>
@@ -1068,36 +996,16 @@ function StandBy({
               ))}
             </div>
           </>
-        ) : (
-          <>
-            <h3 className="mb-2 text-xs font-bold tracking-[0.14em] text-muted">تذكير سريع</h3>
-            <ul className="grid gap-2.5">
-              {[
-                'الإجابة الصحيحة تضيف خمس ثوانٍ إلى نبضك، والخطأ يخصم ثلاثاً.',
-                'لا تنتظر أحداً: لكل لاعب عدّاده وحده.',
-                'أول نبض يسكن يُنهي الجولة على الجميع — والنقاط لمن بقي وقته أطول.',
-              ].map((line, i) => (
-                <li key={i} className="tile flex gap-3 p-3.5 text-sm leading-relaxed text-ink-2">
-                  <span className="tnum shrink-0 font-black text-signal">{i + 1}</span>
-                  {line}
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
+        ) : null}
 
         <Pulses teams={teams} meId={state.id} />
       </div>
 
-      <p className="shrink-0 pt-3 text-center text-xs font-medium text-muted">
-        {ready ? (
-          <>
-            جاهزٌ لجولتك القادمة: <b className="text-signal">{ready}</b>
-          </>
-        ) : (
-          note
-        )}
-      </p>
+      {ready && (
+        <p className="shrink-0 pt-3 text-center text-xs font-medium text-muted">
+          جاهزٌ لجولتك القادمة: <b className="text-signal">{ready}</b>
+        </p>
+      )}
     </>
   );
 }

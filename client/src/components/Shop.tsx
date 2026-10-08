@@ -14,25 +14,22 @@ import { CheckIcon, DoubleIcon, RestoreIcon, SnowflakeIcon, TimePlusIcon } from 
  */
 const CARD_META: Record<
   CardId,
-  { Icon: typeof TimePlusIcon; effect: string; skin: string; ink: string; tone: Tone }
+  { Icon: typeof TimePlusIcon; skin: string; ink: string; tone: Tone }
 > = {
   time: {
     Icon: TimePlusIcon,
-    effect: 'تبدأ الجولة القادمة بعشر ثوانٍ زيادة',
     skin: 'skin-time',
     ink: 'text-safe',
     tone: 'safe',
   },
   freeze: {
     Icon: SnowflakeIcon,
-    effect: 'تقفل لاعباً عن الإجابة خمس ثوانٍ في بداية الجولة',
     skin: 'skin-frost',
     ink: 'text-frost',
     tone: 'frost',
   },
   double: {
     Icon: DoubleIcon,
-    effect: 'نقاط جولتك القادمة ×٢ — تسقط إن توقف نبضك',
     skin: 'skin-gold',
     ink: 'text-gold',
     tone: 'gold',
@@ -63,7 +60,7 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
   const [target, setTarget] = useState<string | null>(null);
 
   if (!shop.open) {
-    return <p className="py-10 text-center text-muted">البطاقات تُفتح بين الجولات</p>;
+    return null;
   }
 
   const flash = (msg: string) => {
@@ -91,7 +88,6 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
     toast(victim ? `جمّدتَ ${victim}` : `اشتريتَ «${meta?.name ?? 'البطاقة'}»`, {
       tone: look.tone,
       icon: <look.Icon size={19} />,
-      note: victim ? 'يُقفل عن الإجابة خمس ثوانٍ في بداية الجولة' : look.effect,
     });
   };
 
@@ -155,7 +151,6 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
                     </span>
                   )}
                 </div>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted">{meta.effect}</p>
               </div>
 
               {/*

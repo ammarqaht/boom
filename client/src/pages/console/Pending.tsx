@@ -146,11 +146,6 @@ export default function PendingPage({ api, sift, banks, onCounts, reloadKey, onC
         {shown.length === 0 ? (
           <Empty
             title={mine.length === 0 ? 'لا سؤال معلَّق' : 'لا سؤال يطابق التصفية'}
-            lead={
-              mine.length === 0
-                ? 'اكتب سؤالاً وإجابته في النموذج أعلاه، أو استورد دفعةً من الترويسة.'
-                : 'وسّع التصفية من الشريط الجانبيّ، أو امسح البحث.'
-            }
           />
         ) : (
           paged.slice.map((row) => (

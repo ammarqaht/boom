@@ -60,8 +60,6 @@ import {
 } from '../components/game';
 
 const SESSION_KEY = 'nabda:admin';
-/* عددُ الأجهزة الذي يُنبَّه عنده المنظّم إلى سعة الواي فاي */
-const CROWD = 30;
 
 /**
  * بطاقةٌ مصوّرة تُنتقى — للبنوك والمراحل.
@@ -360,26 +358,22 @@ export default function Admin() {
 /** مستويات المسابقة كما يراها المنظّم — والنسب في السيرفر */
 type Level = 'primary' | 'middle' | 'secondary' | 'university';
 
-const LEVELS: { id: Level; label: string; hint: string }[] = [
+const LEVELS: { id: Level; label: string }[] = [
   {
     id: 'primary',
     label: 'ابتدائي',
-    hint: 'أسئلة سهلة ومتوسطة بالسويّة، وقليلٌ من الصعب يُطرب من عرفه.',
   },
   {
     id: 'middle',
     label: 'متوسط',
-    hint: 'أغلبها متوسط، وحولها قليلٌ من السهل ومثله من الصعب.',
   },
   {
     id: 'secondary',
     label: 'ثانوي',
-    hint: 'متوسط وصعب يغلب عليه الصعب، وقليلٌ من السهل يُنفّس عن اللاعب.',
   },
   {
     id: 'university',
     label: 'جامعي',
-    hint: 'أغلبها صعب، ومعه ربعٌ من المتوسط — ولا سهل فيه.',
   },
 ];
 
@@ -667,7 +661,7 @@ function Console({
                 {room.status === 'paused' && (
                   <div className="flex items-center justify-center gap-2.5 rounded-chip bg-signal-2 px-3 py-2 text-center text-sm font-black text-signal">
                     <PauseIcon size={15} />
-                    الجولة موقوفة مؤقتاً — كل العدّادات ساكنة
+                    الجولة موقوفة
                   </div>
                 )}
 
@@ -712,18 +706,6 @@ function Console({
                       {room.code}
                     </b>
                   </div>
-                )}
-
-                {/*
-                 * الحدُّ في القاعة هو الواي فاي لا السيرفر: الراوتر المنزليّ
-                 * يختنق بين ثلاثين وخمسين جهازاً فيقطع بعضها. فيُنبَّه المنظّم
-                 * قبل البدء وهو يملك أن يتدارك، لا بعد أن تتساقط الأجهزة.
-                 */}
-                {room.status === 'lobby' && room.teams.length >= CROWD && (
-                  <p className="mt-2 rounded-card bg-warn-2 px-3 py-2.5 text-center text-[12.5px] font-bold text-warn-ink">
-                    {room.teams.length} جهازاً — الراوتر الواحد يختنق بهذا العدد. الأسلم أن يلعبوا
-                    ببيانات الجوال، أو على أكثر من نقطة واي فاي.
-                  </p>
                 )}
               </>
             )}
@@ -948,11 +930,6 @@ function QuestionFeed({
     <Panel
       title="أسئلة الغرفة"
     >
-      {/* الصفّ لا يبدو قابلاً للضغط من نفسه: سطرٌ يقول ماذا يحدث إن ضُغط */}
-      <p className="-mt-1.5 mb-1 text-[11.5px] font-medium text-faint">
-        اضغط أيّ سؤال لترى خياراته وإجابته الصحيحة — ولتُبلّغ عنه.
-      </p>
-
       {/* ارتفاعٌ مقيَّد وتمرير داخلي: القائمة تطول بعشر جولات فتدفع
           ما تحتها خارج الشاشة، والمنظّم يحتاج ما تحتها أثناء الجولة */}
       <div className="-mx-1 max-h-[21rem] overflow-y-auto px-1">
@@ -1294,7 +1271,6 @@ function CardsPanel({
         variant="ghost"
         className="mt-2.5 w-full"
         disabled={!spent}
-        title={spent ? 'تعود كل البطاقات متاحةً للجميع من جديد' : 'لم يشترِ أحدٌ بطاقةً بعد'}
         onClick={onReset}
       >
         <RefreshIcon size={15} />

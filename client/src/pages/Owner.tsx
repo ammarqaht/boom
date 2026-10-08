@@ -151,7 +151,7 @@ const SEARCH: Record<string, string> = {
   pending: 'ابحث في المعلّقة',
   reports: 'ابحث في البلاغات',
   edits: 'ابحث في المحرَّرة',
-  rooms: 'ابحث باسم الغرفة أو رمزها',
+  rooms: 'ابحث في الغرف',
   comments: 'ابحث في نصّ التعليق',
 };
 
@@ -635,7 +635,6 @@ export default function Owner() {
             */}
             <div
               className="mt-auto px-2 pt-4 text-[11px] font-medium text-faint"
-              title="وقتُ بناء هذه النسخة — اضغط Ctrl+Shift+R إن كان قديماً"
             >
               نسخة {__BUILD__}
             </div>
@@ -716,7 +715,6 @@ export default function Owner() {
             <Act
               icon={ImportIcon}
               label="استيراد"
-              title="لصقٌ أو ملفُّ CSV: سؤالٌ وجوابُه في كل سطر"
               onClick={() => setIntake(true)}
             />
           )}

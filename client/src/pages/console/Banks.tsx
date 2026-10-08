@@ -249,7 +249,6 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
         {shown.length === 0 ? (
           <Empty
             title="لا سؤال يطابق التصفية الحالية"
-            lead="وسّع التصفية من الشريط الجانبيّ، أو امسح البحث."
           />
         ) : (
           <Grid cols={COLS} sort={sort} onSort={flip}>
@@ -391,7 +390,7 @@ export function Reports({ api, sift, banks, onEdit, onCounts, reloadKey }: Share
 
       {ordered.length === 0 ? (
         <Panel>
-          <Empty title="لا بلاغات" lead="لم يشكُ أحدٌ من سؤالٍ بعد — وهذا خبرٌ جيّد." />
+          <Empty title="لا بلاغات" />
         </Panel>
       ) : (
         ordered.map(([key, group]) => (
@@ -826,7 +825,6 @@ export function Edits({
         <Panel>
           <Empty
             title="لم يُحرَّر سؤالٌ في الثلاثين يوماً الماضية"
-            lead="كلُّ تحريرٍ أو حذفٍ يُحفظ هنا نسخةً يمكن إرجاعها."
           />
         </Panel>
       ) : (

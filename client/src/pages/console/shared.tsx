@@ -753,7 +753,7 @@ export function QuestionEditor({
 
           {banks.length > 0 && (
             <>
-              <Label>{questionId ? 'البنك — بدّله لنقل السؤال إلى بنكٍ آخر' : 'البنك'}</Label>
+              <Label>البنك</Label>
               <Select
                 value={target}
                 onChange={setTarget}
@@ -779,7 +779,7 @@ export function QuestionEditor({
             autoFocus
           />
 
-          <Label>الخيارات — الأول هو الصواب، والخلط يقع عند التوزيع</Label>
+          <Label>الخيارات — الأول هو الصواب</Label>
           <div className="mb-5 grid gap-2.5 sm:grid-cols-2">
             {draft.options.map((option, i) => (
               <div

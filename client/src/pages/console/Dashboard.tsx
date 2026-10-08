@@ -220,7 +220,7 @@ export default function Dashboard({
           <p className="mt-1.5 text-[14px] font-medium text-ink-2">
             {state.length
               ? state.join(' · ')
-              : 'لم تُلعب مسابقةٌ بعد — ابدأ غرفةً وسيمتلئ هذا المكان'}
+              : 'لم تُلعب مسابقةٌ بعد'}
           </p>
         </div>
         <svg
@@ -288,7 +288,7 @@ export default function Dashboard({
           flush
         >
           {data.worst.length === 0 ? (
-            <Empty title="لا سؤال بلغ حدّ القياس بعد" lead="تُقاس الأسئلة بعد ثلاث عرضاتٍ فأكثر." />
+            <Empty title="لا سؤال بلغ حدّ القياس بعد" />
           ) : (
             <Grid cols={WORST_COLS} min={0}>
               {data.worst.map((row) => (
@@ -383,7 +383,7 @@ export default function Dashboard({
           flush
         >
           {data.recentRooms.length === 0 ? (
-            <Empty title="لا غرف بعد" lead="أنشئ غرفةً من شاشة المنظّم وستظهر هنا." />
+            <Empty title="لا غرف بعد" />
           ) : (
             <Grid cols={ROOM_COLS} min={0}>
               {data.recentRooms.map((room) => (
@@ -612,7 +612,7 @@ function Duplicates({
       {!rows ? (
         <Loading />
       ) : rows.length === 0 ? (
-        <Empty title="لا مكرّرات" lead="البنوك نظيفة — لا نصَّ يتكرّر في موضعين." />
+        <Empty title="لا مكرّرات" />
       ) : (
         <ul className="grid gap-2.5">
           {rows.map((row, i) => (

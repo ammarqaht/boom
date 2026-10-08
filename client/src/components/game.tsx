@@ -865,14 +865,13 @@ const REPORT_REASONS = ['الإجابة خاطئة', 'السؤال غامض', '�
  * أسفل الترتيب لا نافذةً تعترض: من أراد أن يقول قال، ومن أراد أن يمضي
  * مضى. والاعتراضُ على فرحة النتيجة يشتري تعليقاً ويخسر لحظة.
  */
-/** ردُّ الشكر على قدر النبضات — [العنوان، السطر تحته] */
-const THANKS: Record<number, [string, string]> = {
-  0: ['وصل رأيك — شكراً لك', 'كلُّ ملاحظةٍ تُقرأ، وعليها تُبنى الجولة القادمة.'],
-  1: ['سمعناك — وشكراً لصراحتك', 'أخبرتنا بما لم يعجبك، وسنُصلحه.'],
-  2: ['شكراً — الرسالة وصلت', 'نعرف أن فيها ما يُحسَّن، وملاحظتك تدلّنا على أوّله.'],
-  3: ['شكراً لك — رأيك في مكانه', 'نصفُ الطريق قُطع، وبملاحظتك نُكمل ما بقي.'],
-  4: ['يسعدنا هذا — شكراً لك', 'قريبٌ من التمام، وما ذكرتَه يُقرِّبه أكثر.'],
-  5: ['نبضةٌ كاملة — شكراً لك', 'سعدنا بلعبك معنا، ونراك في الجولة القادمة.'],
+const THANKS: Record<number, string> = {
+  0: 'وصل رأيك — شكراً لك',
+  1: 'سمعناك — وشكراً لصراحتك',
+  2: 'شكراً — الرسالة وصلت',
+  3: 'شكراً لك — رأيك في مكانه',
+  4: 'يسعدنا هذا — شكراً لك',
+  5: 'نبضةٌ كاملة — شكراً لك',
 };
 
 export function CommentCard({
@@ -891,14 +890,13 @@ export function CommentCard({
      * خمساً يُفرَح معه، ومن أعطى واحدة لا يُهلَّل في وجهه — يُشكر على
      * صراحته ويُوعَد بالإصلاح. ومن كتب بلا تقييم فله شكرٌ محايد.
      */
-    const [line, sub] = THANKS[stars] ?? THANKS[0];
+    const line = THANKS[stars] ?? THANKS[0];
     return (
       <div className="tile mt-5 px-5 py-6 text-center">
         <span className="mx-auto mb-2.5 flex size-11 items-center justify-center rounded-full bg-safe-2 text-safe-ink">
           <PulseIcon size={22} strokeWidth={2.6} />
         </span>
         <p className="text-[17px] font-black text-safe-ink">{line}</p>
-        <p className="mt-1.5 text-[13px] leading-relaxed font-medium text-muted">{sub}</p>
       </div>
     );
   }
@@ -914,10 +912,6 @@ export function CommentCard({
 
   return (
     <div className="tile mt-5 grid gap-3 p-5">
-      <p className="text-center text-sm leading-relaxed font-bold text-balance">
-        رأيك يهم ويحسّن من مستوى المسابقة — أخبرنا ما أعجبك وما أزعجك.
-      </p>
-
       <div className="flex justify-center gap-1.5" role="radiogroup" aria-label="التقييم">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
@@ -949,7 +943,7 @@ export function CommentCard({
         }}
         rows={3}
         maxLength={1000}
-        placeholder="ما الذي أعجبك؟ وما الذي أزعجك؟"
+        placeholder="رأيك"
         className="w-full resize-none rounded-chip bg-sunk px-3 py-2.5 text-sm leading-relaxed outline-none placeholder:text-faint focus:shadow-[inset_0_0_0_1.5px_var(--color-signal)]"
       />
 

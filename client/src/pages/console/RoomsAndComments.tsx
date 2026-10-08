@@ -149,7 +149,7 @@ export function Rooms({ api, sift, onCounts, reloadKey }: Props) {
         flush
       >
         {shown.length === 0 ? (
-          <Empty title="لا غرف تطابق" lead="بدّل العرض من الشريط الجانبيّ، أو امسح البحث." />
+          <Empty title="لا غرف تطابق" />
         ) : (
           <Grid cols={ROOM_COLS}>
             {shown.map((room) => (
@@ -435,7 +435,7 @@ export function Comments({ api, sift, onCounts, reloadKey }: Props) {
 
       {shown.length === 0 ? (
         <Panel>
-          <Empty title="لا تعليقات تطابق" lead="بدّل العرض من الشريط الجانبيّ، أو امسح البحث." />
+          <Empty title="لا تعليقات تطابق" />
         </Panel>
       ) : (
         <div className="grid gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(330px,1fr))]">
