@@ -1123,6 +1123,7 @@ export class Room {
           reviveLeft: t.reviveLeft,
           revivedAt: t.revivedAt,
           blackout: t.blackout,
+          blackoutBy: t.blackoutBy,
           waiting: t.waiting, // دخل والجولة جارية — ينتظر القادمة
           cardsLeft: this.cardsLeftFor(t), // ما بقي له من كل بطاقة — للوحة المنظّم
         }))

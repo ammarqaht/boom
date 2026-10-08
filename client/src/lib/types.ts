@@ -43,6 +43,7 @@ export interface PublicTeam {
   reviveLeft?: number;
   revivedAt?: number | null;
   blackout?: boolean;
+  blackoutBy?: string | null;
 }
 
 export interface Award {

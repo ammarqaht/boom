@@ -194,9 +194,12 @@ function Board({ room }: { room: RoomState }) {
     /* من دخل والجولة جارية يُذيَّل: ليس متسابقاً، وعدّادُه الممتلئ ليس تصدّراً */
     if (a.waiting !== b.waiting) return a.waiting ? 1 : -1;
     if (a.flatlined !== b.flatlined) return a.flatlined ? 1 : -1;
+    const ad = darkened(a, room.status);
+    if (ad !== darkened(b, room.status)) return ad ? 1 : -1;
+    if (ad) return a.name.localeCompare(b.name, 'ar');
     return b.timeMs - a.timeMs || b.score - a.score;
   });
-  const leaderId = ranked.find((t) => !t.flatlined && !t.waiting)?.id;
+  const leaderId = ranked.find((t) => !t.flatlined && !t.waiting && !darkened(t, room.status))?.id;
 
   const board = useRef<HTMLDivElement>(null);
   useReorderSlide(board, ranked.map((t) => t.id).join(','));
@@ -396,6 +399,7 @@ function Channel({
   leader?: boolean;
 }) {
   const frozen = team.locked && !team.flatlined;
+  const dark = darkened(team, status);
   const gilded = team.doubled && !team.flatlined && !frozen;
   const level = teamLevel(team.timeMs, team.flatlined);
   const dying = level === 'danger' && status === 'running' && !frozen;
@@ -403,7 +407,7 @@ function Channel({
   return (
     <div
       data-row={team.id}
-      style={stateStyle(level, team.timeMs)}
+      style={dark ? undefined : stateStyle(level, team.timeMs)}
       className={`relative grid max-h-[128px] min-h-[86px] flex-1 grid-cols-[64px_340px_minmax(0,1fr)_168px_148px] items-center gap-6 overflow-hidden rounded-card px-6 ${
         frozen
           ? 'frosted'
@@ -450,6 +454,8 @@ function Channel({
         >
           {team.waiting ? (
             'ينتظر الجولة القادمة'
+          ) : dark ? (
+            <span className="text-muted">عتّمه {team.blackoutBy}</span>
           ) : frozen && team.frozenBy ? (
             /* القاعة تحبّ أن تعرف من جمّد من — والمجمَّد يُقرأ له عذرُه */
             <span className="text-frost">جمّده {team.frozenBy}</span>
@@ -459,13 +465,17 @@ function Channel({
         </div>
       </div>
 
-      <Lane
-        timeMs={team.timeMs}
-        running={status === 'running'}
-        flatlined={team.flatlined}
-        size="lg"
-        className="relative h-[58px]"
-      />
+      {dark ? (
+        <div className="relative h-[58px] rounded-card bg-sunk" />
+      ) : (
+        <Lane
+          timeMs={team.timeMs}
+          running={status === 'running'}
+          flatlined={team.flatlined}
+          size="lg"
+          className="relative h-[58px]"
+        />
+      )}
 
       {/* العدّاد لا يغيب وإن سكن النبض: الصفر خبرٌ يُقرأ، والكلمة تحته تفسّره */}
       <div className="relative text-center">
@@ -484,6 +494,11 @@ function Channel({
               <FlatlineIcon size={20} />
               {team.dropped ? 'انقطع اتصاله' : 'توقف النبض'}
             </span>
+          </>
+        ) : dark ? (
+          <>
+            <b className="tnum block text-[50px] leading-none font-black text-faint">؟</b>
+            <span className="mt-1 block text-[28px] font-medium text-muted">ثانية</span>
           </>
         ) : (
           <>
@@ -544,7 +559,7 @@ function Results({
     <Curtain mode="drop" tone="var(--color-signal)" leaving={leaving}>
       <div className="px-20">
         <h2 className="mb-9 text-[48px] font-black">
-          نتائج الجولة <span className="tnum text-signal">{result.round}</span>
+          نتائج الجولة
         </h2>
         <ResultBars awards={result.awards} big />
       </div>
@@ -632,4 +647,8 @@ function describe(event: CardEvent) {
   if (event.card === 'freeze') return `${event.by} جمّد ${event.on}`;
   if (event.card === 'blackout') return `${event.by} عتّم على ${event.on}`;
   return `${event.by} سرق ${event.secs ?? ''} ث من ${event.on}`;
+}
+
+function darkened(team: PublicTeam, status: RoomState['status']) {
+  return Boolean(team.blackout) && !team.flatlined && !team.waiting && status !== 'ended' && status !== 'lobby';
 }

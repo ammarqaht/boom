@@ -1336,6 +1336,7 @@ function TeamRow({
   onRemove: () => void;
 }) {
   const frozen = team.locked && !team.flatlined;
+  const dark = running && Boolean(team.blackout) && !team.flatlined && !team.waiting;
   const gilded = team.doubled && !team.flatlined && !frozen;
   const level = teamLevel(team.timeMs, team.flatlined);
   const skin = frozen ? 'frosted' : gilded ? 'gilded' : 'tile';
@@ -1371,9 +1372,9 @@ function TeamRow({
        * ممتلئٌ بين العدّادات النازلة يقول إنه المتصدّر وهو لم يلعب.
        */}
       <b
-        className={`tnum text-xl font-black sm:text-2xl ${team.flatlined ? 'text-danger' : team.waiting ? 'text-faint' : 'ink-state'}`}
+        className={`tnum text-xl font-black sm:text-2xl ${team.flatlined ? 'text-danger' : team.waiting || dark ? 'text-faint' : 'ink-state'}`}
       >
-        {team.waiting ? '—' : formatTime(team.timeMs)}
+        {team.waiting ? '—' : dark ? '؟' : formatTime(team.timeMs)}
       </b>
       <span className="mt-0.5 block text-[10.5px] font-medium text-muted sm:mt-1 sm:text-[11px]">
         {team.waiting ? 'ينتظر' : team.flatlined ? 'توقف' : 'ثانية'}
@@ -1404,7 +1405,9 @@ function TeamRow({
     </div>
   );
 
-  const lane = (
+  const lane = dark ? (
+    <div className="relative h-[30px] rounded-card bg-sunk sm:h-[38px]" />
+  ) : (
     <Lane
       timeMs={team.timeMs}
       running={running}
@@ -1418,7 +1421,7 @@ function TeamRow({
     return (
       <div
         data-row={team.id}
-        style={stateStyle(level, team.timeMs)}
+        style={dark ? undefined : stateStyle(level, team.timeMs)}
         className={`relative grid h-[74px] shrink-0 grid-cols-[30px_minmax(120px,210px)_104px_88px_minmax(0,1fr)_auto] items-center gap-3.5 overflow-hidden px-3.5 ${skin}`}
       >
         <span className="bg-state absolute inset-y-0 start-0 z-[1] w-1" aria-hidden="true" />
@@ -1435,7 +1438,7 @@ function TeamRow({
   return (
     <div
       data-row={team.id}
-      style={stateStyle(level, team.timeMs)}
+      style={dark ? undefined : stateStyle(level, team.timeMs)}
       className={`relative overflow-hidden p-2.5 ${skin}`}
     >
       <span className="bg-state absolute inset-y-0 start-0 z-[1] w-1" aria-hidden="true" />
