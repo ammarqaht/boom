@@ -25,8 +25,8 @@ function playRoundEndingWith(loser, times = []) {
   return now;
 }
 
-check('الأسعار: وقت 3 · تجميد 3 · مضاعفة 6',
-  CARDS.time.price === 3 && CARDS.freeze.price === 3 && CARDS.double.price === 6);
+check('الأسعار: وقت 6 · تجميد 3 · مضاعفة 6',
+  CARDS.time.price === 6 && CARDS.freeze.price === 3 && CARDS.double.price === 6);
 check('الحدود: وقت 4 · تجميد 3 · مضاعفة 2',
   CARDS.time.limit === 4 && CARDS.freeze.limit === 3 && CARDS.double.limit === 2);
 check('لا شراء في اللوبي', room.buyCard(a.id, 'time').ok === false);
@@ -56,7 +56,7 @@ check('الإجابات الصحيحة لم تُضف أثناء الجولة', d
 check('نقطةٌ لكل إجابة صحيحة تُضاف بعد الجولة', a.score >= 4);
 
 // شراء وقت إضافي
-a.score = 20;
+a.score = 40;
 const aBefore = a.score;
 check('شراء وقت إضافي', room.buyCard(a.id, 'time').ok && a.score === aBefore - CARDS.time.price);
 check('تسجيل استخدام البطاقة', a.cardUses.get('time') === 1);

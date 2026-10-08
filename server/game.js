@@ -72,13 +72,13 @@ const REVIVE_MS = 10000;
  * تُدار لا مصروفٌ يُنفَق أول جولة.
  */
 export const CARDS = {
-  time: { price: 3, name: 'وقت إضافي', limit: 4, stack: true },
+  time: { price: 6, name: 'وقت إضافي', limit: 4, stack: true },
   truce: { price: 3, name: 'هدنة', limit: 2 },
   shield: { price: 2, name: 'درع', limit: 3 },
   revive: { price: 7, name: 'صاعق القلب', limit: 1 },
-  fort: { price: 2, name: 'حصن', limit: 3 },
-  mirror: { price: 4, name: 'مرآة', limit: 2 },
-  blackout: { price: 2, name: 'تعتيم', limit: 3, target: true },
+  fort: { price: 5, name: 'حصن', limit: 3 },
+  mirror: { price: 5, name: 'مرآة', limit: 2 },
+  blackout: { price: 4, name: 'تعتيم', limit: 3, target: true },
   freeze: { price: 3, name: 'تجميد', limit: 3, target: true },
   steal: { price: 4, name: 'سرقة نبض', limit: 2, target: true },
   double: { price: 6, name: 'مضاعفة', limit: 2 },

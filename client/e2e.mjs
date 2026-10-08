@@ -271,8 +271,8 @@ const bought = await ask(buyer.socket, 'team:buyCard', { card: 'time' });
 check('شراء بطاقة الوقت عبر السوكِت', bought.ok === true);
 await wait(500);
 check(
-  `خُصم سعر البطاقة (ثلاث نقاط) — ${scoreBefore2} ← ${buyer.state.score}`,
-  buyer.state.score === scoreBefore2 - 3,
+  `خُصم سعر البطاقة (ست نقاط) — ${scoreBefore2} ← ${buyer.state.score}`,
+  buyer.state.score === scoreBefore2 - 6,
 );
 check('المتبقي صار ثلاثاً', buyer.state.shop.cards.find((c) => c.id === 'time').left === 3);
 const rest = [];
