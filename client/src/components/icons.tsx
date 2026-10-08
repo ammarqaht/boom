@@ -324,3 +324,24 @@ export const PanelIcon = (p: IconProps) => (
 export const ChevronIcon = (p: IconProps) => (
   <Icon {...p}><path d="M6 9.5l6 6 6-6" /></Icon>
 );
+
+export const ShieldIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.2 7.5 9.5 4.3-1.3 7.5-4.9 7.5-9.5V6L12 3Z" /><path d="m9 12 2.2 2.2L15.5 10" /></Icon>
+);
+
+export const FortIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M4 21V9h3V6h3v3h4V6h3v3h3v12H4Z" /><path d="M10 21v-4a2 2 0 0 1 4 0v4" /></Icon>
+);
+
+export const MirrorIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M12 3v18" /><path d="M8 7 4 11l4 4" /><path d="M4 11h6" /><path d="m16 9 4 4-4 4" /><path d="M20 13h-6" /></Icon>
+);
+
+export const StealIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M3 12h3l2-4 3 8 2-5 1.5 2H17" /><path d="m17 9 4 3-4 3" /></Icon>
+);
+
+export const ReviveIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M12 20s-7.5-4.6-7.5-10A4.5 4.5 0 0 1 12 7.3 4.5 4.5 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10Z" /><path d="m12.8 9-2.3 3.6h3l-2.3 3.6" /></Icon>
+);
+

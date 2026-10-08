@@ -22,6 +22,9 @@ const STEP_MS = 250; // كوتيرة البثّ القديمة — فالمجر�
 
 const less = (ms: number, by: number) => Math.max(0, ms - by);
 
+const drained = (truceMs: number | undefined, elapsed: number) =>
+  Math.max(0, elapsed - (truceMs ?? 0));
+
 export function projectTeam(state: TeamState, elapsed: number): TeamState {
   if (state.status === 'countdown') {
     return { ...state, countdownMs: less(state.countdownMs, elapsed) };
@@ -29,7 +32,8 @@ export function projectTeam(state: TeamState, elapsed: number): TeamState {
   const lockedMs = less(state.lockedMs, elapsed);
   return {
     ...state,
-    timeMs: less(state.timeMs, elapsed),
+    timeMs: less(state.timeMs, drained(state.truceMs, elapsed)),
+    truceMs: less(state.truceMs ?? 0, elapsed),
     lockedMs,
     frozenBy: lockedMs > 0 ? state.frozenBy : null,
   };
@@ -49,7 +53,8 @@ export function projectRoom(room: RoomState, elapsed: number): RoomState {
       const lockedMs = less(team.lockedMs, elapsed);
       return {
         ...team,
-        timeMs: less(team.timeMs, elapsed),
+        timeMs: less(team.timeMs, drained(team.truceMs, elapsed)),
+        truceMs: less(team.truceMs ?? 0, elapsed),
         lockedMs,
         locked: lockedMs > 0,
         frozenBy: lockedMs > 0 ? team.frozenBy : null,

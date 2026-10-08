@@ -708,13 +708,11 @@ export function Confetti({ count = 60 }: { count?: number }) {
 export function Standings({
   standings,
   meId,
-  rounds,
   compact = false,
 }: {
   standings: Standing[];
   /** صاحب الجهاز — يُعلَّم صفّه */
   meId?: string;
-  rounds?: number;
   /** داخل لوحةٍ لا على شاشةٍ: سقوفٌ أقصر تليق بعمودٍ بين لوحاتٍ أخرى */
   compact?: boolean;
 }) {
@@ -747,11 +745,6 @@ export function Standings({
         <h2 className="font-black" style={{ fontSize: px(28, 3, 60), lineHeight: 1.1 }}>
           الأوائل
         </h2>
-        {rounds ? (
-          <span className="tnum font-medium text-muted" style={{ fontSize: px(13, 1.2, 26) }}>
-            بعد {rounds} جولة
-          </span>
-        ) : null}
       </header>
 
       {/* البطل */}

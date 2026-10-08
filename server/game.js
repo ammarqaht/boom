@@ -33,8 +33,14 @@ export const MAX_TEAMS = 200;
 export const FLATLINE_GRACE_MS = 1500;
 const LATE_ANSWER_MS = 1000;
 const OFFLINE_AFTER_MS = 3000;
-const TIME_CARD_MS = 10000; // الوقت الإضافي من بطاقة «وقت إضافي»
-const DOUBLE_FACTOR = 2; // مضاعِف بطاقة «مضاعفة»
+const TIME_CARD_MS = 10000;
+const DOUBLE_FACTOR = 2;
+const FREEZE_CAP_MS = 10000;
+const STEAL_MS = 5000;
+const STEAL_FLOOR_MS = 10000;
+const SHIELD_HITS = 2;
+const TRUCE_MS = 10000;
+const REVIVE_MS = 10000;
 
 /**
  * تعريفات البطاقات — المرجع الوحيد للأسعار والحدود والأنواع.
@@ -66,10 +72,21 @@ const DOUBLE_FACTOR = 2; // مضاعِف بطاقة «مضاعفة»
  * تُدار لا مصروفٌ يُنفَق أول جولة.
  */
 export const CARDS = {
-  time: { price: 3, name: 'وقت إضافي', limit: 4 },
-  freeze: { price: 4, name: 'تجميد', limit: 4 },
+  time: { price: 3, name: 'وقت إضافي', limit: 4, stack: true },
+  truce: { price: 3, name: 'هدنة', limit: 2 },
+  shield: { price: 2, name: 'درع', limit: 3 },
+  revive: { price: 7, name: 'صاعق القلب', limit: 1 },
+  fort: { price: 2, name: 'حصن', limit: 3 },
+  mirror: { price: 4, name: 'مرآة', limit: 2 },
+  blackout: { price: 2, name: 'تعتيم', limit: 3, target: true },
+  freeze: { price: 3, name: 'تجميد', limit: 3, target: true },
+  steal: { price: 4, name: 'سرقة نبض', limit: 2, target: true },
   double: { price: 6, name: 'مضاعفة', limit: 2 },
 };
+
+const ATTACK_VERB = { freeze: 'تجميد', blackout: 'تعتيم', steal: 'سرقة' };
+
+const toArabic = (n) => String(n).replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[d]);
 
 /**
  * مستويات المسابقة — ونسبةُ كل طبقة من الأسئلة المعروضة.
@@ -247,26 +264,13 @@ class Team {
     this.seen = new Set();
     // عدد مرات شراء كل بطاقة — والحدّ في CARDS[id].limit لكل نوع طوال اللعبة
     this.cardUses = new Map();
-    // آثار مؤجّلة تُطبّق في الجولة التالية
-    this.pendingBonusMs = 0; // وقت إضافي يُضاف عند بدء الجولة
-    this.pendingMultiplier = 1; // مضاعِف نقاط الجولة القادمة
-    this.pendingFreezeBy = null; // اسم من جمّدك، يُطبّق قفلاً عند البدء
-    /*
-     * ما اشتُري في فترة ما بين الجولتين، بترتيبه.
-     *
-     * الأثرُ المؤجَّل وحده لا يكفي لنقض الشراء: «وقت إضافي» يتراكم في
-     * ‎pendingBonusMs‎ فلا يُعرف منه كم مرّةً اشتُري، و«تجميد» أثرُه عند
-     * خصمه لا عندك. فيُقيَّد كلُّ شراءٍ هنا بثمنه وهدفه، ويُنقض بعينه.
-     * ويُفرَغ عند بدء الجولة — فما طُبّق لا يُستردّ.
-     */
+    this.pendingMultiplier = 1;
     this.pendingBuys = [];
     /*
      * منتظِرٌ للجولة القادمة: دخل والجولة جارية. لا يُسأل ولا ينزل عدّاده
      * ولا يُحتسب في نقاط الجولة الجارية — ويزول انتظاره عند بدء التالية.
      */
     this.waiting = false;
-    /* ما طُبّق عليه عند بدء الجولة — يُردّ إن أُعيدت الجولة */
-    this.roundEntry = null;
     this.resetForRound(settings);
   }
 
@@ -285,6 +289,15 @@ class Team {
     this.dyingAt = null; // بلغ الصفر هنا — وينتظر مهلةَ السكون
     this.dropped = false; // سكن نبضُه وهو منقطع — فلم يُنهِ الجولة على غيره
     this.lateUsed = false; // استُعملت له مهلةُ المتأخّرة في هذه الجولة
+    this.shieldLeft = 0;
+    this.truceMs = 0;
+    this.reviveLeft = 0;
+    this.revivedAt = null;
+    this.blackout = false;
+    this.blackoutBy = null;
+    this.fort = false;
+    this.mirror = false;
+    this.notices = [];
   }
 }
 
@@ -333,6 +346,9 @@ export class Room {
      * ولا يبثّه إلا إذا تقدّم — فلا يُرسل ستّين سطراً أربع مرات في الثانية.
      */
     this.feedVersion = 0;
+    this.changedTeams = new Set();
+    this.roundBuys = [];
+    this.cardEvents = [];
     /* عليها تُبنى الكتابة على القرص: تتبدّل الحالة فتُكتب، وإلا فلا */
     this.dirty = true;
     this.result = null;
@@ -503,28 +519,15 @@ export class Room {
     if (this.status === 'ended') this.round++;
     for (const team of this.teams.values()) {
       team.resetForRound(this.settings);
-      team.waiting = false; // من انتظر الجولة القادمة فقد جاءت
-      // تطبيق البطاقات المؤجّلة عند بدء الجولة
-      const entry = { bonusMs: team.pendingBonusMs, freezeBy: team.pendingFreezeBy };
-      if (team.pendingBonusMs) {
-        team.timeMs = this.clampTime(team.timeMs + team.pendingBonusMs);
-        team.pendingBonusMs = 0;
-      }
-      if (team.pendingFreezeBy) {
-        team.lockedMs = FREEZE_MS;
-        team.frozenBy = team.pendingFreezeBy;
-        team.pendingFreezeBy = null;
-      }
-      /*
-       * ما طُبّق عند البدء يُحفظ: الجولة قد تُعاد لعطبٍ، ولا يُضيَّع على
-       * اللاعب ثمنُ بطاقةٍ استُهلكت في جولةٍ لم تُحتسب.
-       */
-      team.roundEntry = entry;
-      /* بابُ النقض يُغلق ببدء الجولة: ما طُبّق أثرُه لا يُستردّ ثمنُه */
-      team.pendingBuys = [];
-      // pendingMultiplier يبقى حتى احتساب النقاط في نهاية الجولة
-      this.nextQuestion(team);
+      team.waiting = false;
     }
+    this.roundBuys = [];
+    for (const team of this.teams.values()) {
+      for (const buy of team.pendingBuys) this.roundBuys.push({ ...buy, by: team.id });
+      team.pendingBuys = [];
+    }
+    this.applyCards(this.roundBuys);
+    for (const team of this.teams.values()) this.nextQuestion(team);
     this.result = null;
     // ثلاث ثوانٍ استعداد قبل أن تبدأ العدادات فعلياً
     this.status = 'countdown';
@@ -550,14 +553,9 @@ export class Room {
     for (const team of this.teams.values()) {
       team.resetForRound(this.settings);
       team.waiting = false;
-      const entry = team.roundEntry;
-      if (entry?.bonusMs) team.timeMs = this.clampTime(team.timeMs + entry.bonusMs);
-      if (entry?.freezeBy) {
-        team.lockedMs = FREEZE_MS;
-        team.frozenBy = entry.freezeBy;
-      }
-      this.nextQuestion(team);
     }
+    this.applyCards(this.roundBuys ?? []);
+    for (const team of this.teams.values()) this.nextQuestion(team);
     this.result = null;
     this.status = 'countdown';
     this.countdownEndsAt = Date.now() + COUNTDOWN_MS;
@@ -634,9 +632,13 @@ export class Room {
       choice,
       isCorrect,
     });
+    let shielded = false;
     if (isCorrect) {
       team.correct++;
       team.timeMs = this.clampTime(team.timeMs + this.settings.correctBonus * 1000);
+    } else if (team.shieldLeft > 0) {
+      team.shieldLeft--;
+      shielded = true;
     } else {
       team.timeMs = this.clampTime(team.timeMs - this.settings.wrongPenalty * 1000);
     }
@@ -651,13 +653,17 @@ export class Room {
      */
     const reveal = { questionId: team.current.id, answer: team.current.answer };
 
+    let revived = false;
     if (team.timeMs === 0) {
-      this.flatline(team);
-      return { isCorrect, flatlined: true, ...reveal };
+      revived = this.revive(team);
+      if (!revived) {
+        this.flatline(team);
+        return { isCorrect, flatlined: true, shielded, ...reveal };
+      }
     }
 
     this.nextQuestion(team);
-    return { isCorrect, flatlined: false, ...reveal };
+    return { isCorrect, flatlined: false, shielded, revived, ...reveal };
   }
 
   /**
@@ -715,6 +721,7 @@ export class Room {
 
   /** يُسكِن نبض فريقٍ بلا إنهاء الجولة — تُنهيها الدالةُ المستدعية مرّةً واحدة */
   stop(team) {
+    this.changedTeams.add(team.id);
     team.flatlined = true;
     team.flatlinedAt = Date.now();
     team.current = null;
@@ -750,8 +757,15 @@ export class Room {
         team.lockedMs = Math.max(0, team.lockedMs - elapsed);
         if (team.lockedMs === 0) team.frozenBy = null;
       }
-      team.timeMs = Math.max(0, team.timeMs - elapsed);
+      let drain = elapsed;
+      if (team.truceMs > 0) {
+        const held = Math.min(team.truceMs, drain);
+        team.truceMs -= held;
+        drain -= held;
+      }
+      team.timeMs = Math.max(0, team.timeMs - drain);
       if (team.timeMs > 0) continue;
+      if (this.revive(team, now)) continue;
 
       /*
        * المنقطعُ يسكن ولا يُنهي الجولة على غيره.
@@ -906,9 +920,7 @@ export class Room {
       team.score = 0;
       team.seen.clear(); // لعبة جديدة تماماً — كل الأسئلة متاحة من جديد
       team.cardUses.clear(); // البطاقات تعود متاحة
-      team.pendingBonusMs = 0;
       team.pendingMultiplier = 1;
-      team.pendingFreezeBy = null;
       team.pendingBuys = [];
       team.resetForRound(this.settings);
     }
@@ -932,23 +944,116 @@ export class Room {
     }
     if (team.score < card.price) return { ok: false, error: 'نقاطك لا تكفي' };
 
-    if (cardId === 'freeze') {
+    if (card.target) {
       const target = this.teams.get(targetId);
-      if (!target || target.id === team.id) {
-        return { ok: false, error: 'اختر لاعباً آخر للتجميد' };
+      if (!target || target.id === team.id) return { ok: false, error: 'اختر لاعباً آخر' };
+      if (team.pendingBuys.some((buy) => buy.card === cardId && buy.targetId === targetId)) {
+        return { ok: false, error: `اخترتَ ${target.name} لهذه البطاقة` };
       }
-      target.pendingFreezeBy = team.name;
-    } else if (cardId === 'time') {
-      team.pendingBonusMs += TIME_CARD_MS;
-    } else if (cardId === 'double') {
-      team.pendingMultiplier = DOUBLE_FACTOR;
+    } else if (!card.stack && team.pendingBuys.some((buy) => buy.card === cardId)) {
+      return { ok: false, error: 'اشتريتها للجولة القادمة' };
     }
 
     team.score -= card.price;
     team.cardUses.set(cardId, (team.cardUses.get(cardId) ?? 0) + 1);
-    team.pendingBuys.push({ card: cardId, price: card.price, targetId: targetId ?? null });
+    team.pendingBuys.push({
+      card: cardId,
+      price: card.price,
+      targetId: card.target ? targetId : null,
+    });
     this.touch();
     return { ok: true };
+  }
+
+  applyCards(buys) {
+    const mine = (team, card) => buys.filter((buy) => buy.by === team.id && buy.card === card).length;
+    for (const team of this.teams.values()) {
+      const extra = mine(team, 'time') * TIME_CARD_MS;
+      if (extra) team.timeMs = this.clampTime(team.timeMs + extra);
+      team.shieldLeft = mine(team, 'shield') ? SHIELD_HITS : 0;
+      team.truceMs = mine(team, 'truce') ? TRUCE_MS : 0;
+      team.reviveLeft = mine(team, 'revive') ? 1 : 0;
+      team.pendingMultiplier = mine(team, 'double') ? DOUBLE_FACTOR : 1;
+      team.fort = mine(team, 'fort') > 0;
+      team.mirror = mine(team, 'mirror') > 0;
+    }
+
+    const events = [];
+    const freezers = new Map();
+    for (const buy of buys) {
+      if (!CARDS[buy.card]?.target) continue;
+      const attacker = this.teams.get(buy.by);
+      const target = this.teams.get(buy.targetId);
+      if (!attacker || !target) continue;
+      const verb = ATTACK_VERB[buy.card];
+
+      if (target.fort) {
+        target.notices.push(`حصنك صدّ ${verb} ${attacker.name}`);
+        attacker.notices.push(`حصنُ ${target.name} صدّ ${verb}ك`);
+        events.push({ kind: 'blocked', card: buy.card, by: attacker.name, on: target.name });
+        continue;
+      }
+
+      let source = attacker;
+      let victim = target;
+      if (target.mirror) {
+        target.notices.push(`مرآتك ردّت ${verb} ${attacker.name} عليه`);
+        attacker.notices.push(`مرآةُ ${target.name} ردّت ${verb}ك عليك`);
+        events.push({ kind: 'reflected', card: buy.card, by: attacker.name, on: target.name });
+        if (attacker.fort) {
+          attacker.notices.push(`حصنك صدّ ما ردّته مرآةُ ${target.name}`);
+          events.push({ kind: 'blocked', card: buy.card, by: target.name, on: attacker.name });
+          continue;
+        }
+        source = target;
+        victim = attacker;
+      }
+
+      if (buy.card === 'freeze') {
+        victim.lockedMs = Math.min(FREEZE_CAP_MS, victim.lockedMs + FREEZE_MS);
+        const names = freezers.get(victim.id) ?? [];
+        if (!names.includes(source.name)) names.push(source.name);
+        freezers.set(victim.id, names);
+        victim.frozenBy = names.join(' و');
+        if (source === attacker) attacker.notices.push(`جمّدتَ ${victim.name}`);
+        events.push({ kind: 'hit', card: 'freeze', by: source.name, on: victim.name });
+      } else if (buy.card === 'blackout') {
+        victim.blackout = true;
+        victim.blackoutBy = victim.blackoutBy ? `${victim.blackoutBy} و${source.name}` : source.name;
+        victim.notices.push(`عتّم ${source.name} على عدّادك`);
+        if (source === attacker) attacker.notices.push(`عتّمتَ على ${victim.name}`);
+        events.push({ kind: 'hit', card: 'blackout', by: source.name, on: victim.name });
+      } else if (buy.card === 'steal') {
+        const take = Math.max(0, Math.min(STEAL_MS, victim.timeMs - STEAL_FLOOR_MS));
+        if (take === 0) {
+          source.notices.push(`لم يبقَ عند ${victim.name} ما يُسرق`);
+          continue;
+        }
+        victim.timeMs -= take;
+        source.timeMs = this.clampTime(source.timeMs + take);
+        const secs = toArabic(Math.round(take / 1000));
+        victim.notices.push(`سرق ${source.name} ${secs} ث من نبضك`);
+        source.notices.push(`سرقتَ ${secs} ث من ${victim.name}`);
+        events.push({ kind: 'hit', card: 'steal', by: source.name, on: victim.name, secs });
+      }
+    }
+    this.cardEvents = events;
+    for (const [teamId, names] of freezers) {
+      const victim = this.teams.get(teamId);
+      if (victim) victim.notices.push(`جمّدك ${names.join(' و')}`);
+    }
+  }
+
+  revive(team, now = Date.now()) {
+    if (team.reviveLeft <= 0) return false;
+    team.reviveLeft = 0;
+    team.timeMs = REVIVE_MS;
+    team.dyingAt = null;
+    team.revivedAt = now;
+    team.notices.push('صاعق القلب أعاد نبضك');
+    this.changedTeams.add(team.id);
+    this.touch();
+    return true;
   }
 
   /** يفتح البطاقات من جديد لكل المجموعات — يستطيعون شراءها مرة أخرى */
@@ -994,6 +1099,7 @@ export class Room {
       })),
       result: this.present(this.result),
       history: this.history.map((round) => this.present(round)),
+      cardEvents: this.status === 'countdown' || this.status === 'running' ? (this.cardEvents ?? []) : [],
       standings: this.standings,
       displayBlurred: this.displayBlurred,
       countdownMs: this.countdownRemaining(),
@@ -1012,6 +1118,11 @@ export class Room {
           lockedMs: Math.round(t.lockedMs), // المتبقي من التجميد — لعدّاد الشاشات
           frozenBy: t.lockedMs > 0 ? t.frozenBy : null, // من جمّدها — تذكره القاعة والمنظّم
           doubled: t.pendingMultiplier > 1, // مضاعفة فعّالة هذه الجولة — بطاقة ذهبية
+          shieldLeft: t.shieldLeft,
+          truceMs: Math.round(t.truceMs),
+          reviveLeft: t.reviveLeft,
+          revivedAt: t.revivedAt,
+          blackout: t.blackout,
           waiting: t.waiting, // دخل والجولة جارية — ينتظر القادمة
           cardsLeft: this.cardsLeftFor(t), // ما بقي له من كل بطاقة — للوحة المنظّم
         }))
@@ -1061,22 +1172,6 @@ export class Room {
 
     const [buy] = team.pendingBuys.splice(at, 1);
 
-    if (cardId === 'time') {
-      team.pendingBonusMs = Math.max(0, team.pendingBonusMs - TIME_CARD_MS);
-    } else if (cardId === 'double') {
-      /* ولا يعود إلى واحدٍ إن بقيت مضاعفةٌ أخرى في القيد (لا يقع، وحرزٌ) */
-      if (!team.pendingBuys.some((other) => other.card === 'double')) {
-        team.pendingMultiplier = 1;
-      }
-    } else if (cardId === 'freeze') {
-      /*
-       * ولا يُفكّ تجميدٌ ليس منك: لو جمّد لاعبان هدفاً واحداً حمل الهدفُ
-       * اسمَ آخرهما، فمن نقض قبله لا يرفع قفلَ غيره.
-       */
-      const target = this.teams.get(buy.targetId);
-      if (target && target.pendingFreezeBy === team.name) target.pendingFreezeBy = null;
-    }
-
     team.score += buy.price;
     const used = team.cardUses.get(cardId) ?? 0;
     team.cardUses.set(cardId, Math.max(0, used - 1));
@@ -1125,6 +1220,13 @@ export class Room {
       // حالة القفل الحالية (تجميد)
       lockedMs: Math.round(team.lockedMs),
       frozenBy: team.frozenBy,
+      shieldLeft: team.shieldLeft,
+      truceMs: Math.round(team.truceMs),
+      reviveLeft: team.reviveLeft,
+      revivedAt: team.revivedAt,
+      blackout: team.blackout,
+      blackoutBy: team.blackoutBy,
+      notices: team.notices,
       // متجر البطاقات: متاح بين الجولات فقط
       shop: this.shopFor(team),
     };
@@ -1140,14 +1242,21 @@ export class Room {
       used: (team.cardUses.get(id) ?? 0) >= card.limit,
       left: card.limit - (team.cardUses.get(id) ?? 0),
       affordable: team.score >= card.price,
+      target: Boolean(card.target),
       /* كم مرّةً اشتُريت في هذه الفترة — وبها وحدها يظهر زرُّ النقض */
       bought: team.pendingBuys.filter((buy) => buy.card === id).length,
     }));
-    // الآثار المؤجّلة الجاهزة للجولة القادمة — لتذكير الفريق
-    const pending = {
-      time: team.pendingBonusMs > 0,
-      double: team.pendingMultiplier > 1,
-    };
+    const pending = Object.fromEntries(
+      Object.keys(CARDS).map((id) => [id, team.pendingBuys.some((buy) => buy.card === id)]),
+    );
+    const chosen = Object.fromEntries(
+      Object.keys(CARDS)
+        .filter((id) => CARDS[id].target)
+        .map((id) => [
+          id,
+          team.pendingBuys.filter((buy) => buy.card === id).map((buy) => buy.targetId),
+        ]),
+    );
     // خصوم يمكن تجميدهم (كل الفرق عداه)
     /* قائمةُ الخصوم لا تُقرأ إلا والمتجر مفتوح — فلا تُحمل في كل بثٍّ أثناء اللعب */
     const rivals = open
@@ -1155,7 +1264,7 @@ export class Room {
           .filter((t) => t.id !== team.id)
           .map((t) => ({ id: t.id, name: t.name }))
       : [];
-    return { open, cards, pending, rivals };
+    return { open, cards, pending, chosen, rivals };
   }
 }
 
@@ -1183,6 +1292,8 @@ Room.prototype.snapshot = function snapshot() {
     touchedAt: this.touchedAt,
     result: this.result,
     history: this.history,
+    roundBuys: this.roundBuys ?? [],
+    cardEvents: this.cardEvents ?? [],
     playedRounds: this.playedRounds,
     standings: this.standings,
     displayBlurred: this.displayBlurred,
@@ -1196,12 +1307,9 @@ Room.prototype.snapshot = function snapshot() {
       score: t.score,
       seen: [...t.seen],
       cardUses: [...t.cardUses],
-      pendingBonusMs: t.pendingBonusMs,
       pendingMultiplier: t.pendingMultiplier,
-      pendingFreezeBy: t.pendingFreezeBy,
       pendingBuys: t.pendingBuys,
       waiting: t.waiting,
-      roundEntry: t.roundEntry,
       timeMs: Math.round(t.timeMs),
       flatlined: t.flatlined,
       dropped: t.dropped,
@@ -1213,6 +1321,15 @@ Room.prototype.snapshot = function snapshot() {
       review: t.review,
       lockedMs: Math.round(t.lockedMs),
       frozenBy: t.frozenBy,
+      shieldLeft: t.shieldLeft,
+      truceMs: Math.round(t.truceMs),
+      reviveLeft: t.reviveLeft,
+      revivedAt: t.revivedAt,
+      blackout: t.blackout,
+      blackoutBy: t.blackoutBy,
+      fort: t.fort,
+      mirror: t.mirror,
+      notices: t.notices,
     })),
   };
 };
@@ -1236,6 +1353,8 @@ export function restoreRoom(snap) {
   room.touchedAt = snap.touchedAt;
   room.result = snap.result;
   room.history = snap.history ?? [];
+  room.roundBuys = Array.isArray(snap.roundBuys) ? snap.roundBuys : [];
+  room.cardEvents = Array.isArray(snap.cardEvents) ? snap.cardEvents : [];
   /* لقطاتٌ قديمة لا تعرف العدّاد — يُبدأ بما في السجلّ فلا يضيع ما مضى */
   room.playedRounds = snap.playedRounds ?? room.history.length;
   room.standings = snap.standings ?? null;
@@ -1265,13 +1384,10 @@ export function restoreRoom(snap) {
     team.disconnectedAt = Date.now(); // ومهلةُ الانقطاع تبدأ من عودة السيرفر
     team.seen = new Set(t.seen ?? []);
     team.cardUses = new Map(t.cardUses ?? []);
-    team.pendingBonusMs = t.pendingBonusMs ?? 0;
     team.pendingMultiplier = t.pendingMultiplier ?? 1;
-    team.pendingFreezeBy = t.pendingFreezeBy ?? null;
     /* لقطةٌ قديمة لا تحمله — ومصفوفةٌ فارغة أسلمُ من undefined تُقرأ بـfilter */
     team.pendingBuys = Array.isArray(t.pendingBuys) ? t.pendingBuys : [];
     team.waiting = Boolean(t.waiting);
-    team.roundEntry = t.roundEntry ?? null;
     team.timeMs = t.timeMs;
     team.flatlined = Boolean(t.flatlined);
     team.dropped = Boolean(t.dropped);
@@ -1284,6 +1400,15 @@ export function restoreRoom(snap) {
     team.review = t.review ?? [];
     team.lockedMs = t.lockedMs ?? 0;
     team.frozenBy = t.frozenBy ?? null;
+    team.shieldLeft = t.shieldLeft ?? 0;
+    team.truceMs = t.truceMs ?? 0;
+    team.reviveLeft = t.reviveLeft ?? 0;
+    team.revivedAt = t.revivedAt ?? null;
+    team.blackout = Boolean(t.blackout);
+    team.blackoutBy = t.blackoutBy ?? null;
+    team.fort = Boolean(t.fort);
+    team.mirror = Boolean(t.mirror);
+    team.notices = Array.isArray(t.notices) ? t.notices : [];
     room.teams.set(team.id, team);
   }
 

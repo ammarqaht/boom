@@ -1,40 +1,9 @@
 import { useState } from 'react';
 import type { CardId, Shop as ShopData } from '../lib/types';
 import { ask } from '../lib/socket';
-import { Button, toast, type Tone } from './ui';
-import { CheckIcon, DoubleIcon, RestoreIcon, SnowflakeIcon, TimePlusIcon } from './icons';
-
-/*
- * لكلّ بطاقةٍ لونُها وملمسُها.
- *
- * البطاقاتُ ثلاثٌ تُشترى في ثوانٍ بين جولتين، فإن تشابهت وجوهُها لزم
- * اللاعبَ أن يقرأ ثلاثةَ أسطرٍ ليفرّق بينها — وهو لا يملك ذلك. فصار
- * التمييزُ بصريّاً: صقيعٌ أزرقُ للتجميد، وبريقٌ ذهبيٌّ يمرّ للمضاعفة،
- * وخضرةُ وقتٍ للوقت. والنصُّ يبقى لمن أراد التفصيل.
- */
-const CARD_META: Record<
-  CardId,
-  { Icon: typeof TimePlusIcon; skin: string; ink: string; tone: Tone }
-> = {
-  time: {
-    Icon: TimePlusIcon,
-    skin: 'skin-time',
-    ink: 'text-safe',
-    tone: 'safe',
-  },
-  freeze: {
-    Icon: SnowflakeIcon,
-    skin: 'skin-frost',
-    ink: 'text-frost',
-    tone: 'frost',
-  },
-  double: {
-    Icon: DoubleIcon,
-    skin: 'skin-gold',
-    ink: 'text-gold',
-    tone: 'gold',
-  },
-};
+import { Button, toast } from './ui';
+import { CheckIcon, RestoreIcon, SnowflakeIcon } from './icons';
+import { ATTACK_DONE, CARD_LOOK, PICK_LABEL } from '../lib/cards';
 
 /*
  * صيغةُ المعدود: «نقطة» و«نقطتان» و«3 نقاط» و«14 نقطة». والقاعدة في
@@ -55,7 +24,7 @@ const pointsWord = (n: number) => {
 export function Shop({ shop, score }: { shop: ShopData; score: number }) {
   const [busy, setBusy] = useState<CardId | null>(null);
   const [note, setNote] = useState('');
-  const [pickTarget, setPickTarget] = useState(false);
+  const [pickTarget, setPickTarget] = useState<CardId | null>(null);
   // التجميد يقع على لاعبٍ بعينه ولا رجعة فيه، فالاختيار خطوة والتأكيد أخرى
   const [target, setTarget] = useState<string | null>(null);
 
@@ -77,15 +46,16 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
    */
   const buy = async (card: CardId, targetId?: string) => {
     const meta = shop.cards.find((c) => c.id === card);
-    const look = CARD_META[card];
+    const look = CARD_LOOK[card];
     const victim = targetId ? shop.rivals.find((r) => r.id === targetId)?.name : null;
     setBusy(card);
     const res = await ask('team:buyCard', { card, targetId });
     setBusy(null);
-    setPickTarget(false);
+    setPickTarget(null);
     setTarget(null);
     if (!res.ok) return flash(res.error);
-    toast(victim ? `جمّدتَ ${victim}` : `اشتريتَ «${meta?.name ?? 'البطاقة'}»`, {
+    const done = victim ? ATTACK_DONE[card]?.(victim) : null;
+    toast(done ?? `اشتريتَ «${meta?.name ?? 'البطاقة'}»`, {
       tone: look.tone,
       icon: <look.Icon size={19} />,
     });
@@ -111,6 +81,8 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
     });
   };
 
+  const pendingNames = shop.cards.filter((c) => shop.pending?.[c.id]).map((c) => c.name);
+
   return (
     <div className="grid gap-2">
       {note && (
@@ -120,8 +92,9 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
       )}
 
       {shop.cards.map((card) => {
-        const meta = CARD_META[card.id];
-        const picking = card.id === 'freeze' && pickTarget;
+        const meta = CARD_LOOK[card.id];
+        const picking = pickTarget === card.id;
+        const taken = shop.chosen?.[card.id] ?? [];
         const disabled = card.used || !card.affordable || busy !== null;
 
         const owned = card.bought > 0;
@@ -151,6 +124,7 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
                     </span>
                   )}
                 </div>
+                <p className="mt-0.5 text-xs leading-relaxed text-muted">{meta.effect}</p>
               </div>
 
               {/*
@@ -177,7 +151,7 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
                 <Button
                   size="sm"
                   onClick={() =>
-                    card.id === 'freeze' ? (setTarget(null), setPickTarget(true)) : buy(card.id)
+                    card.target ? (setTarget(null), setPickTarget(card.id)) : buy(card.id)
                   }
                   disabled={disabled}
                   variant={card.affordable ? 'primary' : 'ghost'}
@@ -196,19 +170,23 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
 
             {picking && (
               <div className="rise-in mt-3 grid gap-1.5 border-t border-line pt-3">
-                <p className="text-center text-sm font-bold text-muted">اختر لاعباً لتجميده</p>
+                <p className="text-center text-sm font-bold text-muted">
+                  اختر لاعباً لـ{PICK_LABEL[card.id]}
+                </p>
                 {shop.rivals.map((r) => {
                   const on = target === r.id;
+                  const already = taken.includes(r.id);
                   return (
                     <button
                       key={r.id}
                       type="button"
+                      disabled={already}
                       onClick={() => setTarget(r.id)}
                       className={`flex items-center gap-3 rounded-chip px-3 py-2.5 text-right font-bold transition ${
                         on
                           ? 'bg-signal-2 text-ink shadow-[inset_0_0_0_1.5px_var(--color-signal)]'
                           : 'text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line-2)] hover:bg-surface-2'
-                      }`}
+                      } ${already ? 'opacity-40' : ''}`}
                     >
                       <span
                         className={`flex size-[18px] shrink-0 items-center justify-center rounded-full ${
@@ -227,17 +205,17 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
                 <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] gap-1.5">
                   <Button
                     size="sm"
-                    onClick={() => target && buy('freeze', target)}
+                    onClick={() => target && buy(card.id, target)}
                     disabled={!target || busy !== null}
                   >
-                    <SnowflakeIcon size={14} />
-                    {busy === 'freeze'
+                    <meta.Icon size={14} />
+                    {busy === card.id
                       ? 'جارٍ…'
                       : target
-                        ? `أكّد تجميد ${shop.rivals.find((r) => r.id === target)?.name}`
+                        ? `أكّد ${PICK_LABEL[card.id]} ${shop.rivals.find((r) => r.id === target)?.name}`
                         : 'اختر لاعباً أولاً'}
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setPickTarget(false)}>
+                  <Button size="sm" variant="ghost" onClick={() => setPickTarget(null)}>
                     إلغاء
                   </Button>
                 </div>
@@ -250,15 +228,10 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
       <p className="pt-1 text-center text-xs font-medium text-muted">
         رصيدك <b className="tnum text-ink">{score}</b> {pointsWord(score)} · نقطةٌ لك عن كل إجابة
         صحيحة
-        {(shop.pending.time || shop.pending.double) && (
+        {pendingNames.length > 0 && (
           <>
             {' '}
-            · جاهز للجولة القادمة:{' '}
-            <b className="text-signal">
-              {[shop.pending.time && 'وقت إضافي', shop.pending.double && 'مضاعفة ×٢']
-                .filter(Boolean)
-                .join(' + ')}
-            </b>
+            · جاهز للجولة القادمة: <b className="text-signal">{pendingNames.join(' + ')}</b>
           </>
         )}
       </p>

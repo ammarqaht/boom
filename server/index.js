@@ -1962,6 +1962,10 @@ setInterval(() => {
     } else if (resync && room.status === 'running') {
       changed(room, { teams: 'all' });
     }
+    if (room.changedTeams.size) {
+      changed(room, { teams: [...room.changedTeams] });
+      room.changedTeams.clear();
+    }
   }
   flushPending(now);
 }, TICK_MS);

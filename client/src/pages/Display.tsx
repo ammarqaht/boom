@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ask, onWake, useFreshBuild, watchSession, socket } from '../lib/socket';
 import { projectRoom, roomTicking, useProjected } from '../lib/clock';
-import type { PublicTeam, RoomState } from '../lib/types';
+import type { CardEvent, CardId, PublicTeam, RoomState } from '../lib/types';
+import { CARD_LOOK } from '../lib/cards';
 import {
   Button,
   Card,
@@ -244,7 +245,7 @@ function Board({ room }: { room: RoomState }) {
             <Lobby code={room.code} qr={qr} teams={room.teams} />
           ) : room.status === 'finished' && room.standings ? (
             <div className="flex min-h-0 flex-1 items-center overflow-y-auto py-6">
-              <Standings standings={room.standings} rounds={room.history.length} />
+              <Standings standings={room.standings} />
             </div>
           ) : (
             <div ref={board} className="flex min-h-0 flex-1 flex-col justify-center gap-2.5 py-4">
@@ -288,6 +289,23 @@ function Board({ room }: { room: RoomState }) {
       </footer>
 
       <CountdownGate ms={room.countdownMs} on={room.status === 'countdown'} />
+      {room.status === 'countdown' && (room.cardEvents?.length ?? 0) > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-[6vh] z-[60] flex flex-col items-center gap-[1vh] px-[4vw]">
+          {room.cardEvents!.map((event, i) => {
+            const look = CARD_LOOK[event.kind === 'hit' ? event.card : event.kind === 'blocked' ? 'fort' : 'mirror'];
+            return (
+              <div
+                key={i}
+                className="rise-in flex items-center gap-[1vw] rounded-card bg-surface/95 px-[2vw] py-[1vh] text-[clamp(18px,2.4vw,42px)] font-black shadow-[inset_0_0_0_1px_var(--color-line-2)]"
+                style={{ animationDelay: `${i * 0.12}s` }}
+              >
+                <look.Icon className={look.ink} style={{ width: '1.1em', height: '1.1em' }} />
+                {describe(event)}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {room.status === 'paused' && (
         <div className="veil-in fixed inset-0 z-40 flex items-center justify-center bg-ground/92">
@@ -606,4 +624,14 @@ function useFlatlineMoment(teams: PublicTeam[], round: number) {
   }, [name]);
 
   return { name, leaving };
+}
+
+const VERB: Partial<Record<CardId, string>> = { freeze: 'تجميد', blackout: 'تعتيم', steal: 'سرقة' };
+
+function describe(event: CardEvent) {
+  if (event.kind === 'blocked') return `حصن ${event.on} صدّ ${VERB[event.card]} ${event.by}`;
+  if (event.kind === 'reflected') return `مرآة ${event.on} ردّت ${VERB[event.card]} ${event.by}`;
+  if (event.card === 'freeze') return `${event.by} جمّد ${event.on}`;
+  if (event.card === 'blackout') return `${event.by} عتّم على ${event.on}`;
+  return `${event.by} سرق ${event.secs ?? ''} ث من ${event.on}`;
 }

@@ -38,6 +38,11 @@ export interface PublicTeam {
   waiting: boolean;
   /** ما بقي له من كل بطاقة — للوحة المنظّم */
   cardsLeft: Record<CardId, number>;
+  shieldLeft?: number;
+  truceMs?: number;
+  reviveLeft?: number;
+  revivedAt?: number | null;
+  blackout?: boolean;
 }
 
 export interface Award {
@@ -59,7 +64,25 @@ export interface Award {
   doubled?: boolean;
 }
 
-export type CardId = 'time' | 'freeze' | 'double';
+export type CardId =
+  | 'time'
+  | 'truce'
+  | 'shield'
+  | 'revive'
+  | 'fort'
+  | 'mirror'
+  | 'blackout'
+  | 'freeze'
+  | 'steal'
+  | 'double';
+
+export interface CardEvent {
+  kind: 'hit' | 'blocked' | 'reflected';
+  card: CardId;
+  by: string;
+  on: string;
+  secs?: string;
+}
 
 /** بطاقة في متجر اللاعب */
 export interface ShopCard {
@@ -73,12 +96,14 @@ export interface ShopCard {
   affordable: boolean;
   /** كم مرّةً اشتُريت في هذه الفترة — وبها وحدها يُنقض الشراء */
   bought: number;
+  target: boolean;
 }
 
 export interface Shop {
   open: boolean;
   cards: ShopCard[];
-  pending: { time: boolean; double: boolean };
+  pending: Partial<Record<CardId, boolean>>;
+  chosen: Partial<Record<CardId, string[]>>;
   rivals: { id: string; name: string }[];
 }
 
@@ -119,6 +144,7 @@ export interface RoomState {
   cards: { id: CardId; name: string; limit: number }[];
   result: RoomResult | null;
   history: RoomResult[];
+  cardEvents?: CardEvent[];
   standings: Standing[] | null;
   displayBlurred: boolean;
   countdownMs: number;
@@ -174,6 +200,13 @@ export interface TeamState {
   /** قفل التجميد المتبقي بالمللي، واسم من جمّدك */
   lockedMs: number;
   frozenBy: string | null;
+  shieldLeft?: number;
+  truceMs?: number;
+  reviveLeft?: number;
+  revivedAt?: number | null;
+  blackout?: boolean;
+  blackoutBy?: string | null;
+  notices?: string[];
   shop: Shop;
 }
 

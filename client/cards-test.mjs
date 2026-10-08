@@ -25,10 +25,10 @@ function playRoundEndingWith(loser, times = []) {
   return now;
 }
 
-check('الأسعار: وقت 3 · تجميد 4 · مضاعفة 6',
-  CARDS.time.price === 3 && CARDS.freeze.price === 4 && CARDS.double.price === 6);
-check('الحدود: وقت 4 · تجميد 4 · مضاعفة 2',
-  CARDS.time.limit === 4 && CARDS.freeze.limit === 4 && CARDS.double.limit === 2);
+check('الأسعار: وقت 3 · تجميد 3 · مضاعفة 6',
+  CARDS.time.price === 3 && CARDS.freeze.price === 3 && CARDS.double.price === 6);
+check('الحدود: وقت 4 · تجميد 3 · مضاعفة 2',
+  CARDS.time.limit === 4 && CARDS.freeze.limit === 3 && CARDS.double.limit === 2);
 check('لا شراء في اللوبي', room.buyCard(a.id, 'time').ok === false);
 
 // الجولة الأولى: الأسود يخسر
@@ -69,10 +69,10 @@ check('رفض الشراء لعدم كفاية النقاط', room.buyCard(c.id,
 
 // تجميد ومضاعفة
 a.score = 40; // رصيد كافٍ لبقية المشتريات
-check('شراء تجميد على خصم', room.buyCard(a.id, 'freeze', b.id).ok && b.pendingFreezeBy === 'النسور');
+check('شراء تجميد على خصم', room.buyCard(a.id, 'freeze', b.id).ok && a.pendingBuys.some((x) => x.card === 'freeze' && x.targetId === b.id));
 check('لا تجميد للنفس', room.buyCard(b.id, 'freeze', b.id).ok === false);
 b.score = 40;
-check('شراء مضاعفة', room.buyCard(b.id, 'double').ok && b.pendingMultiplier === 2);
+check('شراء مضاعفة', room.buyCard(b.id, 'double').ok && b.pendingBuys.some((x) => x.card === 'double'));
 
 // متجر الفريق يعكس الحالة
 const shopA = room.teamState(a.id).shop;
@@ -86,7 +86,7 @@ const base = room.settings.startSeconds * 1000;
 room.start();
 check('وقت النسور +40 ثانية عند البدء (أربع بطاقات ×10ث)', a.timeMs === base + 40000);
 check('الصقور مقفلة 5 ثوانٍ (تجميد)', b.lockedMs === 5000 && b.frozenBy === 'النسور');
-check('استُهلك وقت النسور المؤجّل', a.pendingBonusMs === 0);
+check('استُهلكت مشتريات النسور المؤجّلة', a.pendingBuys.length === 0);
 
 let now = room.countdownEndsAt;
 room.tick(now); // إلى running

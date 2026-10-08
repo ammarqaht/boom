@@ -30,7 +30,6 @@ import {
   CopyIcon,
   EyeIcon,
   EyeOffIcon,
-  DoubleIcon,
   HistoryIcon,
   MinusIcon,
   OfflineIcon,
@@ -46,6 +45,7 @@ import {
   UsersIcon,
 } from '../components/icons';
 import { BankArt, LevelArt } from '../components/art';
+import { CARD_LOOK } from '../lib/cards';
 import {
   CommentCard,
   CountdownGate,
@@ -635,7 +635,7 @@ function Console({
             {over ? (
               <>
                 <section className="tile px-4 py-6 sm:px-6">
-                  <Standings compact standings={room.standings!} rounds={room.history.length} />
+                  <Standings compact standings={room.standings!} />
                 </section>
                 {/* رأي المنظّم كرأي اللاعب: كلاهما لعب، وأسفلَ الترتيب لا نافذةً تعترض */}
                 <div className="mx-auto w-full max-w-md">
@@ -1191,12 +1191,9 @@ function RoundPanel({
   );
 }
 
-/* أيقونةُ كل بطاقة — أسماؤها تأتي من السيرفر، وهذه صورتُها وحدها */
-const CARD_ICON: Record<CardId, typeof TimePlusIcon> = {
-  time: TimePlusIcon,
-  freeze: SnowflakeIcon,
-  double: DoubleIcon,
-};
+const CARD_ICON = Object.fromEntries(
+  Object.entries(CARD_LOOK).map(([id, look]) => [id, look.Icon]),
+) as Record<CardId, typeof TimePlusIcon>;
 
 /**
  * بطاقات اللاعبين: لكل لاعبٍ سطرٌ وفيه قرصٌ عن كل بطاقة يقول ما بقي له.

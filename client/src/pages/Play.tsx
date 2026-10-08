@@ -8,7 +8,8 @@ import {
   saveTeamSession as saveSession,
 } from '../lib/session';
 import { projectTeam, teamTicking, useProjected } from '../lib/clock';
-import type { PublicTeam, Question, RoomResult, RoomState, TeamState } from '../lib/types';
+import type { CardId, PublicTeam, Question, RoomResult, RoomState, TeamState } from '../lib/types';
+import { CARD_LOOK } from '../lib/cards';
 import {
   Button,
   Card,
@@ -25,6 +26,7 @@ import {
   formatTime,
   stateStyle,
   teamLevel,
+  toast,
   useTheme,
   type MenuAction,
 } from '../components/ui';
@@ -54,7 +56,7 @@ import { playBeat, playCorrect, playFlatline, playWrong, unlockAudio } from '../
 const REVEAL_MS = 900;
 
 type Reveal = { question: Question; right: number; chosen: number };
-type ResultPayload = { isCorrect: boolean; questionId: string; answer: number };
+type ResultPayload = { isCorrect: boolean; questionId: string; answer: number; shielded?: boolean };
 
 export default function Play() {
   const [params] = useSearchParams();
@@ -197,7 +199,11 @@ export default function Play() {
   }, []);
 
   // صوت النتيجة + وميض الشاشة — يُنادى من إقرار الإجابة
-  const onResult = ({ isCorrect, questionId, answer: right }: ResultPayload) => {
+  const onResult = ({ isCorrect, questionId, answer: right, shielded }: ResultPayload) => {
+    if (shielded) {
+      const look = CARD_LOOK.shield;
+      toast('الدرع صدّ الخصم', { tone: look.tone, icon: <look.Icon size={19} /> });
+    }
     setFlash({ key: Date.now(), correct: isCorrect });
     setLockedFor(null);
     (isCorrect ? playCorrect : playWrong)();
@@ -283,6 +289,22 @@ export default function Play() {
    * يجمّد الصفحة والوقتُ يجري — فيسكن نبضُ لاعبٍ لم يفعل شيئاً.
    */
   useWakeLock(state?.status === 'running' || state?.status === 'countdown');
+
+  const heard = useRef({ round: 0, count: 0 });
+  useEffect(() => {
+    if (!state) return;
+    const notices = state.notices ?? [];
+    if (heard.current.round !== state.round) heard.current = { round: state.round, count: 0 };
+    if (state.status !== 'running') {
+      heard.current.count = notices.length;
+      return;
+    }
+    for (const notice of notices.slice(heard.current.count)) {
+      const look = notice.includes('صاعق') ? CARD_LOOK.revive : CARD_LOOK.mirror;
+      toast(notice, { tone: look.tone, icon: <look.Icon size={19} /> });
+    }
+    heard.current.count = notices.length;
+  }, [state]);
 
   /* حزمةٌ أقدم من السيرفر تُحدَّث بين الجولات — والجلسة تعيده إلى مكانه */
   useFreshBuild(!state || (state.status !== 'running' && state.status !== 'countdown'));
@@ -436,11 +458,7 @@ function TopBar({
             <div className="text-[11px] font-bold text-warn">
               لا تُحدّث الصفحة — جهازك لا يحفظ الجلسة
             </div>
-          ) : (
-            <div className="tnum text-[11px] font-medium tracking-[0.08em] text-muted">
-              الجولة {state.round}
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -525,7 +543,7 @@ function TeamScreen({
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-5">
         {/* m-auto يوسّط اللوحة حين تقصر، ولا يقصّ أعلاها حين تطول */}
         <div className="m-auto w-full">
-          <Standings standings={state.standings} meId={state.id} rounds={history.length} />
+          <Standings standings={state.standings} meId={state.id} />
           <CommentCard onSend={(payload) => ask('feedback:comment', payload)} />
           <TheEnd
             primary="العب من جديد"
@@ -563,6 +581,19 @@ function TeamScreen({
           <p className="font-medium text-muted">استعدّ…</p>
         </Centered>
         <CountdownGate ms={state.countdownMs} on />
+        {(state.notices?.length ?? 0) > 0 && (
+          <ul className="fixed inset-x-0 bottom-6 z-[70] mx-auto grid w-full max-w-md gap-2 px-4">
+            {state.notices!.map((notice, i) => (
+              <li
+                key={i}
+                className="rise-in rounded-card bg-surface px-4 py-3 text-center text-[15px] font-black text-ink shadow-[inset_0_0_0_1px_var(--color-line-2),0_10px_30px_-12px_#000]"
+                style={{ animationDelay: `${i * 0.1}s` }}
+              >
+                {notice}
+              </li>
+            ))}
+          </ul>
+        )}
       </>,
     );
   }
@@ -574,7 +605,7 @@ function TeamScreen({
         teams={teams}
         history={history}
         paused={state.status === 'paused'}
-        title={`بانتظار بدء الجولة ${state.round}`}
+        title="بانتظار بدء الجولة"
       />,
     );
   }
@@ -680,15 +711,30 @@ function TeamScreen({
            * الرقم يكبر قليلاً مع الخطر لا بالحركة وحدها: المستوى الأحمر
            * خبرٌ يُقرأ من بُعد، والعينُ في تلك اللحظة على الخيارات لا عليه.
            */}
-          <div
-            className={`ink-state tnum leading-[0.85] font-black tracking-[-0.02em] transition-[font-size] duration-300 ${
-              dying ? 'beat-danger text-[86px]' : 'text-[78px]'
-            }`}
-          >
-            {formatTime(shown)}
-          </div>
-          <p className="mt-2 text-[13px] font-medium text-muted">ثانية من نبضك</p>
-          <Lane timeMs={state.timeMs} running size="md" className="mt-2.5 h-14" />
+          {state.blackout ? (
+            <>
+              <div className="tnum leading-[0.85] font-black tracking-[-0.02em] text-[78px] text-faint">
+                ؟
+              </div>
+              <p className="mt-2 text-[13px] font-bold text-muted">
+                عتّم عليك {state.blackoutBy}
+              </p>
+              <div className="mt-2.5 h-14 rounded-card bg-sunk" />
+            </>
+          ) : (
+            <>
+              <div
+                className={`ink-state tnum leading-[0.85] font-black tracking-[-0.02em] transition-[font-size] duration-300 ${
+                  dying ? 'beat-danger text-[86px]' : 'text-[78px]'
+                }`}
+              >
+                {formatTime(shown)}
+              </div>
+              <p className="mt-2 text-[13px] font-medium text-muted">ثانية من نبضك</p>
+              <Lane timeMs={state.timeMs} running size="md" className="mt-2.5 h-14" />
+            </>
+          )}
+          <EffectChips state={state} />
         </section>
 
         {/*
@@ -1185,4 +1231,32 @@ function useWakeLock(on: boolean) {
       void lock?.release();
     };
   }, [on]);
+}
+
+function EffectChips({ state }: { state: TeamState }) {
+  const chips: { key: string; card: CardId; label: string }[] = [];
+  if ((state.truceMs ?? 0) > 0) {
+    chips.push({ key: 'truce', card: 'truce', label: `هدنة ${Math.ceil((state.truceMs ?? 0) / 1000)}` });
+  }
+  if ((state.shieldLeft ?? 0) > 0) {
+    chips.push({ key: 'shield', card: 'shield', label: `درع ×${state.shieldLeft}` });
+  }
+  if ((state.reviveLeft ?? 0) > 0) chips.push({ key: 'revive', card: 'revive', label: 'صاعق جاهز' });
+  if (chips.length === 0) return null;
+  return (
+    <div className="mt-2.5 flex flex-wrap justify-center gap-1.5">
+      {chips.map(({ key, card, label }) => {
+        const look = CARD_LOOK[card];
+        return (
+          <span
+            key={key}
+            className={`tnum flex items-center gap-1.5 rounded-chip bg-surface-2 px-2.5 py-1 text-[12px] font-black ${look.ink}`}
+          >
+            <look.Icon size={13} />
+            {label}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
