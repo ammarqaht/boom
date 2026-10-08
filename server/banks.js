@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { auditAll } from './audit.js';
+import { auditAll, normalizeText } from './audit.js';
 
 /*
  * طبقةُ القاعدة تُستورَد عند الحاجة لا عند التحميل.
@@ -69,6 +69,8 @@ function dress(bank) {
   return {
     id: bank.id,
     name: bank.name,
+    /* ما لم يُقل فيه شيءٌ مُفعَّل: ملفّاتُ المستودع لا تعرف هذا الوصف */
+    active: bank.active !== false,
     questions: bank.questions.map((item) => ({
       q: item.q,
       options: item.options,
@@ -156,44 +158,17 @@ export async function initBanks() {
   return banks.size;
 }
 
-/**
- * استيرادُ ملفّات المستودع إلى القاعدة — الحلقةُ المقابلة لـpull-banks.
+/*
+ * ولا استيرادَ من الملفّات بعد اليوم.
  *
- * فالقاعدةُ صارت المرجع، ومن أراد أن يُضيف مئةَ سؤالٍ في محرّرٍ ويرفعها إلى
- * git لم يبقَ له طريق. فهذا بابُه: «الناقصَ وحده» يُدخل بنكاً ليس في القاعدة
- * ولا يمسّ قائماً، و«استبدالاً» يُحلّ ملفَّ المستودع محلّ ما في القاعدة —
- * وهو يمحو تحريراً جرى من اللوحة، فلا يُضغط إلا بقصد.
+ * كان بابٌ يُدخل بنكاً له ملفٌّ في المستودع وليس في القاعدة، وآخرُ يُحلّ
+ * الملفَّ محلَّ ما في القاعدة. وهما من زمن كان الملفُّ فيه مرجعاً. والبنكُ
+ * يُنشأ اليوم باسمه ومعرّفه من اللوحة ثم تُضاف أسئلته — فلا حاجة إلى بابٍ
+ * يقرأ القرص، وكان بابُ «استبدالاً» يمحو ما حُرِّر من اللوحة بملفٍّ قديم.
+ *
+ * وتبقى الملفّاتُ بذرةً تُزرع في قاعدةٍ فارغة (انظر initBanks)، ونسخةً في
+ * git تُسحب إليها بـpull-banks.
  */
-export async function importFiles({ replace = false } = {}) {
-  const store = await db();
-  const files = fromFiles();
-  const done = [];
-  for (const bank of files.values()) {
-    const payload = bare(bank);
-    const have = banks.get(bank.id);
-    if (!have) {
-      await store.putBank(payload);
-      remember(payload);
-      done.push({ id: bank.id, name: bank.name, action: 'added', count: payload.questions.length });
-    } else if (!replace) {
-      done.push({ id: bank.id, name: bank.name, action: 'kept', count: have.questions.length });
-    } else if (JSON.stringify(bare(have)) === JSON.stringify(payload)) {
-      done.push({ id: bank.id, name: bank.name, action: 'same', count: payload.questions.length });
-    } else {
-      await store.putBank(payload);
-      remember(payload);
-      done.push({
-        id: bank.id,
-        name: bank.name,
-        action: 'replaced',
-        from: have.questions.length,
-        count: payload.questions.length,
-      });
-    }
-  }
-  report(banks);
-  return done;
-}
 
 /** ينبّه على ما في البنوك من خلل عند كل قراءة — ولا يمنع الإقلاع */
 function report(map) {
@@ -206,7 +181,7 @@ function report(map) {
 /*
  * ولا مراقبَ للمجلّد بعد اليوم: كان تغيُّرُ الملفّ يُعيد قراءة البنوك، وذاك
  * صوابٌ حين كان الملفُّ هو المرجع. والمرجعُ الآن القاعدة، فإعادةُ القراءة
- * تمحو ما حُرِّر من اللوحة بملفٍّ قديم. ومن أراد الملفّات فبابُها importFiles.
+ * تمحو ما حُرِّر من اللوحة بملفٍّ قديم. والملفّاتُ بذرةُ قاعدةٍ فارغةٍ لا غير.
  */
 
 export function listBanks() {
@@ -214,7 +189,29 @@ export function listBanks() {
     id: b.id,
     name: b.name,
     count: b.questions.length,
+    active: b.active,
   }));
+}
+
+/**
+ * ما يُعرض في اللعبة — وهو دون ما في اللوحة.
+ *
+ * شرطان: مُفعَّلٌ، وفيه سؤالٌ واحدٌ على الأقل. والثاني ليس تجميلاً: البنكُ
+ * الفارغ يُعطي `poolFor` مجموعةً خاوية فتُسحب جولةٌ بلا سؤال — فتنكسر
+ * الغرفة في وجه لاعبٍ لا في سجلٍّ يُقرأ. والبنكُ يبدأ فارغاً اليوم (يُكتب
+ * اسمُه ثم تُضاف أسئلته)، فهذا البابُ يحرسه حتى يملأه المالك.
+ */
+export function playableBanks() {
+  return listBanks().filter((b) => b.active && b.count > 0);
+}
+
+/** يُفعّل بنكاً أو يُلغي تفعيله — أسئلتُه وإحصاؤه على حالهما */
+export async function setActive(bankId, active) {
+  const bank = banks.get(bankId);
+  if (!bank) return null;
+  await (await db()).setBankActive(bankId, active);
+  bank.active = Boolean(active);
+  return bank;
 }
 
 export function getBank(id) {
@@ -275,7 +272,18 @@ export function arabizeDigits(text) {
 export async function saveBank(bankId, questions) {
   const bank = banks.get(bankId);
   if (!bank) throw new Error('بنك غير معروف');
-  const payload = { id: bank.id, name: bank.name, questions: questions.map(clean) };
+  /*
+   * ووصفُ التفعيل يُحمل معه: putBank لا يكتب العمود فالقاعدةُ تحفظه، لكن
+   * remember يُعيد بناء البنك في الذاكرة من هذه الحمولة — فلو سقط منها
+   * عاد البنكُ المُلغى مُفعَّلاً في اللوحة بمجرّد حفظ سؤالٍ فيه، ولا يُرى
+   * الخللُ إلا بعد إقلاعٍ يقرأ القاعدة فيردّه مُلغى من جديد.
+   */
+  const payload = {
+    id: bank.id,
+    name: bank.name,
+    active: bank.active,
+    questions: questions.map(clean),
+  };
   await (await db()).putBank(payload);
   const next = remember(payload);
   report(banks);
@@ -300,21 +308,46 @@ export async function deleteBank(bankId) {
 }
 
 /**
- * كتابةُ بنكٍ جديد — ولإرجاع محذوفٍ من السلّة.
+ * كتابةُ بنكٍ جديد — ينشئه المالكُ باسمه، ويُرجع محذوفاً من السلّة.
  *
- * ويُرفض المعرّف المأخوذ: ملفٌّ يُكتب فوق ملفٍّ قائم يمحو بنكاً حيّاً بلا خبر.
+ * ويُرفض المعرّف المأخوذ: بنكٌ يُكتب فوق بنكٍ قائم يمحو مئاتِ الأسئلة بلا خبر.
+ *
+ * ويُحتمل أن يُولد فارغاً: البنكُ يُنشأ باسمه ومعرّفه ثم تُضاف أسئلته واحداً
+ * واحداً أو تُستورد دفعة. والفارغُ لا يظهر في اللعبة (انظر playableBanks)،
+ * فلا يرى اللاعبُ بنكاً لا سؤالَ فيه.
  */
 export async function writeBank({ id, name, questions }) {
-  const slug = String(id)
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, '');
-  if (!slug) throw new Error('معرّف البنك غير صالح');
-  if (banks.has(slug)) throw new Error('المعرّف مأخوذ');
+  /*
+   * المعرّف لاتينيٌّ لا يُقبل غيره — ولا يُصحَّح بالصمت.
+   *
+   * كان ما سوى اللاتينيّ يُحذف بلا خبر: من كتب «بنك-السيرة» خرج له معرّفٌ
+   * «-» ثم «المعرّف غير صالح» ولا يدري أيَّ حرفٍ أنكر عليه. فيُقال له الآن
+   * ما الحرفُ المرفوض. وهو يدخل في معرّف كل سؤال وفي اسم ملفّ صورته، فلا
+   * يحتمل حرفاً عربياً.
+   */
+  const raw = String(id ?? '').trim().toLowerCase();
+  if (!raw) throw new Error('معرّف البنك فارغ');
+  const bad = raw.replace(/[a-z0-9_-]/g, '');
+  if (bad) throw new Error(`المعرّف بالإنجليزية والأرقام والشرطة — وفيه «${[...new Set(bad)].join('')}»`);
+  const slug = raw;
+  if (banks.has(slug)) throw new Error('المعرّف مأخوذ — اختر غيره');
+
+  const label = String(name ?? '').trim().replace(/\s+/g, ' ').slice(0, 40);
+  if (!label) throw new Error('اسم البنك فارغ');
+
+  /*
+   * ولا اسمان لبنكين.
+   *
+   * الاسمُ هو ما يراه المنظّم في قائمة الاختيار ويراه المالك في شريطه —
+   * فبنكان باسم «السيرة النبوية» يجعلان الاختيار قرعةً. والمقارنة بـ
+   * normalizeText فلا يمرّ «السيرةُ النبويّة» بتشكيله ولا «السيره» بهائها.
+   */
+  const twin = [...banks.values()].find((b) => normalizeText(b.name) === normalizeText(label));
+  if (twin) throw new Error(`الاسم مأخوذ — يحمله بنك «${twin.name}»`);
 
   const payload = {
     id: slug,
-    name: String(name).trim().slice(0, 40) || slug,
+    name: label,
     questions: (questions ?? []).map(clean),
   };
   await (await db()).putBank(payload);

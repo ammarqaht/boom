@@ -211,9 +211,36 @@ await pool.query(`
     at        BIGINT NOT NULL
   );
 
+  /*
+    * الأسئلة المعلّقة — غرفةُ انتظارٍ قبل البنك.
+    *
+    * إضافةُ سؤالٍ كانت تطلب كلَّ شيءٍ في جلسةٍ واحدة: نصٌّ وصوابٌ وثلاثةُ
+    * أخطاءٍ ومستوًى وبنك. ومن يقرأ فيجد سؤالاً حسناً لا يملك إلا أن يكتبه
+    * كاملاً أو يَدَعه — فيَدَعه. وهذه مائدةٌ يُلقى عليها السؤالُ بجوابه ثم
+    * يُكمَل ويُراجَع ويُعتمد.
+    *
+    * وهي خارجُ جدول banks عمداً: ما فيها لا يُقرأ في لعبةٍ ولا يُعَدّ في
+    * بنك، ولا يملك معرّفاً مشتقّاً من نصّه بعد — فمعرّفُه رقمٌ متسلسل
+    * يُنسى يوم يُعتمد.
+    *
+    * والأخطاءُ في عمودٍ واحد JSON لا ثلاثة أعمدة: قد تكون صفراً أو واحداً
+    * أو ثلاثة، والقائمةُ أصدقُ وصفاً لها من أعمدةٍ أكثرُها فارغ.
+    */
+  CREATE TABLE IF NOT EXISTS pending (
+    id      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    bank_id TEXT,
+    q       TEXT NOT NULL,
+    answer  TEXT NOT NULL,
+    wrongs  TEXT NOT NULL DEFAULT '[]',
+    level   INTEGER,
+    source  TEXT NOT NULL DEFAULT 'manual',
+    at      BIGINT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS rooms_created ON rooms (created_at DESC);
   CREATE INDEX IF NOT EXISTS edits_at ON edits (at DESC);
   CREATE INDEX IF NOT EXISTS bank_trash_at ON bank_trash (at DESC);
+  CREATE INDEX IF NOT EXISTS pending_at ON pending (at DESC);
   CREATE INDEX IF NOT EXISTS stats_bank ON question_stats (bank_id);
   CREATE INDEX IF NOT EXISTS room_stats_room ON room_question_stats (room_code);
   CREATE INDEX IF NOT EXISTS feedback_kind ON feedback (kind, created_at DESC);
@@ -239,6 +266,15 @@ await pool.query(`
   /* والفهرس بعده لا قبله: لا يُفهرس عمودٌ لم يُضف بعد */
   await pool.query('CREATE INDEX IF NOT EXISTS feedback_unread ON feedback (read_at)');
 }
+
+/*
+ * ترقيةٌ ثانية: «مُفعَّل».
+ *
+ * بنكٌ يُلغى تفعيلُه يبقى في اللوحة بأسئلته وإحصائه ويُحجب عن اللعبة —
+ * فالموسمُ ينتهي ولا يُراد حذفُ ما بُني في شهر. والقيمةُ الافتراضية TRUE
+ * تُغني عن ردمٍ بعدها: ما كان قبل العمود كان مُفعَّلاً فعلاً.
+ */
+await pool.query('ALTER TABLE banks ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT TRUE');
 
 const UPSERT_ROOM = `
   INSERT INTO rooms (code, name, difficulty, bank_ids, status,
@@ -824,8 +860,16 @@ export async function allBankRows() {
     id: r.id,
     name: r.name,
     questions: JSON.parse(r.questions),
+    /* قاعدةٌ لم تُرقَّ بعد لا تعرف العمود — وما لا يُعرف مُفعَّل */
+    active: r.active !== false,
     at: Number(r.at),
   }));
+}
+
+/** يُفعّل بنكاً أو يُلغي تفعيله — ولا يمسّ أسئلته */
+export async function setBankActive(id, active) {
+  const { rowCount } = await q('UPDATE banks SET active = $2 WHERE id = $1', [id, Boolean(active)]);
+  return rowCount;
 }
 
 /** يكتب بنكاً أو يستبدله — والكتابةُ ذرّةٌ واحدة، فلا يُقرأ بنكٌ نصفُه قديم */
@@ -875,6 +919,80 @@ export async function getTrashedBank(id) {
 
 export async function forgetTrashedBank(id) {
   const { rowCount } = await q('DELETE FROM bank_trash WHERE id = $1', [Number(id)]);
+  return rowCount;
+}
+
+/* ══════════════ الأسئلة المعلّقة ══════════════ */
+
+const readPending = (r) => ({
+  id: Number(r.id),
+  bank: r.bank_id,
+  q: r.q,
+  answer: r.answer,
+  wrongs: JSON.parse(r.wrongs),
+  level: r.level === null ? null : Number(r.level),
+  source: r.source,
+  at: Number(r.at),
+});
+
+/** المعلّقة كلها — الأحدثُ أولاً، ولا كنسَ لها: تبقى حتى تُعتمد أو تُحذف */
+export async function listPending() {
+  const { rows } = await q('SELECT * FROM pending ORDER BY at DESC, id DESC');
+  return rows.map(readPending);
+}
+
+export async function getPending(id) {
+  const { rows } = await q('SELECT * FROM pending WHERE id = $1', [Number(id)]);
+  return rows.length ? readPending(rows[0]) : null;
+}
+
+export async function countPending() {
+  const { rows } = await q('SELECT COUNT(*)::int AS n FROM pending');
+  return rows[0].n;
+}
+
+/**
+ * يُدخل دفعةً واحدة — ولصقُ مئةِ سطرٍ ليس مئةَ ذهابٍ إلى القاعدة.
+ *
+ * والصفوفُ تُبنى بمعاملاتٍ مرقّمة لا بنصٍّ مُدمَج: نصُّ السؤال يكتبه المالك
+ * ويُلصق من حيث لا يُعلم، فلا يدخل الاستعلامَ إلا معاملاً.
+ */
+export async function addPending(rows) {
+  if (rows.length === 0) return [];
+  const at = Date.now();
+  const values = [];
+  const holes = rows.map((row, i) => {
+    const base = i * 6;
+    values.push(
+      row.bank || null,
+      row.q,
+      row.answer,
+      JSON.stringify(row.wrongs ?? []),
+      row.level ?? null,
+      row.source ?? 'manual',
+    );
+    return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, ${at})`;
+  });
+  const { rows: out } = await q(
+    `INSERT INTO pending (bank_id, q, answer, wrongs, level, source, at)
+     VALUES ${holes.join(', ')} RETURNING id`,
+    values,
+  );
+  return out.map((r) => Number(r.id));
+}
+
+/** يُحدِّث معلّقاً بتمامه — المحرّر يُرسل الحالَ كلّه لا الفروق */
+export async function updatePending(id, { bank, q: text, answer, wrongs, level }) {
+  const { rowCount } = await q(
+    `UPDATE pending SET bank_id = $2, q = $3, answer = $4, wrongs = $5, level = $6
+     WHERE id = $1`,
+    [Number(id), bank || null, text, answer, JSON.stringify(wrongs ?? []), level ?? null],
+  );
+  return rowCount;
+}
+
+export async function forgetPending(id) {
+  const { rowCount } = await q('DELETE FROM pending WHERE id = $1', [Number(id)]);
   return rowCount;
 }
 

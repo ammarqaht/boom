@@ -312,7 +312,20 @@ check('ولاعبٌ مجهول لا يكسر شيئاً', tally.teams.get(solo.i
  * فإن بقي التحرير فقد نجا ممّا كان يمحوه.
  */
 const banksMod = await import(pathToFileURL(join(serverDir, 'banks.js')).href);
-const { initBanks, importFiles, allBanks, listBanks, saveBank, deleteBank, writeBank } = banksMod;
+const {
+  initBanks,
+  allBanks,
+  listBanks,
+  playableBanks,
+  saveBank,
+  deleteBank,
+  writeBank,
+  setActive,
+} = banksMod;
+const { parseIntake } = await import(pathToFileURL(join(serverDir, 'intake.js')).href);
+
+/* مجمَّعٌ خامٌّ لتفريغ جدولٍ قبل فحصه — store لا يُصدّر مجمَّعه وهو صواب */
+const raw = new pg.Pool({ connectionString: DB_URL });
 
 /* المخطّطُ مُسح في أول الفحص، فالجدول فارغ: تُزرع الملفّات مرّةً */
 const seeded = await initBanks();
@@ -361,6 +374,10 @@ check(
  * وهذا الحارسُ غالٍ: بنوكُ تمّوز كانت مواضعُ صوابها موزّعةً عشوائياً، فلو
  * كُتب الرقمُ «صفر» على خياراتٍ لم تُقدَّم لصار الخطأُ صواباً في كل سؤال —
  * صامتاً لا يظهر إلا في وجه لاعب.
+ *
+ * ويُجرَّب على مسار الزرع نفسه: جدولٌ فارغٌ ثم initBanks. وكان يُجرَّب على
+ * importFiles وقد رُفع — والزرعُ هو ما بقي يقرأ الملفّات، وهو يمرّ بـbare
+ * كما كان يمرّ ذاك.
  */
 {
   const file = join(serverDir, 'banks', 'zz-answer.json');
@@ -385,7 +402,8 @@ check(
     'utf8',
   );
   try {
-    await importFiles(); // يُدخل الناقص وحده — وهو مسارُ الزرع نفسه
+    await raw.query('DELETE FROM banks');
+    await initBanks(); // جدولٌ فارغ ← زرعٌ من الملفّات
     const row = (await store.allBankRows()).find((b) => b.id === 'zz-answer');
     const first = row?.questions[0];
     check('الزرعُ يقدّم الصواب إلى أوّل الخيارات', first?.options[first.answer] === 'الصواب');
@@ -396,33 +414,139 @@ check(
       live?.questions[0].options[live.questions[0].answer] === 'الصواب',
     );
   } finally {
-    await deleteBank('zz-answer').catch(() => {});
     unlinkSync(file);
+    await raw.query('DELETE FROM banks');
+    await initBanks(); // ويُردّ الزرعُ نظيفاً لمن بعده
   }
 }
 
-/* الاستيراد من الملفّات: الناقصَ وحده، ثم استبدالاً */
-const kept = await importFiles();
-check(
-  'الاستيراد بلا استبدال يُبقي ما في القاعدة',
-  kept.every((row) => row.action === 'kept'),
-);
-check(
-  'والبنك المحرَّر ما زال منقوصاً',
-  allBanks().find((b) => b.id === dropped.id).questions.length === trimmed.length,
-);
-const replaced = await importFiles({ replace: true });
-const row = replaced.find((r) => r.id === dropped.id);
-check(
-  'والاستبدال يردّ ملفَّ المستودع',
-  row?.action === 'replaced' && row.count === trimmed.length + 1,
-);
-check(
-  'فعاد السؤال المحذوف من الملفّ',
-  allBanks()
-    .find((b) => b.id === dropped.id)
-    .questions.some((q) => q.id === goneId),
-);
+/* ══ بنكٌ يُنشأ فارغاً، ويُفعَّل ويُلغى ══════════════════════════ */
+
+{
+  const made = await writeBank({ id: 'zz-new', name: 'بنكٌ وليد', questions: [] });
+  check('البنكُ يُنشأ فارغاً', made.questions.length === 0);
+  check('ويُولد مُفعَّلاً', made.active === true);
+  check(
+    'ولا يُعرض في اللعبة وهو فارغ',
+    !playableBanks().some((b) => b.id === 'zz-new'),
+  );
+  check(
+    'ويُعرض في اللوحة على كل حال',
+    listBanks().some((b) => b.id === 'zz-new'),
+  );
+
+  check(
+    'ولا يُنشأ بلا اسم',
+    await writeBank({ id: 'zz-noname', name: '  ', questions: [] })
+      .then(() => false)
+      .catch(() => true),
+  );
+  check(
+    'ولا بمعرّفٍ عربيّ',
+    await writeBank({ id: 'بنك', name: 'عربيّ', questions: [] })
+      .then(() => false)
+      .catch(() => true),
+  );
+  /* الاسمُ المكرَّر يُردّ ولو اختلف معرّفُه — فالاسمُ هو ما يُرى في القائمة */
+  check(
+    'ولا باسمٍ يحمله بنكٌ آخر',
+    await writeBank({ id: 'zz-twin', name: 'بنكٌ وليد', questions: [] })
+      .then(() => false)
+      .catch(() => true),
+  );
+  /* والتشكيلُ والهاءُ لا يصنعان اسماً جديداً */
+  check(
+    'ولا بصيغةٍ منه تختلف بالتشكيل',
+    await writeBank({ id: 'zz-twin2', name: 'بنكٌ وليدٌ', questions: [] })
+      .then(() => false)
+      .catch(() => true),
+  );
+
+  /* سؤالٌ يدخله فيُرى في اللعبة */
+  await saveBank('zz-new', [
+    { q: 'سؤالُ البنك الوليد؟', options: ['صواب', 'خطأ ١', 'خطأ ٢', 'خطأ ٣'], answer: 0, level: 2 },
+  ]);
+  check('وبسؤالٍ واحدٍ يُعرض', playableBanks().some((b) => b.id === 'zz-new'));
+
+  /* إلغاءُ التفعيل: يُحجب عن اللعبة ويبقى في اللوحة */
+  await setActive('zz-new', false);
+  check('إلغاءُ التفعيل يحجبه عن اللعبة', !playableBanks().some((b) => b.id === 'zz-new'));
+  check(
+    'ويبقى في اللوحة مُلغىً',
+    listBanks().find((b) => b.id === 'zz-new')?.active === false,
+  );
+  check(
+    'وأسئلتُه على حالها',
+    allBanks().find((b) => b.id === 'zz-new')?.questions.length === 1,
+  );
+
+  /*
+   * وحفظُ سؤالٍ فيه لا يُعيد تفعيله.
+   *
+   * حارسٌ على زلّةٍ وقعت: saveBank تُعيد بناء البنك في الذاكرة من حمولةٍ
+   * تكتبها، فلو سقط منها وصفُ التفعيل عاد المُلغى مُفعَّلاً بمجرّد تحريره —
+   * ولا يُرى الخللُ إلا بعد إقلاعٍ يقرأ القاعدة فيردّه مُلغى من جديد.
+   */
+  await saveBank('zz-new', [
+    { q: 'سؤالُ البنك الوليد؟', options: ['صواب', 'خطأ ١', 'خطأ ٢', 'خطأ ٣'], answer: 0, level: 2 },
+    { q: 'وسؤالٌ ثانٍ له؟', options: ['صواب', 'خطأ ١', 'خطأ ٢', 'خطأ ٣'], answer: 0, level: 1 },
+  ]);
+  check(
+    'وحفظُ سؤالٍ فيه لا يُعيد تفعيله',
+    listBanks().find((b) => b.id === 'zz-new')?.active === false,
+  );
+  await initBanks();
+  check(
+    'ويبقى مُلغىً بعد إعادة التهيئة — فالوصفُ في القاعدة',
+    listBanks().find((b) => b.id === 'zz-new')?.active === false,
+  );
+
+  await setActive('zz-new', true);
+  check('والتفعيلُ يردّه إلى اللعبة', playableBanks().some((b) => b.id === 'zz-new'));
+
+  await deleteBank('zz-new');
+}
+
+/* ══ الأسئلة المعلّقة ══════════════════════════════════════════ */
+
+{
+  await raw.query('DELETE FROM pending');
+
+  const [one] = await store.addPending([
+    { bank: null, q: 'ما أطولُ سورةٍ في القرآن؟', answer: 'البقرة', wrongs: [], level: null },
+  ]);
+  const got = await store.getPending(one);
+  check('المعلَّقُ يُحفظ بسؤاله وجوابه', got.q === 'ما أطولُ سورةٍ في القرآن؟');
+  check('وبلا بنكٍ ولا مستوى', got.bank === null && got.level === null);
+  check('والمعلّقةُ تُعَدّ', (await store.countPending()) === 1);
+
+  await store.updatePending(one, {
+    bank: 'quran',
+    q: got.q,
+    answer: got.answer,
+    wrongs: ['آل عمران', 'النساء', 'المائدة'],
+    level: 2,
+  });
+  const done = await store.getPending(one);
+  check('والتحريرُ يُكمل تفاصيله', done.wrongs.length === 3 && done.level === 2 && done.bank === 'quran');
+
+  await store.forgetPending(one);
+  check('والنسيانُ يُخرجه', (await store.countPending()) === 0);
+
+  /* القارئ: عمودان يكفيان، وما زاد قُرئ */
+  const { rows: read, skipped } = parseIntake(
+    ['سؤال\tالجواب', 'سؤالٌ بعمودين؟\tجوابه', 'سؤالٌ تامّ؟|صوابه|خطأ ١|خطأ ٢|خطأ ٣|صعب', 'بلا جواب'].join(
+      '\n',
+    ),
+  );
+  check('القارئُ يتجاوز سطرَ العنوان', read.length === 2);
+  check('ويقبل عمودين', read[0].q === 'سؤالٌ بعمودين؟' && read[0].wrongs.length === 0);
+  check(
+    'ويقرأ ما زاد عليهما',
+    read[1].wrongs.length === 3 && read[1].level === 3,
+  );
+  check('ويُخبر عن السطر الساقط', skipped.length === 1 && skipped[0].line === 4);
+}
 
 // ══ اللقطة تذهب والسجلّ يبقى ══════════════════════════════════
 await store.forgetState(before.code);
@@ -431,3 +555,5 @@ check('وبقيت في السجلّ', (await store.listRooms()).length === 1);
 
 await store.close();
 process.exit(0);
+
+await raw.end();

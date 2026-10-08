@@ -87,9 +87,13 @@ export type Alerts = {
   lowStars: number;
   unreadComments: number;
   unreadReports: number;
-  /* توزيعُ البلاغات والمحرَّرة على البنوك — لأعدادِ صفحات الشريط المقيّدة بالبنك */
+  /** المعلّقةُ كلها، والجاهزُ منها للاعتماد */
+  pending: number;
+  pendingReady: number;
+  /* توزيعُ البلاغات والمحرَّرة والمعلّقة على البنوك — لأعدادِ صفحات الشريط المقيّدة بالبنك */
   reportsByBank?: Record<string, number>;
   editsByBank?: Record<string, number>;
+  pendingByBank?: Record<string, number>;
 };
 
 type Data = {
@@ -242,33 +246,23 @@ export default function Dashboard({
           label="أسئلة البنوك"
           value={totals.bank}
           unit={unit(totals.bank, 'question')}
-          hint={`في ${say(data.banks.length, 'bank')}`}
           onClick={() => onGo('banks', 'questions')}
         />
         <Stat
           label="الغرف"
           value={totals.rooms}
           unit={unit(totals.rooms, 'room')}
-          hint={
-            totals.live > 0 ? (
-              <span className="font-bold text-signal-ink">{totals.live} قائمة الآن</span>
-            ) : (
-              `وسيط اللعب ${span(totals.medianPlayedMs)}`
-            )
-          }
           onClick={() => onGo('rooms')}
         />
         <Stat
           label="اللاعبون"
           value={totals.players}
           unit={unit(totals.players, 'player')}
-          hint={`${say(totals.rounds, 'round')} لُعبت`}
         />
         <Stat
           label="البلاغات"
           value={totals.reports}
           tone={totals.reports > 0 ? 'danger' : undefined}
-          hint={totals.reports > 0 ? 'بلا هوية — من لاعبين ومنظّمين' : 'لا شكوى على سؤال'}
           onClick={() => onGo('banks', 'reports')}
         />
       </StatRow>
@@ -277,7 +271,7 @@ export default function Dashboard({
       <Callout data={data} onGo={onGo} onDups={() => setDups(true)} />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
-        <Panel title="نشاط أربعة عشر يوماً" hint="غرفٌ افتُتحت في اليوم">
+        <Panel title="نشاط أربعة عشر يوماً">
           <Activity days={data.days} peak={peak} />
           <div className="mt-4 flex flex-wrap items-center gap-6 border-t border-line-soft pt-3.5">
             <Figure value={opened} label={`${unit(opened, 'room')} في 14 يوماً`} />
@@ -290,7 +284,6 @@ export default function Dashboard({
 
         <Panel
           title="الأولى بالنظر"
-          hint="ما اجتمع فيه ضعفُ الصواب وكثرةُ البلاغ"
           action={<More onClick={() => onGo('banks', 'questions', 'weak')}>افتح في الأسئلة</More>}
           flush
         >
@@ -328,15 +321,6 @@ export default function Dashboard({
       {/* ── البنوك ── */}
       <Panel
         title="البنوك"
-        hint={
-          clean ? (
-            'الفحص: لا خطأ ولا تنبيه ولا مكرّر'
-          ) : (
-            <button type="button" onClick={() => setDups(true)} className="font-bold text-warn-ink">
-              الفحص: {audit.errors} خطأ · {audit.warnings} تنبيه · {audit.duplicates} مكرّر
-            </button>
-          )
-        }
         action={<More onClick={() => onGo('banks', 'questions')}>إدارة البنوك</More>}
         flush
       >
@@ -395,7 +379,6 @@ export default function Dashboard({
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <Panel
           title="آخر الغرف"
-          hint="أحدثُ خمسٍ في السجلّ"
           action={<More onClick={() => onGo('rooms')}>كل الغرف</More>}
           flush
         >
@@ -424,11 +407,6 @@ export default function Dashboard({
 
         <Panel
           title="آخر التعليقات"
-          hint={
-            totals.stars === null
-              ? 'لا تقييم بعد'
-              : `المتوسط ${totals.stars.toFixed(1)} من 5 · ${say(totals.comments, 'comment')}`
-          }
           action={<More onClick={() => onGo('comments')}>كل التعليقات</More>}
         >
           {data.recentComments.length === 0 ? (
@@ -629,7 +607,6 @@ function Duplicates({
   return (
     <Modal
       title="الأسئلة المكرّرة"
-      hint="نصٌّ واحدٌ في موضعين — والخلط قد يجمعهما في جولةٍ واحدة"
       onClose={onClose}
     >
       {!rows ? (

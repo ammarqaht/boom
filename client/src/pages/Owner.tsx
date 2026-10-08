@@ -7,12 +7,16 @@ import {
   CheckIcon,
   ExitIcon,
   GridIcon,
+  ImportIcon,
+  LockIcon,
   PanelIcon,
+  PlusIcon,
   PulseIcon,
   ScreenIcon,
   SearchIcon,
+  TrashIcon,
 } from '../components/icons';
-import { type Api, type Range, DateRange, QuestionEditor, say } from './console/shared';
+import { type Api, type Range, DateRange, Modal, QuestionEditor, say } from './console/shared';
 import Dashboard, { type Alerts } from './console/Dashboard';
 import {
   Edits,
@@ -24,6 +28,8 @@ import {
   type Sift,
 } from './console/Banks';
 import { Comments, Rooms } from './console/RoomsAndComments';
+import PendingPage from './console/Pending';
+import Intake from './console/Intake';
 
 /**
  * لوحة المالك — «نبضٌ على ورق».
@@ -47,6 +53,8 @@ type Choice = {
   label: string;
   count?: number;
   dot?: string;
+  /** بنكٌ أُلغي تفعيلُه — يُرسم قفلاً مكان النقطة */
+  lock?: boolean;
   on: boolean;
   go: () => void;
 };
@@ -62,18 +70,28 @@ const DOORS: {
   { id: 'comments', label: 'التعليقات', icon: ChatIcon },
 ];
 
-const PAGES: Record<string, { label: string; lead: string }> = {
-  home: { label: 'النظرة العامة', lead: 'حالُ المسابقة في نظرةٍ واحدة' },
-  questions: { label: 'الأسئلة', lead: 'ما في البنوك وما قاسه اللعب — يُرتَّب ويُحرَّر' },
-  reports: { label: 'البلاغات', lead: 'شكوى اللاعبين والمنظّمين — بلا هوية' },
-  edits: { label: 'الأسئلة المحرَّرة', lead: 'نسخُ ما حُرِّر أو حُذف — تُحفظ ثلاثين يوماً' },
-  shelf: { label: 'إدارة البنوك', lead: 'ما في كل بنك، وحذفُه بضغطٍ مطوّل، وما حُذف منها' },
-  rooms: { label: 'الغرف', lead: 'سجلّ المسابقات كلّه — وتُحدَّد الفترة من الشريط' },
-  comments: { label: 'التعليقات', lead: 'ما قاله المنظّمون واللاعبون بعد اللعب' },
+/*
+ * اسمُ الصفحة وحده بلا سطرِ وصفٍ تحته.
+ *
+ * كان لكلِّ صفحةٍ سطرٌ يشرحها — «حالُ المسابقة في نظرةٍ واحدة» — يُقرأ
+ * مرّةً في العمر ثم يشغل مكانه في كلِّ فتحة. والصفحةُ تشرح نفسها بما فيها،
+ * ومن احتاج شرحاً فالعلّةُ في الصفحة لا في غياب السطر.
+ */
+const PAGES: Record<string, string> = {
+  home: 'النظرة العامة',
+  questions: 'الأسئلة',
+  pending: 'إضافة سؤال',
+  reports: 'البلاغات',
+  edits: 'الأسئلة المحرَّرة',
+  shelf: 'إدارة البنوك',
+  rooms: 'الغرف',
+  comments: 'التعليقات',
 };
 
 const BANK_PAGES = [
   { id: 'questions', label: 'الأسئلة' },
+  /* المعلّقةُ تالي الأسئلة: بابُ الدخول قبل أبواب ما دخل */
+  { id: 'pending', label: 'إضافة سؤال' },
   { id: 'reports', label: 'البلاغات' },
   { id: 'edits', label: 'الأسئلة المحرَّرة' },
   { id: 'shelf', label: 'إدارة البنوك' },
@@ -87,6 +105,13 @@ const VIEWS: Record<string, { id: string; label: string }[]> = {
     { id: 'weak', label: 'ضعيفة الصواب' },
     { id: 'reported', label: 'مُبلَّغ عنها' },
     { id: 'issues', label: 'عليها ملاحظات' },
+  ],
+  pending: [
+    { id: 'all', label: 'الكل' },
+    { id: 'ready', label: 'تنتظر الاعتماد' },
+    { id: 'short', label: 'ناقصة' },
+    { id: 'nobank', label: 'بلا بنك' },
+    { id: 'twinned', label: 'مكرّرة' },
   ],
   reports: [
     { id: 'all', label: 'الكل' },
@@ -123,6 +148,7 @@ const LEVELS = [
 
 const SEARCH: Record<string, string> = {
   questions: 'ابحث في نصّ السؤال',
+  pending: 'ابحث في المعلّقة',
   reports: 'ابحث في البلاغات',
   edits: 'ابحث في المحرَّرة',
   rooms: 'ابحث باسم الغرفة أو رمزها',
@@ -211,13 +237,15 @@ export default function Owner() {
    * كانت تُجلب عند الجهوز وحده، فيضيف المالك سؤالاً أو يحذفه أو ينقله بين
    * بنكين وأعدادُ الشريط — كلُّ بنكٍ ومجموعُها والعنوانُ فوقها — على حالها
    * حتى يُعاد تحميل الصفحة. فرُبطت بـreloadKey كالشارات، فتتبع التغيير.
+   *
+   * ومن console/banks لا من /api/banks: ذاك بابُ اللعبة وهو يحجب المُلغى
+   * والفارغ — ولو قُرئ منه لاختفى من شريط المالك بنكٌ أُلغي تفعيلُه، فلا
+   * يُعاد تفعيلُه إلا بقاعدةٍ تُفتح بيد.
    */
   useEffect(() => {
     if (!ready) return;
-    void fetch('/api/banks')
-      .then((r) => r.json())
-      .then(setBanks);
-  }, [ready, reloadKey]);
+    void api.get<BankInfo[]>('banks').then((data) => data && setBanks(data));
+  }, [api, ready, reloadKey]);
 
   /*
    * الكتابةُ بـreplace لا push: تبديلُ مرشّحٍ ليس نقلةً في التاريخ، ولو
@@ -239,6 +267,7 @@ export default function Owner() {
 
   const route = door === 'banks' ? page : door;
   const heading = PAGES[route] ?? PAGES.home;
+  const atPending = door === 'banks' && page === 'pending';
 
   /* تبديلُ الباب يُعيد التصفية إلى أولها: تصفيةٌ لا تخصّ الصفحة تُربك */
   const go = useCallback((next: SectionId, nextPage?: string, nextView?: string) => {
@@ -266,25 +295,35 @@ export default function Owner() {
   };
 
   /*
-   * استيرادُ الناقص من ملفّات المستودع — الآمنُ وحده هنا.
+   * ولا استيرادَ للبنوك من ملفّات المستودع بعد اليوم.
    *
-   * و«استبدالاً» يبقى في صفحة البنوك بضغطه المطوّل: هو يمحو ما حُرِّر من
-   * اللوحة، وزرٌّ بهذا الأثر لا يُوضع في ترويسةٍ تُضغط مروراً.
+   * كان زرٌّ يُدخل بنكاً له ملفٌّ في المستودع وليس في القاعدة — وهو من زمن
+   * كان الملفُّ مرجعاً. والبنكُ يُنشأ اليوم باسمه ومعرّفه في صفحة إدارة
+   * البنوك، وأسئلتُه تُستورد لصقاً أو ملفَّ CSV في صفحة المعلّقة.
    */
-  const [importing, setImporting] = useState(false);
-  const bringBanks = async () => {
-    setImporting(true);
-    const res = await api.send<{ error?: string; banks?: { action: string }[] }>(
+  const [intake, setIntake] = useState(false);
+  const [newBank, setNewBank] = useState(false);
+
+  /* اعتمادُ الجاهز كلِّه — ومرشّحُ البنك يضيّق الفعل كما يضيّق النظر */
+  const [approving, setApproving] = useState(false);
+  const approveReady = async () => {
+    setApproving(true);
+    const res = await api.send<{ approved?: number; failed?: { why: string }[] }>(
       'POST',
-      'banks/import',
-      { replace: false },
+      'pending/approve',
+      { bank: bank || null },
     );
-    setImporting(false);
-    if (!res.ok) return toast(res.data?.error ?? 'تعذّر الاستيراد', { tone: 'danger' });
-    const added = (res.data?.banks ?? []).filter((row) => row.action === 'added').length;
-    toast(added ? `أُدخل ${say(added, 'bank')}` : 'لا بنكَ ناقصاً', {
-      tone: added ? 'safe' : 'signal',
-      note: added ? 'من ملفّات المستودع إلى القاعدة' : 'كلُّ ملفٍّ في المستودع له بنكٌ في القاعدة',
+    setApproving(false);
+    if (!res.ok) return toast('تعذّر الاعتماد', { tone: 'danger' });
+    const done = res.data?.approved ?? 0;
+    const failed = res.data?.failed?.length ?? 0;
+    toast(done ? `اعتُمد ${say(done, 'question')}` : 'لا سؤالَ جاهزاً', {
+      tone: done ? 'safe' : 'signal',
+      note: failed
+        ? `وبقي ${say(failed, 'question')} فيها خطأٌ يمنع`
+        : done
+          ? 'دخلت بنوكها وخرجت من الانتظار'
+          : 'أكمِل تفاصيل المعلّقة أولاً',
     });
     refresh();
   };
@@ -314,13 +353,19 @@ export default function Owner() {
             ? bank
               ? banks.find((b) => b.id === bank)?.count
               : total
-            : item.id === 'reports'
+            : item.id === 'pending'
               ? bank
-                ? (alerts?.reportsByBank?.[bank] ?? 0)
-                : alerts?.reports
-              : bank
-                ? (alerts?.editsByBank?.[bank] ?? 0)
-                : alerts?.edits,
+                ? (alerts?.pendingByBank?.[bank] ?? 0)
+                : alerts?.pending
+              : item.id === 'reports'
+                ? bank
+                  ? (alerts?.reportsByBank?.[bank] ?? 0)
+                  : alerts?.reports
+                : item.id === 'edits'
+                  ? bank
+                    ? (alerts?.editsByBank?.[bank] ?? 0)
+                    : alerts?.edits
+                  : undefined,
         go: () => {
           setPage(item.id);
           setView('all');
@@ -338,6 +383,8 @@ export default function Owner() {
           id: b.id,
           label: b.name,
           count: b.count,
+          /* قفلٌ بدل النقطة: البنكُ المُلغى يُعرف في الشريط بلا كلمة */
+          lock: !b.active,
           on: bank === b.id,
           go: () => setBank(b.id),
         })),
@@ -419,8 +466,10 @@ export default function Owner() {
         {
           id: 's1',
           label: 'أضف سؤالاً',
+          count: alerts?.pending,
           on: false,
-          go: () => setEditing({ id: null, bankId: bank || banks[0]?.id }),
+          /* إلى المعلّقة لا إلى المحرّر: حقلان أسرعُ من ستّة */
+          go: () => go('banks', 'pending'),
         },
         {
           id: 's2',
@@ -514,11 +563,11 @@ export default function Owner() {
                 <b className="block text-[16px] leading-tight font-black">
                   {DOORS[doorIndex]?.label}
                 </b>
-                <p className="mt-1 text-[12.5px] leading-snug font-medium text-muted">
-                  {door === 'banks'
-                    ? `${say(total, 'question')} في ${say(banks.length, 'bank')}`
-                    : heading.lead}
-                </p>
+                {door === 'banks' && (
+                  <p className="mt-1 text-[12.5px] leading-snug font-medium text-muted">
+                    {say(total, 'question')} في {say(banks.length, 'bank')}
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -543,12 +592,20 @@ export default function Owner() {
                     data-on={row.on}
                     className="side-row flex h-9 w-full items-center gap-2.5 rounded-chip px-2.5 text-right"
                   >
-                    {row.dot && (
-                      <i
-                        className="size-2 shrink-0 rounded-full"
-                        style={{ background: row.dot }}
-                        aria-hidden="true"
+                    {row.lock ? (
+                      <LockIcon
+                        size={13}
+                        className="shrink-0 text-warn-ink"
+                        aria-label="مُلغى التفعيل"
                       />
+                    ) : (
+                      row.dot && (
+                        <i
+                          className="size-2 shrink-0 rounded-full"
+                          style={{ background: row.dot }}
+                          aria-hidden="true"
+                        />
+                      )
                     )}
                     <span
                       className={`min-w-0 flex-1 truncate text-[13.5px] ${
@@ -609,10 +666,9 @@ export default function Owner() {
             </button>
           )}
 
-          <div className="min-w-0 flex-1">
-            <h1 className="text-[20px] leading-tight font-black">{heading.label}</h1>
-            <p className="mt-0.5 truncate text-[13px] font-medium text-muted">{heading.lead}</p>
-          </div>
+          <h1 className="min-w-0 flex-1 truncate text-[20px] leading-tight font-black">
+            {heading}
+          </h1>
 
           {SEARCH[route] && (
             <label className="relative shrink-0">
@@ -629,27 +685,45 @@ export default function Owner() {
             </label>
           )}
 
-          {door === 'banks' && page !== 'shelf' && (
-            <button
-              type="button"
-              onClick={() => setEditing({ id: null, bankId: bank || banks[0]?.id })}
-              className="h-10 shrink-0 rounded-chip bg-signal-ink px-4 text-[13.5px] font-bold text-white transition hover:brightness-110"
-            >
-              + سؤال جديد
-            </button>
+          {/*
+            «سؤال جديد» ينقل إلى صفحته لا يفتح نافذة.
+            فنموذجُها فيه ما في النافذة وزيادة: يبقى مفتوحاً للسؤال الذي
+            بعده، ولا يُلزمك إتمامَ ما لم يحضرك.
+          */}
+          {door === 'banks' && page !== 'shelf' && !atPending && (
+            <Act
+              icon={PlusIcon}
+              label="أضف سؤالاً"
+              tone="solid"
+              onClick={() => go('banks', 'pending')}
+            />
           )}
 
-          {/* استيرادُ الناقص: مكانُه مع صفحة البنوك، وأثرُه خبرٌ عابر */}
+          {/* اعتمادُ الجاهز: لا يظهر إلا وفيه ما يُعتمد */}
+          {atPending && (counts.ready ?? 0) > 0 && (
+            <Act
+              icon={CheckIcon}
+              label={approving ? 'يُعتمد…' : 'اعتمد الجاهز'}
+              title={`اعتمد ${say(counts.ready ?? 0, 'question')} تمَّت تفاصيلُها — والناقصُ يبقى`}
+              tone="solid"
+              count={counts.ready}
+              disabled={approving}
+              onClick={() => void approveReady()}
+            />
+          )}
+
+          {atPending && (
+            <Act
+              icon={ImportIcon}
+              label="استيراد"
+              title="لصقٌ أو ملفُّ CSV: سؤالٌ وجوابُه في كل سطر"
+              onClick={() => setIntake(true)}
+            />
+          )}
+
+          {/* بنكٌ جديد: فعلُ الصفحة، فمكانُه ترويستُها كبقيّة الأفعال */}
           {door === 'banks' && page === 'shelf' && (
-            <button
-              type="button"
-              disabled={importing}
-              onClick={() => void bringBanks()}
-              title="يُدخل بنكاً له ملفٌّ في المستودع وليس في القاعدة — ولا يمسّ بنكاً قائماً"
-              className="h-10 shrink-0 rounded-chip bg-signal-ink px-4 text-[13.5px] font-bold text-white transition hover:brightness-110 disabled:opacity-50"
-            >
-              {importing ? 'يُستورد…' : 'استيراد البنوك'}
-            </button>
+            <Act icon={PlusIcon} label="بنك جديد" tone="solid" onClick={() => setNewBank(true)} />
           )}
 
           {/*
@@ -661,6 +735,7 @@ export default function Owner() {
               bare
               tone="chip"
               className="shrink-0"
+              glyph={<TrashIcon size={15} />}
               label={`احذف السجلّ كلّه (${alerts?.edits})`}
               onConfirm={() => void wipeEdits()}
             />
@@ -668,17 +743,15 @@ export default function Owner() {
 
           {/* لا يظهر إلا وله عمل: زرٌّ لا أثر له يُضغط مرّةً ثم يُهمَل */}
           {door === 'comments' && (counts.unread ?? 0) > 0 && (
-            <button
-              type="button"
+            <Act
+              icon={CheckIcon}
+              label="قراءة الكل"
+              title="علّم التعليقات كلَّها مقروءة"
+              count={counts.unread}
               onClick={() => {
                 void api.send('POST', 'feedback/read', { kind: 'comment' }).then(refresh);
               }}
-              className="flex h-10 shrink-0 items-center gap-2 rounded-chip bg-signal-2 px-3.5 text-[13.5px] font-bold text-signal-ink transition hover:brightness-95"
-            >
-              <CheckIcon size={14} />
-              <span className="max-sm:hidden">قراءة الكل</span>
-              <span className="tnum">{counts.unread}</span>
-            </button>
+            />
           )}
         </header>
 
@@ -701,6 +774,16 @@ export default function Owner() {
                 onEdit={openQuestion}
                 onCounts={setCounts}
                 reloadKey={reloadKey}
+              />
+            )}
+            {door === 'banks' && page === 'pending' && (
+              <PendingPage
+                api={api}
+                sift={sift}
+                banks={banks}
+                onCounts={setCounts}
+                reloadKey={reloadKey}
+                onChanged={refresh}
               />
             )}
             {door === 'banks' && page === 'reports' && (
@@ -743,6 +826,20 @@ export default function Owner() {
         </main>
       </div>
 
+      {newBank && (
+        <NewBank api={api} onClose={() => setNewBank(false)} onAdded={refresh} />
+      )}
+
+      {intake && (
+        <Intake
+          api={api}
+          banks={banks}
+          bank={bank}
+          onClose={() => setIntake(false)}
+          onDone={refresh}
+        />
+      )}
+
       {editing && (
         <QuestionEditor
           api={api}
@@ -754,6 +851,156 @@ export default function Owner() {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * فعلُ الترويسة — أيقونةٌ واسمٌ بقالبٍ واحد.
+ *
+ * كانت أزرارُ الترويسة أشكالاً شتّى: «+ سؤال جديد» مصبوغٌ بلا أيقونة،
+ * و«استيراد» مُحاطٌ بأيقونة، و«قراءة الكل» بلونٍ ثالث — ثلاثةُ قوالب في
+ * صفٍّ واحد، وكلُّ صفحةٍ تعرض غيرَ ما تعرضه أختُها فلا تستقرّ عينُك.
+ *
+ * فصارت قالباً واحداً: أيقونةٌ ثم اسمٌ ثم عددٌ إن كان له عدد، والأبرزُ
+ * مصبوغٌ والباقي مُحاط. والاسمُ يُطوى دون sm — على اللوح الضيّق تبقى
+ * الأيقونةُ وحدها ومعها `title`، فالعرضُ هناك لا يحتمل أربع كلمات.
+ */
+function Act({
+  icon: Icon,
+  label,
+  title,
+  onClick,
+  tone,
+  count,
+  disabled,
+}: {
+  icon: (p: { size?: number }) => React.ReactElement;
+  label: string;
+  title?: string;
+  onClick: () => void;
+  tone?: 'solid';
+  count?: number;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title ?? label}
+      aria-label={label}
+      className={`flex h-10 shrink-0 items-center justify-center gap-2 rounded-chip px-3.5 text-[13.5px] font-bold transition disabled:opacity-50 ${
+        tone === 'solid'
+          ? 'bg-signal-ink text-white hover:brightness-110'
+          : 'text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] hover:bg-surface-2'
+      }`}
+    >
+      <Icon size={16} />
+      <span className="max-sm:hidden">{label}</span>
+      {count !== undefined && <span className="tnum">{count}</span>}
+    </button>
+  );
+}
+
+/**
+ * بنكٌ جديد: اسمٌ ومعرّف.
+ *
+ * والمعرّفُ لاتينيٌّ لأنه يدخل في معرّف كل سؤال («quran:1a2b») وفي الرابط
+ * وفي اسم ملفّ صورته. والحقلُ يأبى غيرَ اللاتينيّ وأنت تكتب، فلا تُكتب
+ * كلمةٌ عربية ثم تُردّ عند الحفظ.
+ */
+function NewBank({
+  api,
+  onClose,
+  onAdded,
+}: {
+  api: Api;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [id, setId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const bare = !name.trim() || !id.trim();
+
+  const add = async () => {
+    if (bare || busy) return;
+    setBusy(true);
+    setError('');
+    const res = await api.send<{ error?: string }>('POST', 'bank', {
+      id: id.trim(),
+      name: name.trim(),
+    });
+    setBusy(false);
+    if (!res.ok) return setError(res.data?.error ?? 'تعذّر الإنشاء');
+    toast(`أُنشئ بنك «${name.trim()}»`, { tone: 'safe' });
+    onAdded();
+    onClose();
+  };
+
+  return (
+    <Modal
+      title="بنك جديد"
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={() => void add()}
+            disabled={bare || busy}
+            className={`h-10 rounded-chip px-6 text-[14px] font-black transition ${
+              bare || busy
+                ? 'cursor-not-allowed bg-line-2 text-white'
+                : 'bg-signal-ink text-white hover:brightness-110'
+            }`}
+          >
+            {busy ? 'يُنشأ…' : 'أنشِئ'}
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 rounded-chip px-4 text-[14px] font-bold text-ink-2 shadow-[inset_0_0_0_1px_var(--color-line)] transition hover:bg-surface-2"
+          >
+            إلغاء
+          </button>
+        </>
+      }
+    >
+      <span className="mb-2 block text-[12.5px] font-bold text-ink-2">الاسم</span>
+      <input
+        value={name}
+        onChange={(event) => {
+          setName(event.target.value);
+          setError('');
+        }}
+        onKeyDown={(event) => event.key === 'Enter' && void add()}
+        placeholder="السيرة النبوية"
+        autoFocus
+        className="mb-5 h-11 w-full rounded-chip bg-surface px-4 text-[14px] font-bold shadow-[inset_0_0_0_1px_var(--color-line-2)] outline-none placeholder:text-faint focus:shadow-[inset_0_0_0_1.5px_var(--color-signal)]"
+      />
+
+      <span className="mb-2 block text-[12.5px] font-bold text-ink-2">المعرّف</span>
+      <input
+        value={id}
+        onChange={(event) => {
+          /* يُقصّ غيرُ اللاتينيّ عند الكتابة: ردٌّ فوريٌّ أوضحُ من خطأٍ بعد الضغط */
+          setId(
+            event.target.value
+              .toLowerCase()
+              .replace(/[^a-z0-9_-]/g, ''),
+          );
+          setError('');
+        }}
+        onKeyDown={(event) => event.key === 'Enter' && void add()}
+        placeholder="seerah"
+        dir="ltr"
+        className="h-11 w-full rounded-chip bg-surface px-4 text-right font-mono text-[14px] font-bold shadow-[inset_0_0_0_1px_var(--color-line-2)] outline-none placeholder:text-faint focus:shadow-[inset_0_0_0_1.5px_var(--color-signal)]"
+      />
+
+      {error && <p className="mt-3 text-[13.5px] font-bold text-danger">{error}</p>}
+    </Modal>
   );
 }
 

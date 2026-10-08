@@ -8,16 +8,19 @@ import express from 'express';
 import { Server } from 'socket.io';
 import {
   listBanks,
+  playableBanks,
   normalizeBankIds,
   allBanks,
   findQuestion,
   saveBank,
   deleteBank,
   writeBank,
+  setActive,
   initBanks,
-  importFiles,
+  arabizeDigits,
 } from './banks.js';
-import { auditQuestion, auditAll } from './audit.js';
+import { auditQuestion, auditAll, normalizeText } from './audit.js';
+import { parseIntake, MAX_ROWS } from './intake.js';
 import {
   createRoom,
   restoreRoom,
@@ -100,7 +103,13 @@ for (const verb of ['get', 'post', 'put', 'delete', 'patch']) {
     );
 }
 
-app.get('/api/banks', (_req, res) => res.json(listBanks()));
+/*
+ * بنوكُ اللعبة — المفعَّلةُ التي فيها سؤال.
+ *
+ * ومنظّمُ الغرفة يقرأ من هنا، فلا يُعرض له بنكٌ أُلغي تفعيلُه ولا بنكٌ لم
+ * يُملأ بعد. ولوحةُ المالك لها بابُها (console/banks) وفيه الكلُّ بوصفه.
+ */
+app.get('/api/banks', (_req, res) => res.json(playableBanks()));
 app.get('/api/health', (_req, res) => res.json({ ok: true, rooms: [...allRooms()].length }));
 
 /*
@@ -192,12 +201,13 @@ app.get('/api/console/summary', owner, async (_req, res) => {
  * على جواب الآخر، فانتظارُها بالتتابع خمسُ رحلاتٍ إلى القاعدة مكان واحدة.
  */
 async function ownerPulse() {
-  const [health, comments, unread, reports, edits] = await Promise.all([
+  const [health, comments, unread, reports, edits, pending] = await Promise.all([
     store.questionHealth({ minShown: 1, limit: 100000 }),
     store.listFeedback({ kind: 'comment', limit: 1000 }),
     store.unreadFeedback(),
     store.listFeedback({ kind: 'report', limit: 5000 }),
     store.listEdits(),
+    store.listPending(),
   ]);
   const checked = auditAll(allBanks());
 
@@ -216,6 +226,16 @@ async function ownerPulse() {
   }
   const editsByBank = {};
   for (const e of edits) editsByBank[e.bank] = (editsByBank[e.bank] ?? 0) + 1;
+
+  /*
+   * والمعلّقةُ كذلك: شارةُ صفحتها تصف البنك المختار. والمعلَّقُ بلا بنكٍ
+   * يُعَدّ في المجموع ولا يُنسب — فهو ناقصٌ من هذه الجهة بعينها، ويُقرأ
+   * في «كل البنوك» حيث يُسنَد إلى بنكه.
+   */
+  const pendingByBank = {};
+  for (const row of pending) {
+    if (row.bank) pendingByBank[row.bank] = (pendingByBank[row.bank] ?? 0) + 1;
+  }
 
   return {
     health,
@@ -236,8 +256,25 @@ async function ownerPulse() {
       unreadReports: unread.report,
       reportsByBank,
       editsByBank,
+      pending: pending.length,
+      pendingReady: pending.filter((row) => readyPending(row)).length,
+      pendingByBank,
     },
   };
+}
+
+/**
+ * جاهزٌ للاعتماد — ويُقاس هنا كما يُقاس في بابه.
+ *
+ * والشرطُ واحدٌ في الموضعين: بنكٌ وثلاثةُ أخطاءٍ ومستوى. ولا يُنادى
+ * missingOf من هنا لأنها تبني جملةً عربية لتُقرأ، وهذه تريد نعم أو لا.
+ */
+function readyPending(row) {
+  return (
+    Boolean(row.bank) &&
+    (row.wrongs ?? []).filter((text) => String(text ?? '').trim()).length >= 3 &&
+    [1, 2, 3].includes(row.level)
+  );
 }
 
 /** الشارات وحدها — تُقرأ بعد كل حفظٍ بلا حمل اللوحة كلّها */
@@ -464,6 +501,20 @@ app.get('/api/console/bank/:id', owner, async (req, res) => {
   });
 });
 
+/**
+ * بنوكُ اللوحة — كلُّها، المفعَّلُ منها والمُلغى والفارغ.
+ *
+ * ولا تُقرأ من /api/banks: ذاك بابُ اللعبة وهو يحجب المُلغى والفارغ، ولو
+ * قرأت اللوحةُ منه لاختفى من شريطها بنكٌ أُلغي تفعيلُه — فلا يُعاد تفعيله
+ * إلا بقاعدةٍ تُفتح بيد.
+ *
+ * و`playable` تُقال لكل بنك: به تُرسم أيقونةُ القفل في الشريط، ويُعرف
+ * الفارغُ الذي لا يراه لاعبٌ بعد.
+ */
+app.get('/api/console/banks', owner, (_req, res) => {
+  res.json(listBanks().map((bank) => ({ ...bank, playable: bank.active && bank.count > 0 })));
+});
+
 /** سؤالٌ واحد بتمامه — تفتح به صفحاتُ الصحّة والبلاغات المحرّرَ نفسه */
 app.get('/api/console/question/:id', owner, async (req, res) => {
   const found = findQuestion(req.params.id);
@@ -631,8 +682,19 @@ function newIdOf(bankId, text) {
 app.delete('/api/console/question/:id', owner, async (req, res) => {
   const found = findQuestion(req.params.id);
   if (!found) return res.status(404).json({ error: 'سؤال غير موجود' });
-  if (found.bank.questions.length <= 1) {
-    return res.status(400).json({ error: 'لا يُترك البنك فارغاً' });
+
+  /*
+   * ويُترك البنك فارغاً اليوم — إلا أن تلعب به غرفةٌ قائمة.
+   *
+   * كان المنعُ مطلقاً لأن البنك الفارغ يُعطي `poolFor` مجموعةً خاوية فتُسحب
+   * جولةٌ بلا سؤال. وقد صار الفارغُ محجوباً عن اللعبة أصلاً (playableBanks)،
+   * فلا يُختار لغرفةٍ جديدة — فبقي أن يُحرس من غرفةٍ اختارته قبل أن يفرغ،
+   * وهي وحدها التي تُكسر. ومن أراد إخلاءه ليبدأ من جديد فله ذلك.
+   */
+  const busy = [...allRooms()].filter((room) => room.bankIds.includes(found.bank.id));
+  if (found.bank.questions.length <= 1 && busy.length) {
+    const codes = busy.map((room) => room.code).join('، ');
+    return res.status(400).json({ error: `آخرُ سؤالٍ في بنكٍ تستعمله غرفة: ${codes}` });
   }
   const before = found.question;
   await saveBank(
@@ -692,20 +754,277 @@ app.delete('/api/console/bank/:id', owner, async (req, res) => {
 });
 
 /**
- * استيرادُ ملفّات المستودع إلى القاعدة.
+ * إنشاءُ بنكٍ — اسمٌ ومعرّف، ويُولد فارغاً.
  *
- * فالقاعدةُ هي المرجع بعد النقل، ومن أراد أن يكتب مئةَ سؤالٍ في محرّرٍ ويرفعها
- * إلى git احتاج باباً. و«استبدالاً» يمحو ما حُرِّر من اللوحة في البنوك التي
- * لها ملفّات — فيُطلب صريحاً في الجسم لا بالغلط.
+ * فالبنكُ لم يكن له بابٌ قبل اليوم: لا يُولد إلا زرعاً من ملفّات المستودع
+ * عند أوّل إقلاع أو إرجاعاً من السلّة. ومن أراد بنكاً جديداً لم يملك إلا
+ * أن يكتب ملفَّ JSON ويرفعه إلى git وينشر.
+ *
+ * ويُولد فارغاً بلا حرج: playableBanks يحجبه عن اللعبة حتى يدخله سؤال.
  */
-app.post('/api/console/banks/import', owner, async (req, res) => {
-  const replace = req.body?.replace === true;
+app.post('/api/console/bank', owner, async (req, res) => {
   try {
-    const done = await importFiles({ replace });
-    res.json({ ok: true, replace, banks: done });
+    const bank = await writeBank({ id: req.body?.id, name: req.body?.name, questions: [] });
+    res.json({ ok: true, id: bank.id, name: bank.name });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
+});
+
+/**
+ * تفعيلُ بنكٍ وإلغاؤه — حجبٌ عن اللعبة لا حذف.
+ *
+ * الموسمُ ينتهي فلا يُراد بنكُه في قائمة المنظّم، ولا يُراد حذفُ ما بُني
+ * في شهر. فيُلغى تفعيلُه: يبقى في اللوحة بأسئلته وإحصائه وبلاغاته، ويُقرأ
+ * ويُحرَّر، ولا يُعرض لمن يُنشئ غرفة.
+ *
+ * ولا يُلغى تفعيلُ بنكٍ تلعب به غرفةٌ قائمة — كما لا يُحذف: اللعبةُ تسحب
+ * مجموعتها كلَّ جولة، فالإلغاءُ في منتصف اللعب يُقلّص ما يُسحب من تحت لاعب.
+ */
+app.post('/api/console/bank/:id/active', owner, async (req, res) => {
+  const bank = allBanks().find((b) => b.id === req.params.id);
+  if (!bank) return res.status(404).json({ error: 'بنك غير معروف' });
+
+  const want = req.body?.active === true;
+  if (!want) {
+    const busy = [...allRooms()].filter((room) => room.bankIds.includes(bank.id));
+    if (busy.length) {
+      const codes = busy.map((room) => room.code).join('، ');
+      return res.status(400).json({ error: `البنك مستعملٌ في غرفة: ${codes}` });
+    }
+  }
+
+  await setActive(bank.id, want);
+  res.json({ ok: true, active: want });
+});
+
+/* ── الأسئلة المعلّقة ── */
+
+/**
+ * ما ينقص المعلَّق ليُعتمد: بنكٌ، وثلاثةُ أخطاءٍ، ومستوى.
+ *
+ * والمستوى من المطلوب صريحاً ولا يُفترض «متوسطاً»: البابُ كلُّه إنما فُتح
+ * ليُكتب السؤالُ ناقصاً ويُراجَع — فافتراضُ وصفٍ لم يقرأه أحدٌ يُمرّر مئةَ
+ * سؤالٍ بمستوًى لم يُنظر فيه، وهو عين ما يُراد تجنّبه.
+ */
+function missingOf(row) {
+  const gaps = [];
+  if (!row.bank) gaps.push('البنك');
+  const wrongs = (row.wrongs ?? []).filter((text) => String(text ?? '').trim());
+  if (wrongs.length < 3) gaps.push(`${3 - wrongs.length} من الخيارات الخاطئة`);
+  if (![1, 2, 3].includes(row.level)) gaps.push('المستوى');
+  return gaps;
+}
+
+/** السؤالُ كما يصير في البنك: الصوابُ أوّلَ الخيارات، والخلطُ عند التوزيع */
+function asQuestion(row) {
+  return {
+    q: row.q,
+    options: [row.answer, ...(row.wrongs ?? []).filter((text) => String(text ?? '').trim())],
+    answer: 0,
+    level: row.level ?? 2,
+  };
+}
+
+/**
+ * المعلّقة بحالِها: ما ينقصها، وما فيها من ملاحظات الفاحص، وأصلُ المكرّر.
+ *
+ * والتكرارُ يُقاس بـnormalizeText: فروقُ التشكيل والترقيم لا تصنع سؤالاً
+ * جديداً، ومن لصق دفعةً فيها ما في البنك أراد أن يُقال له «هذا عندك» لا
+ * أن يُضاف صامتاً فيراه لاعبٌ مرّتين في جولةٍ واحدة.
+ *
+ * ولا يُرفض المكرّر: ربّما كانت الصيغةُ الملصوقة أحسنَ من صيغة البنك،
+ * فيُعتمد هذا ويُحذف ذاك. والحكمُ للمالك، والشارةُ تكفي لتنبيهه.
+ */
+function describePending(rows, banks) {
+  const names = new Map(banks.map((b) => [b.id, b.name]));
+
+  /* فهرسُ البنوك يُبنى مرّةً: خمسمئةُ معلَّقٍ في ألفِ سؤالٍ لا تُقارن بالتداخل */
+  const inBanks = new Map();
+  for (const bank of banks) {
+    for (const question of bank.questions) {
+      const key = normalizeText(question.q);
+      if (key && !inBanks.has(key)) {
+        inBanks.set(key, { bank: bank.id, bankName: bank.name, id: question.id });
+      }
+    }
+  }
+
+  /* والمعلَّقُ يُقارن بأخيه أيضاً: الأقدمُ أصلٌ والأحدثُ مكرّر */
+  const seen = new Map();
+  const twinOf = new Map();
+  for (const row of [...rows].sort((a, b) => a.id - b.id)) {
+    const key = normalizeText(row.q);
+    if (!key) continue;
+    if (seen.has(key)) twinOf.set(row.id, seen.get(key));
+    else seen.set(key, row.id);
+  }
+
+  return rows.map((row) => {
+    const missing = missingOf(row);
+    const key = normalizeText(row.q);
+    return {
+      ...row,
+      bankName: row.bank ? (names.get(row.bank) ?? row.bank) : null,
+      missing,
+      ready: missing.length === 0,
+      /* الفاحصُ لا يُستدعى على ناقصٍ: «الخيارات ٢ والمطلوب أربعة» ليس خبراً */
+      issues: missing.length === 0 ? auditQuestion(asQuestion(row)) : [],
+      duplicate: key ? (inBanks.get(key) ?? null) : null,
+      twin: twinOf.get(row.id) ?? null,
+    };
+  });
+}
+
+app.get('/api/console/pending', owner, async (_req, res) => {
+  res.json(describePending(await store.listPending(), allBanks()));
+});
+
+function readPendingBody(body) {
+  const wrongs = (Array.isArray(body?.wrongs) ? body.wrongs : [])
+    .map((text) => arabizeDigits(String(text ?? '').trim()))
+    .filter(Boolean)
+    .slice(0, 3);
+  const level = Number(body?.level);
+  return {
+    bank: typeof body?.bank === 'string' && body.bank ? body.bank : null,
+    q: arabizeDigits(String(body?.q ?? '').trim()),
+    answer: arabizeDigits(String(body?.answer ?? '').trim()),
+    wrongs,
+    level: [1, 2, 3].includes(level) ? level : null,
+  };
+}
+
+/** إضافةُ معلَّقٍ واحد — سؤالٌ وجوابٌ يكفيان، وما زاد قُبل */
+app.post('/api/console/pending', owner, async (req, res) => {
+  const row = readPendingBody(req.body);
+  if (!row.q) return res.status(400).json({ error: 'نصّ السؤال فارغ' });
+  if (!row.answer) return res.status(400).json({ error: 'الإجابة الصحيحة فارغة' });
+  if (row.bank && !allBanks().some((b) => b.id === row.bank)) {
+    return res.status(400).json({ error: 'بنك غير معروف' });
+  }
+  const [id] = await store.addPending([{ ...row, source: 'manual' }]);
+  res.json({ ok: true, id });
+});
+
+/**
+ * استيرادُ دفعة — لصقاً أو ملفَّ CSV، والنصُّ واحدٌ في الحالين.
+ *
+ * و`dry` يقرأ ولا يكتب: تُعرض الحصيلةُ على المالك قبل أن تدخل — كم سطراً
+ * فُهم، وكم سقط ولماذا، وأيُّها مكرّر. فمن لصق عموداً خطأً رآه قبل أن
+ * يُدخل ثلاثمئةَ صفٍّ مقلوب.
+ */
+app.post('/api/console/pending/import', owner, async (req, res) => {
+  const { rows, skipped } = parseIntake(req.body?.text);
+  const wanted = typeof req.body?.bank === 'string' ? req.body.bank : '';
+  const bank = wanted && allBanks().some((b) => b.id === wanted) ? wanted : null;
+  const source = req.body?.source === 'csv' ? 'csv' : 'paste';
+  const staged = rows.map((row) => ({ ...row, bank, source }));
+
+  if (req.body?.dry === true) {
+    /*
+     * المعاينةُ تُوصف مع المحفوظ لا وحدَها.
+     *
+     * فالتكرارُ يُقاس في describePending على ما يُمرَّر إليها: لو مُرِّرت
+     * الدفعةُ وحدها كُشف تكرارُها في نفسها وفي البنوك، وخفي أن سؤالاً منها
+     * معلَّقٌ أصلاً من لصقةٍ قبلها — فيُقال «نظيف» ثم يظهر مكرّراً بعد أن
+     * دخل. فتُوصف الدفعةُ في ذيل المحفوظ ثم يُقتطع ذيلُها.
+     *
+     * ومعرّفاتُها فوق أكبر محفوظ: الترتيبُ في describePending بالمعرّف،
+     * والأقدمُ أصلٌ والأحدثُ مكرّر — فلو أُعطيت أرقاماً سالبة لصارت هي
+     * الأصلَ وعُلِّم المحفوظُ مكرّراً، وهو مقلوب.
+     */
+    const kept = await store.listPending();
+    const base = kept.reduce((top, row) => Math.max(top, row.id), 0) + 1;
+    const described = describePending(
+      [...kept, ...staged.map((row, i) => ({ ...row, id: base + i, at: Date.now() }))],
+      allBanks(),
+    );
+    const preview = described.slice(kept.length);
+    return res.json({ ok: true, dry: true, added: 0, rows: preview, skipped, max: MAX_ROWS });
+  }
+
+  const ids = await store.addPending(staged);
+  res.json({ ok: true, added: ids.length, skipped, max: MAX_ROWS });
+});
+
+/** تحريرُ معلَّق: يُكمله المالك على مراحل، فكلُّ حفظٍ يُرسل الحالَ كلَّه */
+app.put('/api/console/pending/:id', owner, async (req, res) => {
+  const have = await store.getPending(req.params.id);
+  if (!have) return res.status(404).json({ error: 'لا سؤال معلَّقٌ بهذا الرقم' });
+
+  const row = readPendingBody(req.body);
+  if (!row.q) return res.status(400).json({ error: 'نصّ السؤال فارغ' });
+  if (!row.answer) return res.status(400).json({ error: 'الإجابة الصحيحة فارغة' });
+  if (row.bank && !allBanks().some((b) => b.id === row.bank)) {
+    return res.status(400).json({ error: 'بنك غير معروف' });
+  }
+
+  await store.updatePending(have.id, row);
+  res.json({ ok: true });
+});
+
+app.delete('/api/console/pending/:id', owner, async (req, res) => {
+  const gone = await store.forgetPending(req.params.id);
+  if (!gone) return res.status(404).json({ error: 'لا سؤال معلَّقٌ بهذا الرقم' });
+  res.json({ ok: true });
+});
+
+/**
+ * اعتمادُ معلَّق — ينتقل إلى بنكه ويخرج من الانتظار.
+ *
+ * ولا يُعتمد ناقصٌ ولا سؤالٌ فيه خطأٌ يكسر اللعبة: البابان يُحرسان في
+ * الخادم لا في الواجهة وحدها، فطلبٌ يُرسل من غيرها لا يمرّ.
+ *
+ * والترتيبُ: يُكتب في البنك أولاً ثم يُنسى من المعلّقة. فلو سقط الحفظُ بقي
+ * معلَّقاً يُعاد اعتمادُه، ولو سقط النسيانُ بقي معلَّقاً ودخل البنك — وهذا
+ * يُرى فيُحذف، أما سؤالٌ ذهب من الجهتين فلا يُرى ولا يُستدرك.
+ */
+async function approveOne(row, banks) {
+  const [described] = describePending([row], banks);
+  if (!described.ready) return { error: `ناقص: ${described.missing.join(' و')}` };
+
+  const bank = banks.find((b) => b.id === row.bank);
+  if (!bank) return { error: 'بنك غير معروف' };
+
+  const question = asQuestion(row);
+  const bad = auditQuestion(question).find((i) => i.severity === 'error');
+  if (bad) return { error: bad.message };
+
+  await saveBank(bank.id, [...bank.questions, question]);
+  await store.forgetPending(row.id);
+  return { ok: true };
+}
+
+app.post('/api/console/pending/:id/approve', owner, async (req, res) => {
+  const row = await store.getPending(req.params.id);
+  if (!row) return res.status(404).json({ error: 'لا سؤال معلَّقٌ بهذا الرقم' });
+  const done = await approveOne(row, allBanks());
+  if (done.error) return res.status(400).json({ error: done.error });
+  res.json({ ok: true });
+});
+
+/**
+ * اعتمادُ الجاهز كلِّه — ومراجعةُ خمسين سؤالاً واحداً واحداً تُتعب.
+ *
+ * ويُعتمد ما كان جاهزاً لحظةَ الضغط: الناقصُ يبقى، وما فيه خطأٌ يبقى ويُقال
+ * خبرُه. ومرشّحُ البنك يضيّق الفعل كما يضيّق النظر — فمن كان في بنكٍ بعينه
+ * اعتُمد جاهزُه وحده، وذاك ما يُرسله في `bank`.
+ */
+app.post('/api/console/pending/approve', owner, async (req, res) => {
+  const only = typeof req.body?.bank === 'string' && req.body.bank ? req.body.bank : null;
+  const rows = await store.listPending();
+  let approved = 0;
+  const failed = [];
+  for (const row of rows) {
+    if (only && row.bank !== only) continue;
+    if (missingOf(row).length > 0) continue;
+    /* البنوكُ تُقرأ في كل دورة: saveBank بدّلها في الدورة التي قبلها */
+    const out = await approveOne(row, allBanks());
+    if (out.ok) approved++;
+    else failed.push({ q: row.q, why: out.error });
+  }
+  res.json({ ok: true, approved, failed });
 });
 
 /** البنوك المحذوفة — تُعرض ثلاثين يوماً ثم تُنسى */

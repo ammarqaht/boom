@@ -740,7 +740,7 @@ function Console({
               />
             </div>
 
-            <Panel title="روابط الغرفة" hint={`${room.teams.length} لاعباً`}>
+            <Panel title="روابط الغرفة">
               <div className="grid gap-1.5">
                 <LinkRow
                   icon={<UsersIcon size={15} />}
@@ -761,7 +761,7 @@ function Console({
             </Panel>
 
             {room.teams.length > 0 && (
-              <Panel title="نقاط اللاعبين" hint="تعديل يدويّ">
+              <Panel title="نقاط اللاعبين">
                 <div className="grid">
                   {byJoin.map((team) => (
                     <div
@@ -824,7 +824,6 @@ function Console({
              */}
             <Panel
               title={last ? `تفاصيل الجولة ${last.round}` : 'تفاصيل آخر جولة'}
-              hint={last ? 'آخر جولة مكتملة' : undefined}
             >
               {last ? (
                 <ResultBars awards={last.awards} />
@@ -840,9 +839,9 @@ function Console({
       {showHistory && <HistoryModal history={room.history} onClose={() => setShowHistory(false)} />}
 
       {/*
-        تأكيدُ الإنهاء: يُقال ما يقع، لا «هل أنت متأكّد؟».
-        فالسؤالُ المجرّد لا يُضيف علماً — والمنظّم يحتاج أن يعرف أن النقاط
-        تبقى وأن الشاشات كلَّها ستتبدّل، لا أن يُسأل عن يقينه.
+        تأكيدُ الإنهاء: سطرٌ واحدٌ يقول ما يقع، لا «هل أنت متأكّد؟».
+        فالسؤالُ المجرّد لا يُضيف علماً، والفقرتان كانتا تقولان الشيء نفسه
+        مرّتين — والزرُّ تحتهما يقول ثالثةً «أنهِ واعرض الأوائل».
       */}
       {confirmEnd && (
         <Modal
@@ -852,17 +851,8 @@ function Console({
         >
           <div className="grid gap-4">
             <p className="text-[15px] leading-relaxed text-ink-2">
-              تنتهي اللعبة الآن ويظهر الترتيب النهائي على شاشة العرض وعند اللاعبين جميعاً.
-            </p>
-
-            {/*
-              تنبيهٌ واحد: ما يقع الآن ولا يُستردّ. وما وراءَه — مصيرُ السجلّ
-              والغرفة — شأنُ المالك لا المنظّم، ومن قرأ في لحظة القرار ما لا
-              يخصّه لم يقرأ ما يخصّه.
-            */}
-            <p className="rounded-card px-4 py-3.5 text-[13.5px] leading-relaxed font-medium text-muted shadow-[inset_0_0_0_1px_var(--color-line)]">
-              الجولة الحالية تُغلق، ولا جولةَ بعدها —{' '}
-              <b className="font-black text-ink-2">إلا ببدءٍ من جديد</b>.
+              يظهر الترتيب النهائي على الشاشات كلّها، ولا جولةَ بعدها —{' '}
+              <b className="font-black text-ink">إلا ببدءٍ من جديد</b>.
             </p>
 
             <div className="flex flex-wrap items-center gap-2.5">
@@ -946,7 +936,6 @@ function QuestionFeed({
   const [reporting, setReporting] = useState<string | null>(null);
   const [note, setNote] = useState('');
 
-  const flagged = feed.filter((f) => f.reported).length;
 
   const send = (item: FeedItem, reason: string) => {
     onReport({ questionId: item.id, reason, note: note.trim() });
@@ -957,7 +946,6 @@ function QuestionFeed({
   return (
     <Panel
       title="أسئلة الغرفة"
-      hint={flagged ? `${feed.length} · ${flagged} مُبلَّغ` : `${feed.length} سؤالاً`}
     >
       {/* الصفّ لا يبدو قابلاً للضغط من نفسه: سطرٌ يقول ماذا يحدث إن ضُغط */}
       <p className="-mt-1.5 mb-1 text-[11.5px] font-medium text-faint">
@@ -1120,8 +1108,6 @@ function RoundPanel({
   onStart: () => void;
   onSend: (event: string, payload?: unknown) => void;
 }) {
-  const level = LEVELS.find((l) => l.id === room.difficulty)?.label ?? '—';
-  const pool = banks.filter((b) => room.bankIds.includes(b.id)).reduce((n, b) => n + b.count, 0);
   const done = room.status === 'finished';
   const onRestart = () => onSend('admin:resetAll');
 
@@ -1201,12 +1187,14 @@ function RoundPanel({
       </div>
       )}
 
-      <div className="mt-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-line pt-2.5 text-xs font-medium text-muted sm:mt-3 sm:pt-3">
-        <span>
-          المستوى <b className="font-black text-ink">{level}</b>
-        </span>
+      {/*
+        عددُ البنوك وحده في القاع.
+        وكان معه المستوى وعددُ أسئلة المجموعة: المستوى مكتوبٌ في مكانٍ آخر
+        من اللوحة، وعددُ الأسئلة رقمٌ لا يُبنى عليه قرار — فذهبا.
+      */}
+      <div className="mt-2.5 border-t border-line pt-2.5 text-xs font-medium text-muted sm:mt-3 sm:pt-3">
         <span className="tnum">
-          {room.bankIds.length} من {banks.length} بنكاً · {pool} سؤال
+          {room.bankIds.length} من {banks.length} بنكاً
         </span>
       </div>
 
@@ -1248,7 +1236,7 @@ function CardsPanel({
   const spent = teams.some((t) => cards.some((c) => (t.cardsLeft?.[c.id] ?? c.limit) < c.limit));
 
   return (
-    <Panel title="بطاقات اللاعبين" hint="ما بقي لكل لاعب">
+    <Panel title="بطاقات اللاعبين">
       <div className="grid">
         {teams.map((team) => (
           <div

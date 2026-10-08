@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { HoldButton } from '../../components/ui';
-import { TrashIcon } from '../../components/icons';
+import { LockIcon, PenIcon, RestoreIcon, TrashIcon, UnlockIcon } from '../../components/icons';
 import {
   type Api,
   type Col,
@@ -34,7 +34,15 @@ import {
  * وثلاثتها تفتح المحرّر نفسه، فما يُصلَح في إحداها يظهر في أختيها.
  */
 
-export type BankInfo = { id: string; name: string; count: number };
+export type BankInfo = {
+  id: string;
+  name: string;
+  count: number;
+  /** مُفعَّل؟ المُلغى يبقى في اللوحة ويُحجب عن اللعبة */
+  active: boolean;
+  /** يراه لاعب؟ مُفعَّلٌ وفيه سؤالٌ على الأقل */
+  playable?: boolean;
+};
 export type Counts = Record<string, number>;
 
 export type Sift = {
@@ -197,7 +205,6 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
         : { key, dir: key === 'q' || key === 'bank' ? 1 : -1 },
     );
 
-  const measured = mine.filter((r) => r.shown > 0).length;
   const weak = mine.filter(isWeak).length;
   const reported = mine.filter((r) => r.reports > 0).length;
   const rated = mine.filter((r) => r.rate !== null).map((r) => r.rate as number);
@@ -213,24 +220,20 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
           label={sift.bank ? 'أسئلة البنك' : 'أسئلة البنوك'}
           value={mine.length}
           unit={unit(mine.length, 'question')}
-          hint={`${measured} منها قِيست في اللعب`}
         />
         <Stat
           label="وسيط الصواب"
           value={middle === null ? '—' : `${middle}%`}
-          hint="نصفُ المقيس فوقه ونصفُه دونه"
         />
         <Stat
           label="ضعيفة الصواب"
           value={weak}
           tone={weak > 0 ? 'warn' : undefined}
-          hint="دون 30% صواباً — ولو من عرضة"
         />
         <Stat
           label="مُبلَّغ عنها"
           value={reported}
           tone={reported > 0 ? 'danger' : undefined}
-          hint="شكا منها لاعبٌ أو منظّم"
         />
       </StatRow>
 
@@ -240,7 +243,6 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
             ? say(mine.length, 'question')
             : `${shown.length} من ${say(mine.length, 'question')}`
         }
-        hint="اضغط رأس عمودٍ للترتيب · اضغط صفّاً لفتح المحرّر"
         flush
       >
         {shown.length === 0 ? (
@@ -376,14 +378,12 @@ export function Reports({ api, sift, banks, onEdit, onCounts, reloadKey }: Share
           label="البلاغات"
           value={mine.length}
           unit={unit(mine.length, 'report')}
-          hint="بلا هوية — تُحفظ الصفة لا الاسم"
         />
-        <Stat label="أسئلةٌ شُكي منها" value={questions} hint="الأكثرُ بلاغاً أولاً" />
-        <Stat label="من اللاعبين" value={byPlayer} hint="لا تظهر لمنظّم الغرفة" />
+        <Stat label="أسئلةٌ شُكي منها" value={questions} />
+        <Stat label="من اللاعبين" value={byPlayer} />
         <Stat
           label="من المنظّمين"
           value={mine.length - byPlayer}
-          hint="من سجلّ الغرفة أثناء اللعب"
         />
       </StatRow>
 
@@ -406,9 +406,11 @@ export function Reports({ api, sift, banks, onEdit, onCounts, reloadKey }: Share
                 <button
                   type="button"
                   onClick={() => onEdit(key)}
-                  className="shrink-0 text-[13px] font-bold text-signal-ink transition hover:underline"
+                  title="افتح السؤال في المحرّر"
+                  aria-label="افتح السؤال في المحرّر"
+                  className="flex size-8 shrink-0 items-center justify-center rounded-chip text-muted transition hover:bg-surface-2 hover:text-ink"
                 >
-                  افتح في المحرّر
+                  <PenIcon size={15} />
                 </button>
               )}
             </div>
@@ -472,9 +474,16 @@ type Trashed = {
 };
 
 /**
- * إدارةُ البنوك: ما في كلٍّ منها، وحذفُه، وما حُذف.
+ * إدارةُ البنوك: إنشاءٌ، وتفعيلٌ، وحذفٌ وإرجاع.
  *
- * الحذفُ بضغطٍ مطوّل لا بضغطةٍ وتأكيد: البنكُ مئاتُ الأسئلة، والضغطةُ
+ * والبنكُ يُنشأ هنا باسمه ومعرّفه ويُولد فارغاً — ثم تُضاف أسئلته من صفحة
+ * المعلّقة واحداً واحداً أو تُستورد دفعة. ولا يراه لاعبٌ وهو فارغ.
+ *
+ * والإلغاءُ لا الحذف هو البابُ الأول: الموسمُ ينتهي فلا يُراد بنكُه في قائمة
+ * المنظّم، ولا يُراد محوُ ما بُني في شهر. فيُلغى تفعيلُه فيبقى كما هو في
+ * اللوحة بإحصائه وبلاغاته، ويُقرأ ويُحرَّر — ويُحجب عن اللعبة وحدها.
+ *
+ * والحذفُ بضغطٍ مطوّل لا بضغطةٍ وتأكيد: البنكُ مئاتُ الأسئلة، والضغطةُ
  * الطائشة في لوحةٍ تُدار بالإبهام تكلّف بنكاً كاملاً. والمطوّلُ لا يُفلت.
  *
  * ولا يذهب المحذوف: يُحفظ بأسئلته كلّها ثلاثين يوماً كأرشيف التحرير،
@@ -498,14 +507,32 @@ export function Shelf({
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState('');
 
+  const live = banks.filter((b) => b.active).length;
+  const empty = banks.filter((b) => b.count === 0).length;
+
   useEffect(() => {
     if (!rows) return;
-    onCounts({ all: banks.length, deleted: rows.length });
-  }, [rows, banks.length, onCounts]);
+    onCounts({ all: banks.length, off: banks.length - live, empty, deleted: rows.length });
+  }, [rows, banks.length, live, empty, onCounts]);
 
   const flash = (message: string) => {
     setNote(message);
     setTimeout(() => setNote(''), 4000);
+  };
+
+  const flip = async (bank: BankInfo) => {
+    setBusy(bank.id);
+    const res = await api.send<{ error?: string }>('POST', `bank/${bank.id}/active`, {
+      active: !bank.active,
+    });
+    setBusy(null);
+    if (!res.ok) return flash(res.data?.error ?? 'تعذّر التبديل');
+    flash(
+      bank.active
+        ? `أُلغي تفعيل «${bank.name}» — لا يُعرض لمن يُنشئ غرفة`
+        : `فُعِّل «${bank.name}» — وعاد إلى قائمة المنظّم`,
+    );
+    onChanged();
   };
 
   const remove = async (bank: BankInfo) => {
@@ -545,12 +572,21 @@ export function Shelf({
   return (
     <div className="grid gap-4">
       <StatRow>
-        <Stat lead label="بنوك" value={banks.length} unit={unit(banks.length, 'bank')} />
+        <Stat
+          lead
+          label="بنوك"
+          value={banks.length}
+          unit={unit(banks.length, 'bank')}
+        />
         <Stat label="أسئلة" value={total} unit={unit(total, 'question')} />
+        <Stat
+          label="مُلغاة"
+          value={banks.length - live}
+          tone={banks.length - live ? 'warn' : undefined}
+        />
         <Stat
           label="محذوفة"
           value={rows.length}
-          hint="تُحفظ بأسئلتها ثلاثين يوماً ثم تُنسى"
           tone={rows.length ? 'warn' : undefined}
         />
       </StatRow>
@@ -570,22 +606,35 @@ export function Shelf({
       */}
       <Panel
         title="البنوك"
-        hint="الحذف بضغطٍ مطوّل على أيقونة السلّة — ويُحفظ البنك بأسئلته فيُرجَع. ولا يُحذف آخر بنك، ولا بنكٌ تستعمله غرفةٌ قائمة."
       >
         <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {banks.map((bank) => (
             <article
               key={bank.id}
-              className="flex items-center gap-3 rounded-card bg-surface-2 px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--color-line)]"
+              data-off={!bank.active}
+              className="flex items-center gap-3 rounded-card bg-surface-2 px-4 py-3.5 shadow-[inset_0_0_0_1px_var(--color-line)] data-[off=true]:opacity-65"
             >
               <div className="min-w-0 flex-1">
-                <b className="block truncate text-[14.5px] font-black">{bank.name}</b>
+                <b className="flex items-center gap-1.5 text-[14.5px] font-black">
+                  {!bank.active && <LockIcon size={13} className="shrink-0 text-warn-ink" />}
+                  <span className="truncate">{bank.name}</span>
+                </b>
                 <span
                   dir="ltr"
                   className="mt-0.5 block truncate text-right font-mono text-[12px] text-faint"
                 >
                   {bank.id}
                 </span>
+                {/* سببُ الحجب يُقال في موضعه: «فارغ» ليس كـ«مُلغى» */}
+                {!bank.active ? (
+                  <span className="mt-1 block text-[11.5px] font-bold text-warn-ink">
+                    مُلغى — لا يُعرض في اللعبة
+                  </span>
+                ) : bank.count === 0 ? (
+                  <span className="mt-1 block text-[11.5px] font-bold text-muted">
+                    فارغ — لا يُعرض حتى يدخله سؤال
+                  </span>
+                ) : null}
               </div>
 
               <div className="shrink-0 text-center">
@@ -597,18 +646,40 @@ export function Shelf({
                 </span>
               </div>
 
-              {banks.length <= 1 ? (
-                <Badge>آخرُ بنك</Badge>
-              ) : busy === bank.id ? (
-                <span className="shrink-0 text-[12px] font-bold text-muted">يُحذف…</span>
+              {busy === bank.id ? (
+                <span className="shrink-0 text-[12px] font-bold text-muted">لحظة…</span>
               ) : (
-                <HoldButton
-                  bare
-                  tone="icon"
-                  glyph={<TrashIcon size={15} />}
-                  label={`احذف «${bank.name}» — ${say(bank.count, 'question')} تُحفظ ثلاثين يوماً`}
-                  onConfirm={() => void remove(bank)}
-                />
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => void flip(bank)}
+                    title={
+                      bank.active
+                        ? `إلغاء تفعيل «${bank.name}» — يُحجب عن اللعبة ويبقى في اللوحة`
+                        : `تفعيل «${bank.name}» — يعود إلى قائمة المنظّم`
+                    }
+                    aria-label={bank.active ? 'إلغاء التفعيل' : 'تفعيل'}
+                    className="flex size-8 items-center justify-center rounded-chip text-muted transition hover:bg-surface hover:text-ink"
+                  >
+                    {bank.active ? <LockIcon size={15} /> : <UnlockIcon size={15} />}
+                  </button>
+
+                  {banks.length <= 1 ? (
+                    <Badge>آخرُ بنك</Badge>
+                  ) : (
+                    <HoldButton
+                      bare
+                      tone="icon"
+                      glyph={<TrashIcon size={15} />}
+                      label={
+                        bank.count
+                          ? `احذف «${bank.name}» — ${say(bank.count, 'question')} تُحفظ ثلاثين يوماً`
+                          : `احذف «${bank.name}» — وهو فارغ`
+                      }
+                      onConfirm={() => void remove(bank)}
+                    />
+                  )}
+                </div>
               )}
             </article>
           ))}
@@ -616,7 +687,7 @@ export function Shelf({
       </Panel>
 
       {rows.length > 0 && (
-        <Panel title="البنوك المحذوفة" hint="تُرجَع بأسئلتها كما كانت، أو تُنسى قبل الثلاثين" flush>
+        <Panel title="البنوك المحذوفة" flush>
           {rows.map((row) => (
             <div key={row.id} className="border-b border-line-soft px-5 py-3.5 last:border-0">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -629,27 +700,28 @@ export function Shelf({
                     {say(row.count, 'question')} · حُذف {stamp(row.at)}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex shrink-0 items-center gap-1.5">
                   {row.restorable ? (
                     <button
                       type="button"
                       onClick={() => void restore(row)}
                       disabled={busy === String(row.id)}
-                      className="h-8 rounded-chip px-3.5 text-[12.5px] font-bold text-signal-ink shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-signal)_30%,transparent)] transition hover:bg-signal-2"
+                      title={`أرجِع «${row.name}» بأسئلته`}
+                      aria-label={`أرجِع «${row.name}» بأسئلته`}
+                      className="flex size-8 items-center justify-center rounded-chip text-signal-ink transition hover:bg-signal-2 disabled:opacity-50"
                     >
-                      {busy === String(row.id) ? 'يُرجَع…' : 'إرجاع البنك'}
+                      <RestoreIcon size={15} />
                     </button>
                   ) : (
                     <Badge tone="signal">أُرجع</Badge>
                   )}
-                  <div className="w-[150px]">
-                    <HoldButton
-                      bare
-                      label="انسَ نهائياً"
-                      hint="لا رجعة بعده"
-                      onConfirm={() => void forget(row)}
-                    />
-                  </div>
+                  <HoldButton
+                    bare
+                    tone="icon"
+                    glyph={<TrashIcon size={15} />}
+                    label={`انسَ «${row.name}» نهائياً — لا رجعة بعده`}
+                    onConfirm={() => void forget(row)}
+                  />
                 </div>
               </div>
             </div>
@@ -738,16 +810,14 @@ export function Edits({
           label="نسخٌ محفوظة"
           value={mine.length}
           unit={unit(mine.length, 'question')}
-          hint="تُحفظ ثلاثين يوماً ثم تُنسى"
         />
-        <Stat label="حُرِّرت" value={mine.length - deleted} hint="بُدِّل نصُّها أو خياراتها" />
+        <Stat label="حُرِّرت" value={mine.length - deleted} />
         <Stat
           label="حُذِفت"
           value={deleted}
           tone={deleted > 0 ? 'warn' : undefined}
-          hint="خرجت من البنك — وتُرجَع من هنا"
         />
-        <Stat label="إحصاءٌ مُحي" value={wiped} hint="عرضاتٌ ذهبت مع النصّ القديم" />
+        <Stat label="إحصاءٌ مُحي" value={wiped} />
       </StatRow>
 
       {shown.length === 0 ? (
@@ -819,9 +889,11 @@ export function Edits({
                     <button
                       type="button"
                       onClick={() => setAsk({ id: row.id, mode: 'restore' })}
-                      className="h-8 rounded-chip px-3.5 text-[12.5px] font-bold text-signal-ink shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-signal)_30%,transparent)] transition hover:bg-signal-2"
+                      title="أرجِع النسخة القديمة"
+                      aria-label="أرجِع النسخة القديمة"
+                      className="flex size-8 items-center justify-center rounded-chip text-signal-ink transition hover:bg-signal-2"
                     >
-                      إرجاع القديم
+                      <RestoreIcon size={15} />
                     </button>
                   ) : (
                     <Badge tone="signal">أُرجع القديم</Badge>
@@ -830,8 +902,8 @@ export function Edits({
                   <button
                     type="button"
                     onClick={() => setAsk({ id: row.id, mode: 'delete' })}
-                    title="حذف هذا السجلّ من الأرشيف"
-                    aria-label="حذف هذا السجلّ من الأرشيف"
+                    title="احذف هذا السجلّ من الأرشيف"
+                    aria-label="احذف هذا السجلّ من الأرشيف"
                     className="flex size-8 shrink-0 items-center justify-center rounded-chip text-danger transition hover:bg-danger-2"
                   >
                     <TrashIcon size={15} />

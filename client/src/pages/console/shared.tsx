@@ -85,6 +85,8 @@ const UNITS = {
   comment: { one: 'تعليق', two: 'تعليقان', few: 'تعليقات', many: 'تعليقاً' },
   bank: { one: 'بنك', two: 'بنكان', few: 'بنوك', many: 'بنكاً' },
   rating: { one: 'تقييم', two: 'تقييمان', few: 'تقييمات', many: 'تقييماً' },
+  note: { one: 'ملاحظة', two: 'ملاحظتان', few: 'ملاحظات', many: 'ملاحظة' },
+  line: { one: 'سطر', two: 'سطران', few: 'سطور', many: 'سطراً' },
 } as const;
 
 export type Unit = keyof typeof UNITS;
@@ -219,7 +221,6 @@ export function Stat({
   label,
   value,
   unit: unitText,
-  hint,
   tone,
   lead,
   onClick,
@@ -227,7 +228,6 @@ export function Stat({
   label: string;
   value: number | string;
   unit?: string;
-  hint?: React.ReactNode;
   tone?: 'safe' | 'danger' | 'warn';
   lead?: boolean;
   onClick?: () => void;
@@ -271,13 +271,6 @@ export function Stat({
             {unitText}
           </span>
         )}
-      </span>
-      <span
-        className={`mt-1.5 block text-[12.5px] leading-snug font-medium ${
-          lead ? 'text-white/70' : 'text-faint'
-        }`}
-      >
-        {hint ?? ' '}
       </span>
     </Box>
   );
@@ -677,7 +670,7 @@ export function QuestionEditor({
   return (
     <Modal
       title={questionId ? 'تحرير سؤال' : 'سؤال جديد'}
-      hint={bankName ? `بنك ${bankName} · يُفحص وأنت تكتب` : 'يُفحص وأنت تكتب'}
+      hint={bankName}
       onClose={onClose}
       footer={
         <>

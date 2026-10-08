@@ -301,6 +301,21 @@ export const RestoreIcon = (p: IconProps) => (
   <Icon {...p}><path d="M3 9h11a5 5 0 1 1 0 10H7" /><path d="M7 5L3 9l4 4" /></Icon>
 );
 
+/* قفلٌ مغلق: بنكٌ أُلغي تفعيلُه — يُقرأ في الشريط بلا كلمة */
+export const LockIcon = (p: IconProps) => (
+  <Icon {...p}><rect x="4" y="11" width="16" height="10" rx="2.2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></Icon>
+);
+
+/* وقفلٌ مفتوح: يُفعَّل البنك فيعود إلى قائمة المنظّم */
+export const UnlockIcon = (p: IconProps) => (
+  <Icon {...p}><rect x="4" y="11" width="16" height="10" rx="2.2" /><path d="M8 11V7a4 4 0 0 1 7.5-2" /></Icon>
+);
+
+/* صندوقٌ بسهمٍ داخل: استيرادُ دفعةٍ من لصقٍ أو ملف */
+export const ImportIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M12 3v10" /><path d="M8 9l4 4 4-4" /><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" /></Icon>
+);
+
 export const PanelIcon = (p: IconProps) => (
   <Icon {...p}><rect x="3" y="4" width="18" height="16" rx="2.4" /><path d="M14.5 4v16" /></Icon>
 );

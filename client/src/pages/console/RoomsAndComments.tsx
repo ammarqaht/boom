@@ -117,7 +117,6 @@ export function Rooms({ api, sift, onCounts, reloadKey }: Props) {
   const players = all.reduce((n, r) => n + r.players, 0);
   const rounds = all.reduce((n, r) => n + r.rounds, 0);
   const totalMs = all.reduce((n, r) => n + (r.playedMs ?? 0), 0);
-  const played = all.filter((r) => r.playedMs !== null).length;
 
   return (
     <div className="grid gap-4">
@@ -127,21 +126,18 @@ export function Rooms({ api, sift, onCounts, reloadKey }: Props) {
           label="الغرف"
           value={all.length}
           unit={unit(all.length, 'room')}
-          hint={played === all.length && all.length ? 'كلّها لُعبت فعلاً' : `${played} منها لُعبت`}
         />
         <Stat
           label="اللاعبون"
           value={players}
           unit={unit(players, 'player')}
-          hint={all.length ? `${(players / all.length).toFixed(1)} في الغرفة` : undefined}
         />
         <Stat
           label="الجولات"
           value={rounds}
           unit={unit(rounds, 'round')}
-          hint={all.length ? `${(rounds / all.length).toFixed(1)} في الغرفة` : undefined}
         />
-        <Stat label="زمن اللعب" value={span(totalMs)} hint="من انطلاق أول جولة إلى آخر أثر" />
+        <Stat label="زمن اللعب" value={span(totalMs)} />
       </StatRow>
 
       <Panel
@@ -149,11 +145,6 @@ export function Rooms({ api, sift, onCounts, reloadKey }: Props) {
           shown.length === all.length
             ? say(all.length, 'room')
             : `${shown.length} من ${say(all.length, 'room')}`
-        }
-        hint={
-          sift.range
-            ? `${day(sift.range.from)} — ${day(sift.range.to)}`
-            : 'السجلّ كامل — ولا تُحذف غرفةٌ إلا بيدك'
         }
         flush
       >
@@ -350,10 +341,6 @@ function DeleteRoom({
                 <li>الأسئلةُ نفسها في بنوكها</li>
                 <li>ما قاسته الغرفُ الأخرى على تلك الأسئلة</li>
               </ul>
-              <p className="mt-2.5 text-[12px] leading-relaxed font-medium text-faint">
-                الإحصاء مجموعُ الغرف، ونصيبُ كلِّ غرفةٍ منه مسجَّلٌ على حدة — فيُطرح نصيبُها
-                وحده ويبقى الباقي. وغرفةٌ لُعبت قبل أن يُسجَّل التفصيل لا يُطرح عنها شيء.
-              </p>
             </div>
           </div>
         )}
@@ -419,7 +406,6 @@ export function Comments({ api, sift, onCounts, reloadKey }: Props) {
     ? rated.reduce((n, r) => n + (r.stars ?? 0), 0) / rated.length
     : null;
   const low = all.filter((r) => (r.stars ?? 5) <= 2).length;
-  const written = all.filter((r) => r.note).length;
 
   return (
     <div className="grid gap-4">
@@ -429,27 +415,21 @@ export function Comments({ api, sift, onCounts, reloadKey }: Props) {
           label="التعليقات"
           value={all.length}
           unit={unit(all.length, 'comment')}
-          hint={
-            written === all.length && all.length ? 'كلّها فيها نصّ' : `${written} منها فيها نصّ`
-          }
         />
         <Stat
           label="متوسط التقييم"
           value={average === null ? '—' : average.toFixed(1)}
           unit={average === null ? '' : 'من 5'}
           tone={average !== null && average >= 4 ? 'safe' : undefined}
-          hint={`${say(rated.length, 'rating')} بالنجوم`}
         />
         <Stat
           label="تقييمٌ منخفض"
           value={low}
           tone={low > 0 ? 'warn' : undefined}
-          hint="نجمتان فأقلّ — اقرأها أولاً"
         />
         <Stat
           label="من اللاعبين"
           value={all.filter((r) => r.byRole === 'player').length}
-          hint="باسم الفريق لا باسم اللاعب"
         />
       </StatRow>
 
