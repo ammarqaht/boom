@@ -348,8 +348,7 @@ function Lobby({ code, qr, teams }: { code: string; qr: string; teams: PublicTea
           <p className="text-[34px] font-medium text-muted">
             امسح الرمز أو افتح <span className="font-black text-ink">{location.host}/play</span>
           </p>
-          <p className="mt-4 text-[34px] font-medium text-muted">ثم أدخل رمز الغرفة</p>
-          <div className="tnum mt-2 text-[150px] leading-none font-black tracking-[0.1em] text-signal">
+          <div className="tnum mt-6 text-[150px] leading-none font-black tracking-[0.1em] text-signal">
             {code}
           </div>
         </div>
@@ -526,7 +525,6 @@ function FlatlineMoment({ name, leaving }: { name: string; leaving: boolean }) {
         <div className="relative text-center">
           <p className="text-[34px] font-bold tracking-[0.2em] text-danger">توقف النبض</p>
           <h2 className="thump mt-3 text-[132px] leading-none font-black">{name}</h2>
-          <p className="mt-5 text-[32px] font-medium text-muted">وانتهت الجولة على الجميع</p>
         </div>
         <span className="relative block h-1.5 w-full rounded-full bg-danger" aria-hidden="true" />
       </div>

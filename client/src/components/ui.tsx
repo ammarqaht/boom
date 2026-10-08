@@ -709,7 +709,7 @@ export interface MenuAction {
   icon?: ReactNode;
   onClick: () => void;
   /** فعل لا رجعة فيه: يحتاج ضغطاً مستمراً بدل نقرة */
-  hold?: string;
+  hold?: boolean;
 }
 
 /**
@@ -778,7 +778,6 @@ export function Menu({ actions }: { actions: MenuAction[] }) {
               <HoldButton
                 key={action.label}
                 label={action.label}
-                hint={action.hold}
                 onConfirm={() => {
                   setOpen(false);
                   action.onClick();
@@ -1049,10 +1048,9 @@ export function Segmented<T extends string>({
   onPick,
 }: {
   value: T;
-  options: { id: T; label: string; hint: string }[];
+  options: { id: T; label: string }[];
   onPick: (id: T) => void;
 }) {
-  const picked = options.find((o) => o.id === value);
   return (
     <div>
       <div
@@ -1074,7 +1072,6 @@ export function Segmented<T extends string>({
           </button>
         ))}
       </div>
-      {picked && <p className="mt-2 text-xs leading-relaxed text-muted">{picked.hint}</p>}
     </div>
   );
 }

@@ -417,7 +417,6 @@ export function Countdown({ ms, leaving }: { ms: number; leaving?: boolean }) {
       >
         {seconds}
       </div>
-      <p className="mt-4 font-medium text-muted">الجولة على وشك أن تبدأ</p>
     </div>
   );
 }

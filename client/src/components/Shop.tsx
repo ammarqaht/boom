@@ -226,8 +226,7 @@ export function Shop({ shop, score }: { shop: ShopData; score: number }) {
       })}
 
       <p className="pt-1 text-center text-xs font-medium text-muted">
-        رصيدك <b className="tnum text-ink">{score}</b> {pointsWord(score)} · نقطةٌ لك عن كل إجابة
-        صحيحة
+        رصيدك <b className="tnum text-ink">{score}</b> {pointsWord(score)}
         {pendingNames.length > 0 && (
           <>
             {' '}

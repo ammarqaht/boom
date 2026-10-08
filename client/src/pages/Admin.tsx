@@ -669,8 +669,7 @@ function Console({
                   <div className="tile flex flex-col items-center gap-2.5 px-3 py-7 text-center sm:gap-3 sm:px-4 sm:py-10">
                     <PulseMark size={26} className="text-faint" />
                     <p className="text-muted">
-                      لم ينضم أحد بعد — شارك الرمز{' '}
-                      <b className="tnum font-black tracking-[0.14em] text-signal">{room.code}</b>
+                      لم ينضم أحد بعد
                     </p>
                   </div>
                 ) : (
@@ -700,7 +699,7 @@ function Console({
                   <div className="mt-1 flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 rounded-card border-[1.5px] border-dashed border-line-2 px-3 py-3.5 text-center text-[12.5px] font-medium text-muted sm:gap-x-3 sm:px-4 sm:py-5 sm:text-[13.5px]">
                     <span className="flex items-center gap-2">
                       <PulseMark size={18} className="text-signal-ink" />
-                      بابُ الانضمام مفتوح — شارك الرمز
+                      بابُ الانضمام مفتوح
                     </span>
                     <b dir="ltr" className="tnum font-black tracking-[0.2em] text-signal-ink">
                       {room.code}
@@ -806,7 +805,7 @@ function Console({
              * النتيجة وهو يدير الجولة الجديدة، فلا تُسحب من تحت يده.
              */}
             <Panel
-              title={last ? `تفاصيل الجولة ${last.round}` : 'تفاصيل آخر جولة'}
+              title="تفاصيل آخر جولة"
             >
               {last ? (
                 <ResultBars awards={last.awards} />
@@ -833,11 +832,6 @@ function Console({
           onClose={() => setConfirmEnd(false)}
         >
           <div className="grid gap-4">
-            <p className="text-[15px] leading-relaxed text-ink-2">
-              يظهر الترتيب النهائي على الشاشات كلّها، ولا جولةَ بعدها —{' '}
-              <b className="font-black text-ink">إلا ببدءٍ من جديد</b>.
-            </p>
-
             <div className="flex flex-wrap items-center gap-2.5">
               <Button
                 onClick={() => {
@@ -1104,7 +1098,6 @@ function RoundPanel({
           bare
           tone="action"
           label="بدء من جديد"
-          hint="تُصفَّر نقاط اللاعبين وتعود الجولة إلى الأولى — وسجلّ الغرفة يبقى كما هو."
           onConfirm={onRestart}
         />
       ) : (
@@ -1183,10 +1176,6 @@ function RoundPanel({
        * الاختصار لا يُخمَّن: من لم يُخبَر به لن يجده — لكنه خبرٌ لمن له
        * لوحةُ مفاتيح. وعلى الجوال سطرٌ يشغل ولا يُفيد، فيُطوى دون sm.
        */}
-      <p className="mt-1.5 hidden text-[11px] font-medium text-faint sm:block">
-        <b className="font-black">مسافة</b> إيقاف واستئناف · <b className="font-black">Enter</b> بدء
-        الجولة
-      </p>
     </section>
   );
 }

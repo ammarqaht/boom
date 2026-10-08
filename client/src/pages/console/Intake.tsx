@@ -277,7 +277,7 @@ export default function Intake({
               ))}
               {report.rows.length > 40 && (
                 <p className="px-4 py-2.5 text-[12.5px] font-bold text-faint">
-                  و{report.rows.length - 40} سؤالاً غيرها تدخل كما تدخل هذه
+                  و{report.rows.length - 40} غيرها
                 </p>
               )}
             </div>

@@ -629,11 +629,11 @@ export function Shelf({
                 {/* سببُ الحجب يُقال في موضعه: «فارغ» ليس كـ«مُلغى» */}
                 {!bank.active ? (
                   <span className="mt-1 block text-[11.5px] font-bold text-warn-ink">
-                    مُلغى — لا يُعرض في اللعبة
+                    مُلغى
                   </span>
                 ) : bank.count === 0 ? (
                   <span className="mt-1 block text-[11.5px] font-bold text-muted">
-                    فارغ — لا يُعرض حتى يدخله سؤال
+                    فارغ
                   </span>
                 ) : null}
               </div>
@@ -656,8 +656,8 @@ export function Shelf({
                     onClick={() => void flip(bank)}
                     title={
                       bank.active
-                        ? `إلغاء تفعيل «${bank.name}» — يُحجب عن اللعبة ويبقى في اللوحة`
-                        : `تفعيل «${bank.name}» — يعود إلى قائمة المنظّم`
+                        ? `إلغاء تفعيل «${bank.name}»`
+                        : `تفعيل «${bank.name}»`
                     }
                     aria-label={bank.active ? 'إلغاء التفعيل' : 'تفعيل'}
                     className="flex size-8 items-center justify-center rounded-chip text-muted transition hover:bg-surface hover:text-ink"

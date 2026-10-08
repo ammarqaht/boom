@@ -376,7 +376,7 @@ export default function Play() {
     {
       label: 'الخروج من اللعبة',
       icon: <ExitIcon size={17} />,
-      hold: 'تخرج من الغرفة وتحتاج إلى الانضمام من جديد.',
+      hold: true,
       onClick: () => {
         clearSession();
         location.href = '/';
@@ -873,10 +873,10 @@ function RoundEnd({
     : names.length === 0
       ? null
       : names.length === 1
-        ? `${names[0]} توقّف نبضه — فانتهت الجولة`
+        ? `${names[0]} توقّف نبضه`
         : names.length === 2
-          ? `${names[0]} و${names[1]} توقّف نبضهما — فانتهت الجولة`
-          : `${names[0]} و${names.length - 1} غيره توقّف نبضهم — فانتهت الجولة`;
+          ? `${names[0]} و${names[1]} توقّف نبضهما`
+          : `${names[0]} و${names.length - 1} غيره توقّف نبضهم`;
 
   /*
    * صفحةٌ واحدة تجري كلها: كان الرأس والتبويبان ثابتين ولا يجري إلا ما

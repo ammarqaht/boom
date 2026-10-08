@@ -1062,7 +1062,6 @@ function Gate({ current, onKey }: { current: string; onKey: (key: string) => voi
           <PulseIcon size={24} />
         </span>
         <h1 className="mt-4 text-center text-[19px] font-black">نبضة — لوحة المالك</h1>
-        <p className="mt-1 text-center text-[13px] font-medium text-muted">هذا الباب للمالك وحده</p>
 
         <label className="mt-6 block text-[12.5px] font-bold text-ink-2">المفتاح السرّي</label>
         <input

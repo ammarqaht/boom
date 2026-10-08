@@ -333,13 +333,11 @@ const ROLES = [
     to: '/display',
     Icon: ScreenIcon,
     title: 'شاشة العرض',
-    desc: 'على البروجكتر — القاعة تتابع النبضات وهي تخفت',
   },
   {
     to: '/admin',
     Icon: SlidersIcon,
     title: 'لوحة المنظّم',
-    desc: 'أنشئ الغرفة، أطلق الجولات، وتحكّم في المصير',
   },
 ];
 
@@ -434,9 +432,6 @@ export default function Home() {
             </button>
           </form>
 
-          <p className="gate-note">
-            الرمز عند منظّم الجلسة، أو امسح الرمز المعروض على الشاشة الكبيرة.
-          </p>
 
           <a href="#rules" className="hero-cue" aria-label="كيف تُلعب">
             <span className="hero-cue-rail" aria-hidden="true">
@@ -460,27 +455,18 @@ export default function Home() {
               <span className="seat-icon">
                 <UsersIcon size={24} />
               </span>
-              <span>
-                <b className="block text-xl font-black">انضمّ كلاعب</b>
-                <span className="mt-1 block text-sm leading-relaxed text-muted">
-                  افتحها على جهازك، أدخل الرمز، واستعدّ للضغط
-                </span>
-              </span>
+              <b className="block text-xl font-black">انضمّ كلاعب</b>
             </Link>
           </Reveal>
 
           <Reveal delay={100}>
-            <p className="seat-aside">تنظّم الجلسة؟ هاتان الشاشتان مكانهما اللابتوب والبروجكتر.</p>
             <div className="grid gap-3 sm:grid-cols-2">
-              {ROLES.map(({ to, Icon, title, desc }) => (
+              {ROLES.map(({ to, Icon, title }) => (
                 <Link key={to} to={to} className="tap seat-side" onClick={tap}>
                   <span className="seat-side-icon">
                     <Icon size={20} />
                   </span>
-                  <span>
-                    <b className="block font-black">{title}</b>
-                    <span className="mt-0.5 block text-sm leading-relaxed text-muted">{desc}</span>
-                  </span>
+                  <b className="block font-black">{title}</b>
                 </Link>
               ))}
             </div>
