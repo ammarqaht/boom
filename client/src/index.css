@@ -968,24 +968,6 @@ textarea {
  */
 
 /*
- * البطل يملأ الشاشة — بـdvh لا vh.
- *
- * وvh على الجوال يقيس الشاشة وشريطُ المتصفّح فوقها، فيقع حقل الرمز
- * تحت الطيّة في اللحظة الأولى من الفتح — وهي اللحظة التي جاء لها.
- * وطرحُ ٥rem لأن النافبار فوقه: البطل والنافبار شاشةٌ واحدة.
- */
-.hero {
-  position: relative;
-  display: flex;
-  min-height: calc(100dvh - 5rem);
-  flex-direction: column;
-  justify-content: center;
-  gap: 1.75rem;
-  padding-block: 2rem;
-  /* قصّةُ الآيفون وشريط الهوم: الزرّ لا يُدفن تحتهما */
-  padding-bottom: max(2.5rem, env(safe-area-inset-bottom));
-}
-/*
  * مجرى البطل يملأ عرض الشاشة.
  *
  * كان محبوساً في ‎max-w-6xl‎ مع بقيّة المحتوى، فيقف الخطُّ على بعد مئتي
@@ -1111,189 +1093,317 @@ textarea {
   cursor: not-allowed;
   opacity: 0.35;
 }
-.gate-note {
-  margin-inline: auto;
-  max-width: 34ch;
-  text-align: center;
-  font-size: 0.8125rem;
-  line-height: 1.7;
+
+.home-bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--color-line);
+  background: color-mix(in srgb, var(--color-ground) 86%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+.home-link {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  border-radius: var(--radius-chip);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 700;
   color: var(--color-muted);
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+}
+.home-link:hover {
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+.home-ghost,
+.home-make {
+  display: inline-flex;
+  height: 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-chip);
+  padding-inline: 0.875rem;
+  font-size: 0.9375rem;
+  font-weight: 900;
+}
+.home-ghost {
+  color: var(--color-ink-2);
+  box-shadow: inset 0 0 0 1px var(--color-line-2);
+}
+.home-ghost:hover {
+  background: var(--color-surface-2);
+}
+.home-make {
+  background: var(--color-action);
+  color: var(--color-on-action);
+}
+.home-make:hover {
+  filter: brightness(1.1);
 }
 
-/*
- * دعوةُ التمرير.
- *
- * كل ما يشرح اللعبة تحت الطيّة، والبطل يملأ الشاشة فلا يُرى تحته شيء
- * يوحي بأن ثمّ شيئاً. فنبضةٌ تسقط في سكّة: حركةٌ صغيرة إلى أسفل تقول
- * «هنا مزيد» بلا سهمٍ ولا كلمة «اسحب».
- */
-.hero-cue {
-  position: absolute;
-  inset-inline: 0;
-  bottom: max(0.5rem, env(safe-area-inset-bottom));
+.home-hero {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.625rem;
-  font-size: 0.6875rem;
-  font-weight: 900;
-  letter-spacing: 0.18em;
-  color: var(--color-faint);
+  gap: 1.5rem;
+  padding-block: 1.25rem 3rem;
 }
-.hero-cue-rail {
-  position: relative;
-  height: 2.25rem;
-  width: 1px;
-  overflow: hidden;
-  background: var(--color-line-2);
-}
-.hero-cue-dot {
-  position: absolute;
-  inset-inline: 0;
-  height: 0.875rem;
-  background: var(--color-signal);
-  animation: cue-fall 2s ease-in-out infinite;
-}
-@keyframes cue-fall {
-  0% {
-    opacity: 0;
-    transform: translateY(-0.875rem);
-  }
-  30% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(2.25rem);
+@media (min-width: 640px) {
+  .home-hero {
+    gap: 2rem;
+    padding-block: 2rem 4.5rem;
   }
 }
 
-/*
- * الكشف عند التمرير.
- *
- * transform وopacity وحدهما — فلا تخطيط ولا طلاء، وتبقى الصفحة عند
- * ستّين إطاراً وهي تُمرَّر بالإبهام.
- */
-.reveal {
-  opacity: 0;
-  transform: translateY(18px);
-  transition:
-    opacity 0.7s ease,
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
-  transition-delay: var(--d, 0ms);
-}
-.reveal.is-in {
-  opacity: 1;
-  transform: none;
-}
-
-/* ── القاعدة الواحدة: عرضٌ حيّ وكلامٌ يعلّق عليه ── */
-.rule {
+.doors {
   display: grid;
-  align-items: center;
-  gap: 1.75rem;
-  border-bottom: 1px solid var(--color-line);
-  padding-block: 3.5rem;
+  width: 100%;
+  max-width: 34rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem;
+}
+.door-join {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 0.625rem;
 }
 @media (min-width: 1024px) {
-  .rule {
-    grid-template-columns: 1fr 1fr;
-    gap: 4rem;
-    padding-block: 5rem;
+  .doors {
+    max-width: 60rem;
+    grid-template-columns: 1.7fr 1fr 1fr;
+  }
+  .door-join {
+    grid-column: auto;
   }
 }
-.rule-n {
-  display: block;
-  font-size: 0.75rem;
+.door-make,
+.door-show {
+  display: flex;
+  height: 4rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  border-radius: var(--radius-chip);
+  font-size: 1.0625rem;
+  font-weight: 900;
+  transition:
+    filter 0.15s ease,
+    background 0.15s ease;
+}
+.door-make {
+  background: var(--color-action);
+  color: var(--color-on-action);
+}
+.door-make:hover {
+  filter: brightness(1.1);
+}
+.door-show {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  box-shadow: inset 0 0 0 1px var(--color-line-2);
+}
+.door-show:hover {
+  background: var(--color-surface-2);
+}
+.door-join .gate-go {
+  background: var(--color-surface-2);
+  color: var(--color-ink);
+  box-shadow: inset 0 0 0 1px var(--color-line-2);
+}
+.door-join .gate-go:not(:disabled) {
+  background: var(--color-signal-2);
+  color: var(--color-signal-ink);
+  box-shadow: inset 0 0 0 1px var(--color-signal);
+}
+
+.home-try {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--radius-chip);
+  padding-block: 0.5rem;
+  padding-inline: 0.5rem 1.25rem;
+  font-weight: 900;
+  color: var(--color-ink);
+  box-shadow: inset 0 0 0 1px var(--color-line-2);
+  transition: background 0.15s ease;
+}
+.home-try:hover {
+  background: var(--color-surface);
+}
+.home-try-dot {
+  position: relative;
+  display: flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-signal);
+  color: var(--color-on-signal);
+}
+.home-try-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  animation: try-ping 2.2s var(--ease-monitor) infinite;
+}
+@keyframes try-ping {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-signal) 60%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+
+.home-sec {
+  scroll-margin-top: 5rem;
+  border-top: 1px solid var(--color-line);
+  padding-block: 3rem;
+}
+@media (min-width: 1024px) {
+  .home-sec {
+    padding-block: 4.5rem;
+  }
+}
+.home-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1.5rem;
+}
+.home-n {
+  font-size: 0.8125rem;
   font-weight: 900;
   letter-spacing: 0.14em;
   color: var(--color-signal);
 }
-.rule-title {
-  margin-top: 0.5rem;
-  font-size: clamp(1.5rem, 5.5vw, 2rem);
+.home-title {
+  font-size: clamp(1.625rem, 6vw, 2.25rem);
   font-weight: 900;
-  line-height: 1.3;
+  line-height: 1.2;
 }
-.rule-desc {
-  margin-top: 0.75rem;
-  max-width: 42ch;
-  line-height: 1.85;
-  color: var(--color-muted);
+.home-rules {
+  display: flex;
+  gap: 0.5rem;
+  margin-inline-start: auto;
+}
+.home-rules > span {
+  display: inline-flex;
+  height: 2.25rem;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-chip);
+  background: var(--color-surface);
+  padding-inline: 0.75rem;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 1px var(--color-line);
 }
 
-/* ── سطح العرض: لوحُ جهازٍ يعمل، لا بطاقةُ زينة ── */
-.scene {
+.demo {
+  position: relative;
+  display: grid;
+  gap: 1rem;
+  overflow: hidden;
+  border: 1px solid var(--color-line-2);
+  border-radius: var(--radius-card);
+  background: var(--color-sunk);
+  padding: 1rem;
+}
+@media (min-width: 1024px) {
+  .demo {
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    gap: 2rem;
+    padding: 1.75rem;
+  }
+  .demo-clock {
+    display: block;
+  }
+  .demo-play {
+    min-height: 21rem;
+  }
+}
+.demo-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.demo-board {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-card);
-  background: var(--color-surface);
-  padding: 1.25rem;
+  gap: 0.375rem;
 }
-.scene-foot {
+.demo-row {
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--radius-chip);
+  background: var(--color-surface);
+  padding: 0.25rem 0.75rem;
+  transition: opacity 0.3s ease;
 }
-.scene-readout {
-  font-size: clamp(2rem, 9vw, 2.75rem);
-  font-weight: 900;
-  line-height: 1;
-  color: var(--color-signal);
+.demo-row.is-me {
+  box-shadow: inset 0 0 0 1.5px var(--color-signal);
 }
-.scene-tag {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--color-muted);
+.demo-row.is-flat {
+  opacity: 0.55;
 }
-.scene-name {
+.demo-name {
   width: 3.5rem;
   flex-shrink: 0;
-  font-size: 0.8125rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 900;
   color: var(--color-ink-2);
 }
-.scene-mini {
+.demo-row.is-me .demo-name {
+  color: var(--color-signal);
+}
+.demo-time {
+  display: flex;
   width: 2.75rem;
   flex-shrink: 0;
-  text-align: end;
-  font-size: 0.875rem;
+  justify-content: flex-end;
   font-weight: 900;
-  color: var(--color-ink-2);
+  color: var(--color-ink);
 }
-.scene-verdict {
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: var(--color-muted);
-  transition: color 0.3s ease;
-}
-.scene-verdict.is-on {
+.demo-row.is-flat .demo-time {
   color: var(--color-danger);
 }
-
-/*
- * الزيادة والنقصان: رقمٌ يطفو من المجرى ثم يذهب.
- *
- * ولا يمكث إلا ثانيةً وربعاً: ما زاد على ذلك يصير زينةً تُرى في كل
- * دورةٍ فتُملّ، والمطلوب أن يُقرأ مرّةً فيُفهم.
- */
-.scene-jolt {
+.demo-jolt {
   position: absolute;
-  inset-inline-start: 0.875rem;
+  inset-inline-start: 0.5rem;
   top: 50%;
+  margin-top: -0.75rem;
+  display: flex;
+  align-items: center;
   font-size: 1.25rem;
   font-weight: 900;
+  line-height: 1.5rem;
+  pointer-events: none;
   animation: jolt 1.25s ease-out forwards;
 }
-.scene-jolt.is-up {
-  --dir: -1.75rem;
+.demo-jolt.is-up {
+  --dir: -1.5rem;
   color: var(--color-safe);
 }
-.scene-jolt.is-down {
-  --dir: 1.75rem;
+.demo-jolt.is-down {
+  --dir: 1.5rem;
   color: var(--color-danger);
+}
+.demo-jolt.is-hold {
+  --dir: -1.5rem;
+  color: var(--color-signal);
 }
 @keyframes jolt {
   0% {
@@ -1308,105 +1418,328 @@ textarea {
     transform: translateY(var(--dir));
   }
 }
-
-/*
- * صفوف الترتيب: الخطوة الأولى بترتيب القاعة، ثم تنتقل إلى ترتيب
- * النتيجة. والانتقال بـtransform لا بإعادة ترتيب العقد — فالعين
- * تتبع الصفّ وهو يصعد، ولو أُعيد بناء القائمة لوجدته مكانه فجأة.
- */
-.rank-box {
-  --row: 3.25rem;
+.demo-play {
+  display: flex;
+  min-height: 19rem;
+  flex-direction: column;
+  justify-content: center;
+}
+.demo-center {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 1rem;
 }
-.rank-row {
+.demo-start {
+  display: flex;
+  height: 5.5rem;
+  width: 5.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-action);
+  color: var(--color-on-action);
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--color-signal) 14%, transparent);
+}
+.demo-count {
+  font-size: 6rem;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--color-signal);
+}
+.demo-clock {
+  display: none;
+  text-align: center;
+  font-size: 3.25rem;
+  font-weight: 900;
+  line-height: 1;
+}
+.demo-q {
+  display: flex;
+  min-height: 5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  text-align: center;
+  font-size: 1.125rem;
+  font-weight: 700;
+  line-height: 1.6;
+}
+.demo-opt {
+  min-height: 4.25rem;
+  padding: 0.625rem 0.875rem;
+  font-size: 1rem;
+  font-weight: 900;
+  line-height: 1.35;
+}
+.demo-medal {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-chip);
+  background: var(--color-surface);
+  color: var(--color-muted);
+}
+.demo-medal.is-win {
+  background: var(--color-signal-2);
+  color: var(--color-signal);
+}
+.demo-result {
   display: flex;
   height: 2.75rem;
   align-items: center;
   gap: 0.75rem;
   border-radius: var(--radius-chip);
-  background: var(--color-surface-2);
+  background: var(--color-surface);
   padding-inline: 0.875rem;
-  transition:
-    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.4s ease;
-  will-change: transform;
 }
-.rank-row.is-top {
-  box-shadow: inset 0 0 0 1px var(--color-signal);
+.demo-result.is-me {
+  box-shadow: inset 0 0 0 1.5px var(--color-signal);
 }
-.rank-pos {
+.demo-pos {
   width: 1.25rem;
-  font-size: 0.875rem;
   font-weight: 900;
   color: var(--color-faint);
 }
-.rank-row.is-top .rank-pos {
+.demo-pts {
+  min-width: 2rem;
+  text-align: end;
+  font-size: 1.125rem;
+  font-weight: 900;
   color: var(--color-signal);
 }
-.rank-name {
-  flex: 1;
-  font-size: 0.9375rem;
-  font-weight: 700;
-}
-.rank-pts {
-  font-size: 1rem;
-  font-weight: 900;
-  color: var(--color-ink-2);
-}
 
-/* ── المكان: اللاعب أوّلاً ── */
-.seat {
+.lab {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 1024px) {
+  .lab {
+    grid-template-columns: 1.25fr 1fr;
+    align-items: start;
+    gap: 1.5rem;
+  }
+}
+.lab-stage {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 1rem;
   border: 1px solid var(--color-line-2);
   border-radius: var(--radius-card);
-  background: var(--color-surface);
-  padding: 1.25rem 1.5rem;
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    transform 0.12s ease;
+  background: var(--color-sunk);
+  padding: 1rem;
 }
-.seat:hover {
-  background: var(--color-surface-2);
+@media (min-width: 640px) {
+  .lab-stage {
+    padding: 1.5rem;
+  }
 }
-.seat-icon {
+.lab-row {
   display: flex;
-  height: 3rem;
-  width: 3rem;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: 0.5rem 0.875rem;
+  transition:
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+.lab-name {
+  width: 3.25rem;
   flex-shrink: 0;
+  font-weight: 900;
+  color: var(--color-ink-2);
+}
+.lab-dark {
+  border-radius: var(--radius-chip);
+  background: var(--color-ground);
+}
+.lab-side {
+  display: flex;
+  min-width: 3.5rem;
+  flex-shrink: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+.lab-mark {
+  display: flex;
+  height: 1.5rem;
+  width: 1.5rem;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-chip);
+  border-radius: 999px;
   background: var(--color-surface-2);
-  color: var(--color-muted);
 }
-.seat-title {
+.lab-time {
+  white-space: nowrap;
   font-size: 1.125rem;
   font-weight: 900;
 }
-.seat-lead {
-  border-color: color-mix(in srgb, var(--color-signal) 55%, transparent);
+.lab-read {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  border-top: 1px solid var(--color-line);
+  padding-top: 1rem;
 }
-.seat-lead .seat-icon {
-  background: var(--color-signal-2);
-  color: var(--color-signal);
+.lab-big {
+  display: flex;
+  height: 3.5rem;
+  width: 3.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+}
+.lab-stats {
+  display: flex;
+  width: 100%;
+  gap: 0.5rem;
 }
 @media (min-width: 640px) {
-  .seat {
-    flex-direction: column;
-    justify-content: center;
-    gap: 0.875rem;
-    padding: 2rem 1.25rem;
-    text-align: center;
+  .lab-stats {
+    width: auto;
   }
-  .seat-icon {
-    height: 3.5rem;
-    width: 3.5rem;
+}
+.lab-stats > span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  border-radius: var(--radius-chip);
+  background: var(--color-surface);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--color-muted);
+}
+.lab-stats b {
+  font-size: 1.125rem;
+  font-weight: 900;
+  color: var(--color-ink);
+}
+.lab-deck {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.lab-card {
+  position: relative;
+  display: flex;
+  min-height: 6.5rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: var(--radius-card);
+  background-color: var(--color-surface);
+  padding: 0.625rem 0.25rem;
+  box-shadow: inset 0 0 0 1px var(--color-line);
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.12s ease;
+}
+.lab-card:hover {
+  background-color: var(--color-surface-2);
+}
+.lab-card.is-on {
+  box-shadow:
+    inset 0 0 0 2px var(--color-signal),
+    0 0 26px -10px var(--color-signal);
+}
+.lab-card-name {
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 900;
+  line-height: 1.3;
+}
+.lab-card-price {
+  font-size: 0.75rem;
+  font-weight: 900;
+  color: var(--color-gold);
+}
+@media (min-width: 640px) {
+  .lab-card-name {
+    font-size: 0.875rem;
   }
+}
+
+.hall {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-radius: var(--radius-card);
+  background: var(--color-surface);
+  padding: 1rem;
+  box-shadow: inset 0 0 0 1px var(--color-line);
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.12s ease;
+}
+.hall:hover {
+  background: var(--color-surface-2);
+  box-shadow: inset 0 0 0 1px var(--color-line-2);
+}
+.hall-n {
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--color-signal-2);
+  font-weight: 900;
+  color: var(--color-signal);
+}
+.hall-art {
+  display: flex;
+  height: 8rem;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.75rem;
+  border-radius: var(--radius-chip);
+  background: var(--color-sunk);
+  padding: 1rem 1.25rem;
+}
+.hall-slider {
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--color-surface-2);
+}
+.hall-slider > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-signal);
+}
+.hall-screen {
+  align-items: center;
+  box-shadow: inset 0 0 0 3px var(--color-surface-2);
+}
+.hall-code {
+  font-size: 2.5rem;
+  font-weight: 900;
+  letter-spacing: 0.2em;
+  color: var(--color-signal);
+}
+.hall-phone {
+  margin-inline: auto;
+  width: 9rem;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  box-shadow: inset 0 0 0 2px var(--color-surface-2);
+}
+.hall-opt {
+  height: 1.25rem;
+  border-radius: var(--radius-chip);
+  box-shadow: inset 0 0 0 1.5px var(--opt);
 }
 
 /*
@@ -2124,8 +2457,8 @@ textarea {
   .boot,
   .boot-trace,
   .boot-mark,
-  .scene-jolt,
-  .hero-cue-dot,
+  .demo-jolt,
+  .home-try-dot::after,
   .blink,
   .rise-in,
   .thump,

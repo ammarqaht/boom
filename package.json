@@ -14,7 +14,7 @@
     "build": "npm --prefix client install --include=dev && npm --prefix client run build",
     "start": "node server/index.js",
     "pull-banks": "node server/pull-banks.mjs",
-    "test": "cd client && node env-test.mjs && node rules-test.mjs && node memory-test.mjs && node cards-test.mjs && node cards-rules-test.mjs && node flags-test.mjs && node e2e.mjs && node net-test.mjs && node grace-test.mjs",
+    "test": "cd client && node env-test.mjs && node rules-test.mjs && node memory-test.mjs && node cards-test.mjs && node cards-rules-test.mjs && node flags-test.mjs && node home-test.mjs && node e2e.mjs && node net-test.mjs && node grace-test.mjs",
     "live": "node scripts/live.mjs",
     "hooks": "git config core.hooksPath .githooks"
   },
