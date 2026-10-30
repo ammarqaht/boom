@@ -23,6 +23,7 @@ import {
   CheckIcon,
   CloseIcon,
   CrownIcon,
+  DuelIcon,
   FlatlineIcon,
   HistoryIcon,
   PauseIcon,
@@ -311,26 +312,81 @@ export function ResultBars({
   big?: boolean;
 }) {
   const top = Math.max(1, ...awards.map((a) => a.points));
+  /*
+   * في القاعة الكبيرة تُصفّ الأشرطة أعمدةً وتصغر بقدر العدد: أربعون شريطاً
+   * بطول ٨٤ لا تسعها شاشة، فيُقصّ آخرُها — وآخرُها هم من يريدون أن يروا
+   * أنفسهم. فكلّ لاعبٍ يظهر، والشريطُ يصغر ولا يختفي.
+   */
+  const n = awards.length;
+  const tier = !big ? 'sm' : n <= 8 ? 'xl' : n <= 18 ? 'lg' : n <= 36 ? 'md' : 'xs';
+  const cols = { sm: 1, xl: 1, lg: 2, md: 3, xs: n <= 60 ? 4 : 5 }[tier];
+  const size = {
+    sm: {
+      bar: 'h-11 px-3.5 gap-4',
+      name: 'text-[15px]',
+      meta: 'text-xs',
+      pts: 'w-9 text-base',
+      rank: 'w-4 text-sm text-faint',
+      gap: 'gap-2',
+      row: 'gap-3',
+      icon: 13,
+    },
+    xl: {
+      bar: 'h-[84px] px-7 gap-4',
+      name: 'text-[44px]',
+      meta: 'text-[28px]',
+      pts: 'w-[130px] text-[44px]',
+      rank: 'w-10 text-[34px] text-muted',
+      gap: 'gap-3.5',
+      row: 'gap-5',
+      icon: 30,
+    },
+    lg: {
+      bar: 'h-[62px] px-5 gap-3',
+      name: 'text-[30px]',
+      meta: 'text-[20px]',
+      pts: 'w-[84px] text-[32px]',
+      rank: 'w-8 text-[26px] text-muted',
+      gap: 'gap-2.5 gap-x-8',
+      row: 'gap-3',
+      icon: 22,
+    },
+    md: {
+      bar: 'h-[46px] px-4 gap-2.5',
+      name: 'text-[22px]',
+      meta: 'hidden',
+      pts: 'w-[62px] text-[24px]',
+      rank: 'w-7 text-[20px] text-muted',
+      gap: 'gap-2 gap-x-6',
+      row: 'gap-2.5',
+      icon: 17,
+    },
+    xs: {
+      bar: 'h-[32px] px-3 gap-2',
+      name: 'text-[16px]',
+      meta: 'hidden',
+      pts: 'w-[44px] text-[17px]',
+      rank: 'w-6 text-[15px] text-muted',
+      gap: 'gap-1.5 gap-x-5',
+      row: 'gap-2',
+      icon: 13,
+    },
+  }[tier];
 
   return (
-    <div className={big ? 'grid gap-3.5' : 'grid gap-2'}>
+    <div
+      className={`grid ${size.gap}`}
+      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+    >
       {awards.map((award, i) => {
         const share = Math.max(award.points / top, award.points > 0 ? 0.18 : 0.08);
         return (
-          <div key={award.teamId} className={`flex items-center ${big ? 'gap-5' : 'gap-3'}`}>
+          <div key={award.teamId} className={`flex min-w-0 items-center ${size.row}`}>
             {/* الترتيب خارج المجرى: داخله يصطدم بالحافّة المضيئة فلا يُقرأ */}
-            <span
-              className={`tnum shrink-0 text-center font-light ${
-                big ? 'w-10 text-[34px] text-muted' : 'w-4 text-sm text-faint'
-              }`}
-            >
-              {i + 1}
-            </span>
+            <span className={`tnum shrink-0 text-center font-light ${size.rank}`}>{i + 1}</span>
 
             <div
-              className={`bar flex min-w-0 flex-1 items-center gap-4 ${
-                big ? 'h-[84px] px-7' : 'h-11 px-3.5'
-              }`}
+              className={`bar flex min-w-0 flex-1 items-center ${size.bar}`}
               style={
                 {
                   '--bar': award.flatlined ? 'var(--color-danger)' : 'var(--color-signal)',
@@ -340,29 +396,38 @@ export function ResultBars({
             >
               <span
                 className="bar-fill"
-                style={{ animationDelay: `${i * 0.08}s` }}
+                style={{ animationDelay: `${Math.min(i, 20) * 0.06}s` }}
                 aria-hidden="true"
               />
-              <b className={`relative truncate font-black ${big ? 'text-[44px]' : 'text-[15px]'}`}>
-                {award.name}
-              </b>
+              <b className={`relative truncate font-black ${size.name}`}>{award.name}</b>
+              {/* غالبُ المبارزة يُعلَّم بسيفين — وصاحبُ المضاعفة بـ×٢ */}
+              {(award.duelPoints ?? 0) > 0 && (
+                <DuelIcon size={size.icon} className="relative shrink-0 text-danger" />
+              )}
+              {award.doubled && (
+                <span
+                  className={`relative shrink-0 font-black text-gold ${size.meta === 'hidden' ? 'text-[0.9em]' : size.meta}`}
+                >
+                  ×٢
+                </span>
+              )}
               <span
                 className={`tnum relative mr-auto shrink-0 font-medium ${
                   award.flatlined ? 'text-danger' : 'text-muted'
-                } ${big ? 'text-[28px]' : 'text-xs'}`}
+                } ${size.meta}`}
               >
-                {award.flatlined
-                  ? award.dropped
-                    ? 'انقطع'
-                    : 'توقف النبض'
-                  : `${formatTime(award.timeMs)} ث`}
+                {award.burned
+                  ? 'احترقت المضاعفة'
+                  : award.flatlined
+                    ? award.dropped
+                      ? 'انقطع'
+                      : 'توقف النبض'
+                    : `${formatTime(award.timeMs)} ث`}
               </span>
               <span
-                className={`tnum relative shrink-0 text-left font-black text-signal ${
-                  big ? 'w-[130px] text-[44px]' : 'w-9 text-base'
-                }`}
+                className={`tnum relative shrink-0 text-left font-black text-signal ${size.meta === 'hidden' ? 'mr-auto' : ''} ${size.pts}`}
               >
-                +{award.points}
+                {award.points < 0 ? `−${-award.points}` : `+${award.points}`}
               </span>
             </div>
           </div>
@@ -536,10 +601,10 @@ export function RoundHistory({
                 <span className="font-bold">{award.name}</span>
                 <span className={`tnum text-sm ${award.flatlined ? 'text-danger' : 'text-muted'}`}>
                   {award.flatlined
-                  ? award.dropped
-                    ? 'انقطع'
-                    : 'توقف النبض'
-                  : `${formatTime(award.timeMs)} ث`}
+                    ? award.dropped
+                      ? 'انقطع'
+                      : 'توقف النبض'
+                    : `${formatTime(award.timeMs)} ث`}
                 </span>
                 <span className="tnum w-10 text-left font-black text-signal">+{award.points}</span>
               </div>
@@ -708,15 +773,23 @@ export function Standings({
   standings,
   meId,
   compact = false,
+  bars,
 }: {
   standings: Standing[];
   /** صاحب الجهاز — يُعلَّم صفّه */
   meId?: string;
   /** داخل لوحةٍ لا على شاشةٍ: سقوفٌ أقصر تليق بعمودٍ بين لوحاتٍ أخرى */
   compact?: boolean;
+  /**
+   * كم شريطاً كبيراً بعد البطل — وما بعدهم شبكةٌ صغيرة. شاشةُ العرض لا
+   * تُمرَّر: ثلاثون شريطاً بطول ثمانين تدفع البطلَ خارجها.
+   */
+  bars?: number;
 }) {
   const top = Math.max(1, standings[0]?.score ?? 1);
-  const [champion, ...rest] = standings;
+  const [champion, ...all] = standings;
+  const rest = bars === undefined ? all : all.slice(0, bars);
+  const tail = bars === undefined ? [] : all.slice(bars);
   if (!champion) return null;
 
   /*
@@ -737,108 +810,139 @@ export function Standings({
   return (
     <div className="@container mx-auto w-full max-w-[1400px]">
       <div className="grid" style={{ gap: px(8, 0.9, 16) }}>
-      <Confetti />
+        <Confetti />
 
-      <header className="thump flex items-center justify-center" style={{ gap: px(10, 0.9, 20) }}>
-        <TrophyIcon className="text-signal" style={{ width: px(26, 2.4, 48), height: 'auto' }} />
-        <h2 className="font-black" style={{ fontSize: px(28, 3, 60), lineHeight: 1.1 }}>
-          الأوائل
-        </h2>
-      </header>
+        <header className="thump flex items-center justify-center" style={{ gap: px(10, 0.9, 20) }}>
+          <TrophyIcon className="text-signal" style={{ width: px(26, 2.4, 48), height: 'auto' }} />
+          <h2 className="font-black" style={{ fontSize: px(28, 3, 60), lineHeight: 1.1 }}>
+            الأوائل
+          </h2>
+        </header>
 
-      {/* البطل */}
-      <div
-        className="rise-in relative overflow-hidden rounded-card bg-surface shadow-[inset_0_0_0_2px_var(--color-signal)]"
-        style={{ padding: px(14, 1.3, 26), animationDelay: '0.1s' }}
-      >
-        <span className="absolute inset-y-0 start-0 w-1.5 bg-signal" aria-hidden="true" />
-        <div className="flex items-center" style={{ gap: px(10, 1.1, 22) }}>
-          <CrownIcon
-            className="shrink-0 text-signal"
-            style={{ width: px(24, 2.2, 46), height: 'auto' }}
-          />
-          <div className="min-w-0 flex-1">
-            <div
-              className="font-bold tracking-[0.2em] text-signal"
-              style={{ fontSize: px(11, 0.85, 20) }}
-            >
-              الأول{champion.teamId === meId ? ' · أنت' : ''}
-            </div>
-            <div
-              className="truncate font-black"
-              style={{ fontSize: px(26, 3.2, 64), lineHeight: 1.15 }}
-            >
-              {champion.name}
-            </div>
-          </div>
-          <div className="shrink-0 text-center">
-            <div
-              className="tnum font-black text-signal"
-              style={{ fontSize: px(30, 3.6, 72), lineHeight: 1 }}
-            >
-              {champion.score}
-            </div>
-            <div className="font-medium text-muted" style={{ fontSize: px(11, 1, 22) }}>
-              نقطة
-            </div>
-          </div>
-        </div>
-        {/* مخطّطٌ لا يزال ينبض: البطل هو النبض الذي لم يسكن */}
-        <Lane timeMs={20000} size="lg" className="mt-3" style={{ height: px(30, 3.2, 60) }} />
-      </div>
-
-      {rest.map((team, i) => {
-        const mine = team.teamId === meId;
-        const podium = i < 2; // الثاني والثالث
-        return (
-          <div
-            key={team.teamId}
-            className="rise-in flex items-center"
-            style={{ gap: px(8, 0.8, 18), animationDelay: `${0.18 + i * 0.07}s` }}
-          >
-            <span
-              className="tnum shrink-0 text-center font-light text-faint"
-              style={{ fontSize: px(14, 1.5, 32), width: px(18, 1.8, 42) }}
-            >
-              {team.rank}
-            </span>
-            <div
-              className={`bar flex min-w-0 flex-1 items-center ${
-                mine ? 'shadow-[inset_0_0_0_2px_var(--color-signal)]' : ''
-              }`}
-              style={
-                {
-                  // صفُّ صاحب الجهاز بلون الإشارة أينما وقع: أول ما يبحث عنه
-                  '--bar': podium || mine ? 'var(--color-signal)' : 'var(--color-ink-2)',
-                  '--cut': `${(1 - Math.max(team.score / top, 0.08)) * 100}%`,
-                  height: px(42, 4.2, 80),
-                  paddingInline: px(12, 1.2, 26),
-                  gap: px(8, 0.8, 18),
-                } as CSSProperties
-              }
-            >
-              <span className="bar-fill" aria-hidden="true" />
-              <b className="relative truncate font-black" style={{ fontSize: px(15, 1.8, 40) }}>
-                {team.name}
-              </b>
-              {mine && (
-                <span
-                  className="relative shrink-0 font-bold text-signal"
-                  style={{ fontSize: px(11, 0.9, 22) }}
-                >
-                  أنت
-                </span>
-              )}
-              <span
-                className="tnum relative mr-auto shrink-0 font-black"
-                style={{ fontSize: px(17, 2, 42) }}
+        {/* البطل */}
+        <div
+          className="rise-in relative overflow-hidden rounded-card bg-surface shadow-[inset_0_0_0_2px_var(--color-signal)]"
+          style={{ padding: px(14, 1.3, 26), animationDelay: '0.1s' }}
+        >
+          <span className="absolute inset-y-0 start-0 w-1.5 bg-signal" aria-hidden="true" />
+          <div className="flex items-center" style={{ gap: px(10, 1.1, 22) }}>
+            <CrownIcon
+              className="shrink-0 text-signal"
+              style={{ width: px(24, 2.2, 46), height: 'auto' }}
+            />
+            <div className="min-w-0 flex-1">
+              <div
+                className="font-bold tracking-[0.2em] text-signal"
+                style={{ fontSize: px(11, 0.85, 20) }}
               >
-                {team.score}
-              </span>
+                الأول{champion.teamId === meId ? ' · أنت' : ''}
+              </div>
+              <div
+                className="truncate font-black"
+                style={{ fontSize: px(26, 3.2, 64), lineHeight: 1.15 }}
+              >
+                {champion.name}
+              </div>
+            </div>
+            <div className="shrink-0 text-center">
+              <div
+                className="tnum font-black text-signal"
+                style={{ fontSize: px(30, 3.6, 72), lineHeight: 1 }}
+              >
+                {champion.score}
+              </div>
+              <div className="font-medium text-muted" style={{ fontSize: px(11, 1, 22) }}>
+                نقطة
+              </div>
             </div>
           </div>
-        );
-      })}
+          {/* مخطّطٌ لا يزال ينبض: البطل هو النبض الذي لم يسكن */}
+          <Lane timeMs={20000} size="lg" className="mt-3" style={{ height: px(30, 3.2, 60) }} />
+        </div>
+
+        {rest.map((team, i) => {
+          const mine = team.teamId === meId;
+          const podium = i < 2; // الثاني والثالث
+          return (
+            <div
+              key={team.teamId}
+              className="rise-in flex items-center"
+              style={{ gap: px(8, 0.8, 18), animationDelay: `${0.18 + i * 0.07}s` }}
+            >
+              <span
+                className="tnum shrink-0 text-center font-light text-faint"
+                style={{ fontSize: px(14, 1.5, 32), width: px(18, 1.8, 42) }}
+              >
+                {team.rank}
+              </span>
+              <div
+                className={`bar flex min-w-0 flex-1 items-center ${
+                  mine ? 'shadow-[inset_0_0_0_2px_var(--color-signal)]' : ''
+                }`}
+                style={
+                  {
+                    // صفُّ صاحب الجهاز بلون الإشارة أينما وقع: أول ما يبحث عنه
+                    '--bar': podium || mine ? 'var(--color-signal)' : 'var(--color-ink-2)',
+                    '--cut': `${(1 - Math.max(team.score / top, 0.08)) * 100}%`,
+                    height: px(42, 4.2, 80),
+                    paddingInline: px(12, 1.2, 26),
+                    gap: px(8, 0.8, 18),
+                  } as CSSProperties
+                }
+              >
+                <span className="bar-fill" aria-hidden="true" />
+                <b className="relative truncate font-black" style={{ fontSize: px(15, 1.8, 40) }}>
+                  {team.name}
+                </b>
+                {mine && (
+                  <span
+                    className="relative shrink-0 font-bold text-signal"
+                    style={{ fontSize: px(11, 0.9, 22) }}
+                  >
+                    أنت
+                  </span>
+                )}
+                <span
+                  className="tnum relative mr-auto shrink-0 font-black"
+                  style={{ fontSize: px(17, 2, 42) }}
+                >
+                  {team.score}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* بقيّةُ القاعة: مركزٌ واسمٌ ونقاط في أعمدة — يجد كلٌّ اسمه ولا يُطرد البطل */}
+        {tail.length > 0 && (
+          <div
+            className="rise-in grid"
+            style={{
+              gridTemplateColumns: `repeat(${tail.length > 24 ? 4 : 3}, minmax(0, 1fr))`,
+              gap: `${px(4, 0.35, 8)} ${px(10, 1, 22)}`,
+              marginTop: px(6, 0.6, 12),
+              animationDelay: '0.7s',
+            }}
+          >
+            {tail.map((team) => (
+              <div
+                key={team.teamId}
+                className={`flex min-w-0 items-baseline border-b border-line ${
+                  team.teamId === meId ? 'text-signal' : ''
+                }`}
+                style={{
+                  gap: px(6, 0.6, 12),
+                  fontSize: px(12, 1.15, 24),
+                  paddingBlock: px(3, 0.3, 6),
+                }}
+              >
+                <span className="tnum shrink-0 font-light text-faint">{team.rank}</span>
+                <b className="min-w-0 flex-1 truncate font-black">{team.name}</b>
+                <span className="tnum shrink-0 font-black">{team.score}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -904,6 +1008,8 @@ export function CommentCard({
 
   return (
     <div className="tile mt-5 grid gap-3 p-5">
+      {/* لماذا يُقيّم — سطرٌ يجعل التقييمَ طلبَ مساعدةٍ لا استبياناً */}
+      <h3 className="text-center text-[15px] font-black">تقييمك للعبة يساعدنا في تطويرها</h3>
       <div className="flex justify-center gap-1.5" role="radiogroup" aria-label="التقييم">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
@@ -1053,7 +1159,9 @@ export function ReviewList({
             <p className="flex-1 leading-relaxed font-bold">
               <span className="tnum text-faint">{index + 1}. </span>
               {item.q}
-              {item.flag && <Flag code={item.flag} className="ms-2 inline-block h-[18px] align-[-3px]" />}
+              {item.flag && (
+                <Flag code={item.flag} className="ms-2 inline-block h-[18px] align-[-3px]" />
+              )}
             </p>
           </div>
 

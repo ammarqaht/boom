@@ -1422,6 +1422,19 @@ function flushPending(now = Date.now()) {
       entry.players = false;
       entry.playersAt = now;
     }
+    /*
+     * من سكن نبضُه والجولةُ قائمة يشاهدها حيّة: تُبعث إليه حالُ الغرفة كل
+     * ثانية — إليه وحده لا إلى قناة اللاعبين كلها، فالصامدون لا ينظرون إلا
+     * إلى سؤالهم ولا يُثقل عليهم البثّ.
+     */
+    if (room.status === 'running' && now - (entry.spectAt ?? 0) >= PLAYERS_MS) {
+      const watching = [...room.teams.values()].filter((t) => t.flatlined && !t.waiting);
+      if (watching.length) {
+        const state = current();
+        for (const team of watching) io.to(`team:${team.id}`).emit('room:state', state);
+        entry.spectAt = now;
+      }
+    }
     for (const teamId of entry.teams) pushTeam(room, teamId);
     entry.teams.clear();
   }

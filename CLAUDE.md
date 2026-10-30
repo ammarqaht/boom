@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**نبضة (Nabda)**: a live, in-hall team quiz game. Teams play at the same time, each against its own countdown ("pulse"). A correct answer adds time, a wrong one subtracts, and the first team whose clock hits zero ends the round for everyone. Between rounds teams buy cards with their points; the catalogue (10 cards, prices, limits) is `CARDS` in `server/game.js`, and the 3-card table in README.md is outdated. All UI and most code comments are Arabic, and the UI is RTL. README.md (Arabic) is the authoritative product and ops doc.
+**نبضة (Nabda)**: a live, in-hall team quiz game. Teams play at the same time, each against its own countdown ("pulse"). A correct answer adds time, a wrong one subtracts, and the first team whose clock hits zero ends the round for everyone. Between rounds teams buy cards with sparks (شرارات), a purchase currency kept separate from the win points that decide the ranking; the catalogue (8 cards, prices, limits) is `CARDS` in `server/game.js` and sparks income is `SPARK_BASE`/`STREAK_EVERY` there. The 3-card table in README.md is outdated. All UI and most code comments are Arabic, and the UI is RTL. README.md (Arabic) is the authoritative product and ops doc.
 
 ## Commands
 

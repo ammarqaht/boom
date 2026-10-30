@@ -84,8 +84,8 @@ const sec = (ms) => `sec(${ms / 1000})`;
 check('card lab: time shows TIME_CARD_MS', sceneBody('time').includes(sec(serverConst('TIME_CARD_MS'))));
 check('card lab: revive shows REVIVE_MS', sceneBody('revive').includes(sec(serverConst('REVIVE_MS'))));
 check('card lab: steal moves STEAL_MS', sceneBody('steal').split(sec(serverConst('STEAL_MS'))).length - 1 === 2);
-check('card lab: freeze lasts FREEZE_MS', /g >= 2500 && g < 7500/.test(sceneBody('freeze')) && serverConst('FREEZE_MS') === 5000);
-check('card lab: truce lasts TRUCE_MS', sceneBody('truce').includes(`g < ${serverConst('TRUCE_MS')}`));
+check('card lab: freeze lasts FREEZE_MS', sceneBody('freeze').includes(`g >= 2500 && g < ${2500 + serverConst('FREEZE_MS')}`));
+check('card lab: every server card has a scene', Object.keys(CARDS).every((id) => sceneBody(id) !== ''));
 check('card lab: shield absorbs SHIELD_HITS wrong answers',
   (sceneBody('shield').match(/tone: 'hold'/g) ?? []).length === serverConst('SHIELD_HITS'));
 check('card lab: shield penalty after it breaks = wrongPenalty',

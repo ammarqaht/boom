@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import type { RoomState, TeamState } from './types';
 
 /*
@@ -22,9 +22,6 @@ const STEP_MS = 250; // كوتيرة البثّ القديمة — فالمجر�
 
 const less = (ms: number, by: number) => Math.max(0, ms - by);
 
-const drained = (truceMs: number | undefined, elapsed: number) =>
-  Math.max(0, elapsed - (truceMs ?? 0));
-
 export function projectTeam(state: TeamState, elapsed: number): TeamState {
   if (state.status === 'countdown') {
     return { ...state, countdownMs: less(state.countdownMs, elapsed) };
@@ -32,15 +29,15 @@ export function projectTeam(state: TeamState, elapsed: number): TeamState {
   const lockedMs = less(state.lockedMs, elapsed);
   return {
     ...state,
-    timeMs: less(state.timeMs, drained(state.truceMs, elapsed)),
-    truceMs: less(state.truceMs ?? 0, elapsed),
+    timeMs: less(state.timeMs, elapsed),
     lockedMs,
     frozenBy: lockedMs > 0 ? state.frozenBy : null,
   };
 }
 
 export const teamTicking = (state: TeamState) =>
-  state.status === 'countdown' || (state.status === 'running' && !state.flatlined && !state.waiting);
+  state.status === 'countdown' ||
+  (state.status === 'running' && !state.flatlined && !state.waiting);
 
 export function projectRoom(room: RoomState, elapsed: number): RoomState {
   if (room.status === 'countdown') {
@@ -53,8 +50,7 @@ export function projectRoom(room: RoomState, elapsed: number): RoomState {
       const lockedMs = less(team.lockedMs, elapsed);
       return {
         ...team,
-        timeMs: less(team.timeMs, drained(team.truceMs, elapsed)),
-        truceMs: less(team.truceMs ?? 0, elapsed),
+        timeMs: less(team.timeMs, elapsed),
         lockedMs,
         locked: lockedMs > 0,
         frozenBy: lockedMs > 0 ? team.frozenBy : null,
@@ -89,4 +85,25 @@ export function useProjected<T>(
 
   if (value === null || !running) return value;
   return project(value, performance.now() - anchor.current.at);
+}
+
+/**
+ * عدٌّ تنازليٌّ محلّيّ من آخر قيمةٍ أرسلها السيرفر (وقت الشراء بين الجولتين).
+ * كلُّ قيمةٍ جديدة تُعيد المرساة، وبينها يُنزل المتصفّح العدّاد بنفسه.
+ */
+export function useCountdown(ms: number) {
+  const [left, setLeft] = useState(ms);
+  const anchor = useRef({ ms, at: performance.now() });
+  useEffect(() => {
+    anchor.current = { ms, at: performance.now() };
+    setLeft(ms);
+  }, [ms]);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const { ms: from, at } = anchor.current;
+      setLeft(Math.max(0, from - (performance.now() - at)));
+    }, 200);
+    return () => clearInterval(timer);
+  }, []);
+  return left;
 }

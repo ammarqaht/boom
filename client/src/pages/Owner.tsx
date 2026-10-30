@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { HoldButton, toast, useTheme } from '../components/ui';
+import { ConfirmButton, toast, useTheme } from '../components/ui';
 import {
   CardsIcon,
   ChatIcon,
@@ -170,9 +170,7 @@ export default function Owner() {
    */
   const [params, setParams] = useSearchParams();
 
-  const [door, setDoor] = useState<SectionId>(
-    () => (params.get('d') as SectionId) || 'home',
-  );
+  const [door, setDoor] = useState<SectionId>(() => (params.get('d') as SectionId) || 'home');
   const [page, setPage] = useState(() => params.get('p') || 'questions');
   const [bank, setBank] = useState(() => params.get('b') || '');
   const [level, setLevel] = useState(() => Number(params.get('l')) || 0);
@@ -488,9 +486,7 @@ export default function Owner() {
     groups.push({
       label: 'الفترة',
       rows: [],
-      node: (
-        <DateRange value={range} onPick={setRange} preset={preset} onPreset={setPreset} />
-      ),
+      node: <DateRange value={range} onPick={setRange} preset={preset} onPreset={setPreset} />,
     });
   }
 
@@ -633,9 +629,7 @@ export default function Owner() {
               لأن المتصفّح يخزّن الصفحة فيعرض حزمةَ الأمس، ولا يُعرف أيُّ
               نسخةٍ تعمل إلا أن تقولها النسخةُ نفسها. فإن شككتَ فاقرأ هنا.
             */}
-            <div
-              className="mt-auto px-2 pt-4 text-[11px] font-medium text-faint"
-            >
+            <div className="mt-auto px-2 pt-4 text-[11px] font-medium text-faint">
               نسخة {__BUILD__}
             </div>
           </aside>
@@ -711,13 +705,7 @@ export default function Owner() {
             />
           )}
 
-          {atPending && (
-            <Act
-              icon={ImportIcon}
-              label="استيراد"
-              onClick={() => setIntake(true)}
-            />
-          )}
+          {atPending && <Act icon={ImportIcon} label="استيراد" onClick={() => setIntake(true)} />}
 
           {/* بنكٌ جديد: فعلُ الصفحة، فمكانُه ترويستُها كبقيّة الأفعال */}
           {door === 'banks' && page === 'shelf' && (
@@ -729,7 +717,7 @@ export default function Owner() {
             ولا يظهر إلا وفي السجلّ ما يُمحى.
           */}
           {door === 'banks' && page === 'edits' && (alerts?.edits ?? 0) > 0 && (
-            <HoldButton
+            <ConfirmButton
               bare
               tone="chip"
               className="shrink-0"
@@ -824,9 +812,7 @@ export default function Owner() {
         </main>
       </div>
 
-      {newBank && (
-        <NewBank api={api} onClose={() => setNewBank(false)} onAdded={refresh} />
-      )}
+      {newBank && <NewBank api={api} onClose={() => setNewBank(false)} onAdded={refresh} />}
 
       {intake && (
         <Intake
@@ -984,11 +970,7 @@ function NewBank({
         value={id}
         onChange={(event) => {
           /* يُقصّ غيرُ اللاتينيّ عند الكتابة: ردٌّ فوريٌّ أوضحُ من خطأٍ بعد الضغط */
-          setId(
-            event.target.value
-              .toLowerCase()
-              .replace(/[^a-z0-9_-]/g, ''),
-          );
+          setId(event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''));
           setError('');
         }}
         onKeyDown={(event) => event.key === 'Enter' && void add()}

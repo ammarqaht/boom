@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from 'react';
 import {
+  ArrowIcon,
   CheckIcon,
   ChevronIcon,
   MenuIcon,
@@ -516,7 +517,9 @@ export function Field({
   group?: boolean;
   children: ReactNode;
 }) {
-  const head = <span className="mb-2 block text-sm font-bold tracking-[0.08em] text-muted">{label}</span>;
+  const head = (
+    <span className="mb-2 block text-sm font-bold tracking-[0.08em] text-muted">{label}</span>
+  );
   if (group) {
     return (
       <div role="group" aria-label={label} className="block">
@@ -708,13 +711,13 @@ export interface MenuAction {
   label: string;
   icon?: ReactNode;
   onClick: () => void;
-  /** فعل لا رجعة فيه: يحتاج ضغطاً مستمراً بدل نقرة */
-  hold?: boolean;
+  /** فعلٌ لا رجعة فيه: يحتاج ضغطتين، والثانيةُ تأكيد */
+  confirm?: boolean;
 }
 
 /**
  * قائمة الخيارات — ومكان الأفعال الخطرة الوحيد.
- * إخفاؤها عن الشاشة يمنع الضغط بالخطأ، والضغط المستمر يمنعه مرة أخرى.
+ * إخفاؤها عن الشاشة يمنع الضغط بالخطأ، والضغطةُ الثانية تمنعه مرة أخرى.
  */
 /**
  * مقاسُ أقراص الترويسة.
@@ -774,8 +777,8 @@ export function Menu({ actions }: { actions: MenuAction[] }) {
           className="rise-in absolute left-0 z-50 mt-1.5 w-[240px] max-w-[calc(100vw-1.5rem)] rounded-card bg-surface p-1 shadow-[inset_0_0_0_1px_var(--color-line-2),0_18px_40px_-16px_rgb(0_0_0/0.5)]"
         >
           {actions.map((action) =>
-            action.hold ? (
-              <HoldButton
+            action.confirm ? (
+              <ConfirmButton
                 key={action.label}
                 label={action.label}
                 onConfirm={() => {
@@ -804,10 +807,18 @@ export function Menu({ actions }: { actions: MenuAction[] }) {
   );
 }
 
-const HOLD_MS = 900;
+/* كم يبقى الزرُّ متأهّباً بعد الضغطة الأولى، ثم يعود كما كان */
+const ARM_MS = 3500;
 
-/** يُنفَّذ بعد ضغط مستمر، ويملأ نفسه أثناءه ليعرف المستخدم ما يحدث */
-export function HoldButton({
+/**
+ * زرٌّ بضغطتين: الأولى تُنبّه والثانية تؤكّد.
+ *
+ * كان يُنفَّذ بضغطٍ مستمرٍّ يملأ الزر، فلا يعرفه من لم يُخبَر به: يضغط
+ * فلا يحدث شيء فيظنّه معطوباً. والضغطتان مألوفتان: الأولى تُبدّل الزرَّ
+ * إلى «اضغط للتأكيد» بلونٍ أشدّ، والثانية تُنفّذ. ومن لم يضغط الثانية خلال
+ * ثلاث ثوانٍ ونصف عاد الزرُّ كما كان — فلا يبقى فعلٌ خطِرٌ معلّقاً.
+ */
+export function ConfirmButton({
   label,
   hint,
   onConfirm,
@@ -820,65 +831,78 @@ export function HoldButton({
   hint?: string;
   onConfirm: () => void;
   className?: string;
-  /** danger: صفٌّ في قائمة. action: زرٌّ أساسيّ. chip: قرصُ ترويسة. icon: رمزٌ وحده */
-  tone?: 'danger' | 'action' | 'chip' | 'icon';
+  /** danger: صفٌّ في قائمة. action: زرٌّ أساسيّ. ghost: زرٌّ ثانويّ كبير. chip: قرصُ ترويسة. icon: رمزٌ وحده */
+  tone?: 'danger' | 'action' | 'ghost' | 'chip' | 'icon';
   /** رمزٌ مكان النصّ — لبطاقةٍ ضيّقة لا تحتمل جملة. واللفظُ يبقى في title */
   glyph?: ReactNode;
   /** بلا فاصلٍ علويّ ولا هامش — حين لا يكون آخرَ صفٍّ في قائمة */
   bare?: boolean;
 }) {
-  const [held, setHeld] = useState(0);
-  const frame = useRef(0);
+  const [armed, setArmed] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
 
-  const stop = () => {
-    cancelAnimationFrame(frame.current);
-    setHeld(0);
+  const press = () => {
+    clearTimeout(timer.current);
+    if (armed) {
+      setArmed(false);
+      onConfirm();
+      return;
+    }
+    setArmed(true);
+    timer.current = setTimeout(() => setArmed(false), ARM_MS);
   };
 
-  const start = () => {
-    const from = performance.now();
-    const step = (now: number) => {
-      const pct = Math.min(1, (now - from) / HOLD_MS);
-      setHeld(pct);
-      if (pct >= 1) {
-        stop();
-        onConfirm();
-        return;
-      }
-      frame.current = requestAnimationFrame(step);
-    };
-    frame.current = requestAnimationFrame(step);
-  };
+  const base =
+    tone === 'icon'
+      ? 'relative flex size-9 shrink-0 items-center justify-center rounded-chip transition select-none'
+      : tone === 'action'
+        ? 'relative flex w-full items-center justify-center gap-2.5 rounded-chip px-4 py-3 text-center text-[15px] leading-snug font-black transition select-none'
+        : tone === 'ghost'
+          ? 'relative flex h-12 w-full items-center justify-center gap-2 rounded-chip px-4 text-center text-[15px] font-black transition select-none'
+          : tone === 'chip'
+            ? 'relative flex h-10 shrink-0 items-center gap-2 rounded-chip px-3.5 text-[13.5px] font-bold whitespace-nowrap transition select-none'
+            : 'relative flex w-full items-center gap-2.5 rounded-chip px-2.5 py-2 text-right text-[13.5px] leading-snug font-black transition select-none';
 
-  useEffect(() => () => cancelAnimationFrame(frame.current), []);
+  /* المتأهّبُ أحمرُ مصمت في كل الأحوال: لونُ «انتبه، الضغطةُ القادمة تُنفّذ» */
+  const look = armed
+    ? 'bg-danger text-white shadow-none'
+    : tone === 'icon'
+      ? 'text-danger shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_25%,transparent)] hover:bg-danger-2'
+      : tone === 'action'
+        ? 'bg-action text-on-action hover:brightness-110'
+        : tone === 'ghost'
+          ? 'text-ink shadow-[inset_0_0_0_1px_var(--color-line-2)] hover:bg-surface-2'
+          : tone === 'chip'
+            ? 'text-danger shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_30%,transparent)] hover:bg-danger-2'
+            : 'text-danger hover:bg-danger-2';
 
   return (
     <div className={`${bare ? '' : 'mt-1 border-t border-line pt-1'} ${className}`}>
       <button
-        onPointerDown={start}
-        onPointerUp={stop}
-        onPointerLeave={stop}
-        onPointerCancel={stop}
-        title={glyph ? `${label}، استمر بالضغط` : undefined}
-        aria-label={glyph ? label : undefined}
-        style={{ '--held': held } as CSSProperties}
-        className={
-          tone === 'icon'
-            ? 'relative flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-chip text-danger shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_25%,transparent)] transition select-none hover:bg-danger-2'
-            : tone === 'action'
-            ? 'relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-chip bg-action px-4 py-3 text-center text-[15px] leading-snug font-black text-on-action transition select-none hover:brightness-110'
-            : tone === 'chip'
-              ? 'relative flex h-10 shrink-0 items-center gap-2 overflow-hidden rounded-chip px-3.5 text-[13.5px] font-bold whitespace-nowrap text-danger shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--color-danger)_30%,transparent)] transition select-none hover:bg-danger-2'
-              : 'relative flex w-full items-center gap-2.5 overflow-hidden rounded-chip px-2.5 py-2 text-right text-[13.5px] leading-snug font-black text-danger transition select-none hover:bg-danger-2'
-        }
+        type="button"
+        onClick={press}
+        onBlur={() => {
+          clearTimeout(timer.current);
+          setArmed(false);
+        }}
+        title={armed ? 'اضغط مرّةً ثانية للتأكيد' : label}
+        aria-label={armed ? `${label}: اضغط مرّةً ثانية للتأكيد` : label}
+        className={`${base} ${look}`}
       >
-        <span className="hold-fill" aria-hidden="true" />
-        {/* القرصُ والرمزُ في موضعٍ ضيّق: الشرحُ في title لا في سطرٍ يكسر الصفّ */}
         <span className="relative flex items-center gap-2">
-          {glyph ?? (tone === 'chip' ? label : `${label}، استمر بالضغط`)}
+          {armed ? (
+            tone === 'icon' ? (
+              <CheckIcon size={15} strokeWidth={3} />
+            ) : (
+              'اضغط للتأكيد'
+            )
+          ) : (
+            (glyph ?? label)
+          )}
         </span>
       </button>
-      {hint && (
+      {hint && !armed && (
         <p
           className={`text-[11px] font-medium text-muted ${
             tone === 'action' ? 'px-1 pt-1.5 text-center' : 'px-2.5 pt-1 pb-0.5'
@@ -1164,7 +1188,12 @@ export function Credit({ className = '' }: { className?: string }) {
     <p className={`inline-flex items-center gap-1.5 text-xs font-medium text-faint ${className}`}>
       تم تطوير هذا النظام بواسطة
       <img src="/brand/medad-cream.png" alt="مداد" className="medad-mark medad-on-dark" />
-      <img src="/brand/medad-teal.png" alt="" aria-hidden="true" className="medad-mark medad-on-light" />
+      <img
+        src="/brand/medad-teal.png"
+        alt=""
+        aria-hidden="true"
+        className="medad-mark medad-on-light"
+      />
     </p>
   );
 }
@@ -1243,6 +1272,22 @@ export function FormPage({
       </div>
       <Credit className="justify-center self-center px-5 pb-6" />
     </div>
+  );
+}
+
+/**
+ * طريقُ العودة إلى الصفحة الرئيسية تحت زرّ الدخول أو الإنشاء: من فتح
+ * البابَ الخطأ يرجع بضغطة، لا بزرّ الرجوع في المتصفّح يخمّن أين يقع.
+ */
+export function HomeLink() {
+  return (
+    <a
+      href="/"
+      className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-chip py-3 text-[14px] font-bold text-muted transition hover:bg-surface-2 hover:text-ink"
+    >
+      <ArrowIcon size={16} className="-scale-x-100" />
+      الصفحة الرئيسية
+    </a>
   );
 }
 

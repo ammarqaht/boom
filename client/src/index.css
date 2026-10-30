@@ -1167,6 +1167,11 @@ textarea {
   grid-template-columns: 1fr 1fr;
   gap: 0.625rem;
 }
+@media (max-width: 420px) {
+  .doors {
+    grid-template-columns: 1fr;
+  }
+}
 .door-join {
   display: flex;
   grid-column: 1 / -1;
@@ -1174,8 +1179,7 @@ textarea {
 }
 @media (min-width: 1024px) {
   .doors {
-    max-width: 60rem;
-    grid-template-columns: 1.7fr 1fr 1fr;
+    max-width: 38rem;
   }
   .door-join {
     grid-column: auto;
@@ -1625,7 +1629,7 @@ textarea {
 }
 .lab-deck {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.5rem;
 }
 .lab-card {
@@ -2821,4 +2825,187 @@ textarea {
 
 .console-body .grid:not([class*='grid-cols']) {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/*
+ * ══════════════ بين الجولتين ══════════════
+ * بطاقةُ اللاعب: سطحٌ يتوهّج بلون مصيره (أخضر لمن صمد، أحمر لمن سكن)،
+ * وخلفه مجرى نبضه خافتاً — فيُقرأ الحالُ قبل أن يُقرأ الرقم.
+ */
+.hero-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  background:
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--tone) 13%, transparent), transparent 60%),
+    linear-gradient(160deg, var(--color-surface), var(--color-sunk));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--tone) 24%, var(--color-line)),
+    0 14px 32px -26px color-mix(in srgb, var(--tone) 45%, transparent);
+}
+
+/*
+ * مربّعُ البطاقة في المتجر: مصبوغٌ بلون ميزتها من ركنه، وأيقونتُها
+ * علامةٌ مائية كبيرة في الركن المقابل — فتُعرف البطاقة من بُعد.
+ */
+.shop-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  background: linear-gradient(
+    155deg,
+    color-mix(in srgb, var(--c) 30%, var(--color-surface)) 0%,
+    var(--color-surface) 64%
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 34%, transparent);
+  transition:
+    transform var(--t-quick, 0.15s) ease,
+    box-shadow var(--t-quick, 0.15s) ease,
+    opacity var(--t-quick, 0.15s) ease;
+}
+.shop-tile:active:not(:disabled) {
+  transform: scale(0.96);
+}
+.shop-tile.is-owned {
+  box-shadow:
+    inset 0 0 0 2px var(--c),
+    0 10px 24px -14px var(--c);
+}
+
+/* النافذة السفلية: تصعد من أسفل الشاشة حيث الإبهام */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+.sheet-up {
+  animation: sheet-up 0.32s var(--ease-monitor) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-up {
+    animation: none;
+  }
+}
+
+/*
+ * الجولة التعريفية: الشاشةُ تُطفأ إلا إطارَ العنصر المشروح، والإطارُ ينبض
+ * بلون الإشارة نبضاً هادئاً — والفقاعةُ تصعد إلى مكانها مع كل خطوة.
+ */
+.tour-spot {
+  box-shadow:
+    0 0 0 2px var(--color-signal),
+    0 0 0 0 transparent,
+    0 0 0 9999px color-mix(in srgb, var(--color-ground) 82%, transparent);
+  transition:
+    top 0.32s var(--ease-monitor),
+    left 0.32s var(--ease-monitor),
+    width 0.32s var(--ease-monitor),
+    height 0.32s var(--ease-monitor);
+  animation: tour-glow 1.8s ease-in-out infinite;
+}
+@keyframes tour-glow {
+  /* الظلال الثلاثة بترتيبها في الطرفين: لو اختلف عددُها لمزج المتصفّح الإطفاءَ بلون التوهّج */
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 2px var(--color-signal),
+      0 0 0 0 transparent,
+      0 0 0 9999px color-mix(in srgb, var(--color-ground) 82%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px var(--color-signal),
+      0 0 22px 4px color-mix(in srgb, var(--color-signal) 45%, transparent),
+      0 0 0 9999px color-mix(in srgb, var(--color-ground) 82%, transparent);
+  }
+}
+.tour-bubble {
+  box-shadow:
+    inset 0 0 0 1px var(--color-line-2),
+    0 18px 40px -16px #000;
+  animation: rise-in 0.28s var(--ease-monitor) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot,
+  .tour-bubble {
+    animation: none;
+    transition: none;
+  }
+}
+
+/*
+ * نافذةُ الختام: سطحٌ يتوهّج ذهباً من أعلاه خفيفاً — كأسٌ في ضوء منصّة.
+ */
+.finish-card {
+  background: linear-gradient(180deg, var(--color-surface), var(--color-sunk));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--color-gold) 28%, var(--color-line)),
+    0 30px 80px -30px #000;
+}
+.finish-glow {
+  position: absolute;
+  inset: -40% -20% auto;
+  height: 70%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--color-gold) 22%, transparent), transparent);
+  pointer-events: none;
+}
+
+/* بطاقةُ مفتاحٍ في شاشة الانتظار: مصبوغةٌ خفيفاً من ركنها بلون موضوعها */
+.guide-card {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 20px;
+  padding: 14px 16px 6px;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--g) 10%, var(--color-surface)), var(--color-surface) 55%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--g) 22%, var(--color-line));
+}
+
+/* شريطٌ يُسحب بالإصبع بلا مقبض تمرير — القاعدةُ العامة تُرقّق المقابض ولا تُخفيها */
+.no-scrollbar {
+  scrollbar-width: none !important;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * مربّعُ نبضةٍ من نبضات الجولة: حيٌّ بلون الصمود يخفق خطُّه، ومكسورٌ أحمرُ
+ * بخطٍّ مستقيم — وانكسارُه هزّةٌ قصيرة تُرى من آخر القاعة.
+ */
+.life-box {
+  color: var(--color-safe);
+  background: color-mix(in srgb, var(--color-safe) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-safe) 40%, transparent);
+  transition:
+    color 0.3s ease,
+    background 0.3s ease;
+}
+.life-box.is-broken {
+  color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-danger) 45%, transparent);
+  animation: life-break 0.5s var(--ease-monitor) both;
+}
+@keyframes life-break {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.18) rotate(-4deg);
+  }
+  60% {
+    transform: scale(0.94) rotate(3deg);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .life-box.is-broken {
+    animation: none;
+  }
 }

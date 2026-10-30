@@ -28,28 +28,21 @@ const SCENES: Record<CardId, { still: number; at: (g: number) => Scene }> = {
   time: {
     still: 6000,
     at: (g) => ({
-      you: { ms: 18000 - g + (g >= 1500 ? 10000 : 0), mark: 'time' },
+      you: { ms: 18000 - g + (g >= 1500 ? 15000 : 0), mark: 'time' },
       rival: { ms: 18000 - g },
-      hits: [{ side: 'you', at: 1500, tone: 'up', text: `+${sec(10)}` }],
-    }),
-  },
-  truce: {
-    still: 6000,
-    at: (g) => ({
-      you: { ms: g < 10000 ? 20000 : 30000 - g, mark: g < 10000 ? 'truce' : undefined },
-      rival: { ms: 20000 - g },
-      hits: [],
+      hits: [{ side: 'you', at: 1500, tone: 'up', text: `+${sec(15)}` }],
     }),
   },
   shield: {
     still: 7500,
     at: (g) => ({
-      you: { ms: 22000 - g - (g >= 10000 ? 3000 : 0), mark: g < 10000 ? 'shield' : undefined },
-      rival: { ms: 20000 - g },
+      you: { ms: 22000 - g - (g >= 12000 ? 3000 : 0), mark: g < 12000 ? 'shield' : undefined },
+      rival: { ms: 22000 - g },
       hits: [
         { side: 'you', at: 3000, tone: 'hold', text: sec(0) },
-        { side: 'you', at: 6500, tone: 'hold', text: sec(0) },
-        { side: 'you', at: 10000, tone: 'down', text: `−${sec(3)}` },
+        { side: 'you', at: 6000, tone: 'hold', text: sec(0) },
+        { side: 'you', at: 9000, tone: 'hold', text: sec(0) },
+        { side: 'you', at: 12000, tone: 'down', text: `−${sec(3)}` },
       ],
     }),
   },
@@ -61,55 +54,9 @@ const SCENES: Record<CardId, { still: number; at: (g: number) => Scene }> = {
           ? { ms: 7000 - g, mark: 'revive' }
           : g < 8500
             ? { ms: 0, flat: true, mark: 'revive' }
-            : { ms: 10000 - (g - 8500) },
+            : { ms: 20000 - (g - 8500) },
       rival: { ms: 22000 - g },
-      hits: [{ side: 'you', at: 8500, tone: 'up', text: `+${sec(10)}` }],
-    }),
-  },
-  fort: {
-    still: 5000,
-    at: (g) => ({
-      you: { ms: 20000 - g, mark: 'fort' },
-      rival: { ms: 21000 - g },
-      hits: [{ side: 'you', at: 4000, tone: 'hold', icon: 'freeze' }],
-    }),
-  },
-  mirror: {
-    still: 6000,
-    at: (g) => ({
-      you: { ms: 20000 - g, mark: g < 4000 ? 'mirror' : undefined },
-      rival: { ms: 21000 - g, frost: g >= 4000 && g < 9000 },
-      hits: [
-        { side: 'you', at: 4000, tone: 'hold', icon: 'freeze' },
-        { side: 'rival', at: 4000, tone: 'down', icon: 'freeze' },
-      ],
-    }),
-  },
-  blackout: {
-    still: 6000,
-    at: (g) => ({
-      you: { ms: 20000 - g },
-      rival: { ms: 21000 - g, dark: g >= 2500 },
-      hits: [{ side: 'rival', at: 2500, tone: 'down', icon: 'blackout' }],
-    }),
-  },
-  freeze: {
-    still: 5000,
-    at: (g) => ({
-      you: { ms: 20000 - g },
-      rival: { ms: 21000 - g, frost: g >= 2500 && g < 7500 },
-      hits: [{ side: 'rival', at: 2500, tone: 'down', icon: 'freeze' }],
-    }),
-  },
-  steal: {
-    still: 6000,
-    at: (g) => ({
-      you: { ms: 18000 - g + (g >= 4000 ? 5000 : 0) },
-      rival: { ms: 22000 - g - (g >= 4000 ? 5000 : 0) },
-      hits: [
-        { side: 'you', at: 4000, tone: 'up', text: `+${sec(5)}` },
-        { side: 'rival', at: 4000, tone: 'down', text: `−${sec(5)}` },
-      ],
+      hits: [{ side: 'you', at: 8500, tone: 'up', text: `+${sec(20)}` }],
     }),
   },
   double: {
@@ -118,6 +65,49 @@ const SCENES: Record<CardId, { still: number; at: (g: number) => Scene }> = {
       you: { ms: 22000 - g, gold: true, pts: g >= 11000 ? `${sec(4)} × ${sec(2)} = ${sec(8)}` : undefined },
       rival: { ms: 20000 - g, pts: g >= 11000 ? sec(3) : undefined },
       hits: [],
+    }),
+  },
+  freeze: {
+    still: 5000,
+    at: (g) => ({
+      you: { ms: 20000 - g },
+      rival: { ms: 21000 - g, frost: g >= 2500 && g < 10500 },
+      hits: [{ side: 'rival', at: 2500, tone: 'down', icon: 'freeze' }],
+    }),
+  },
+  steal: {
+    still: 6000,
+    at: (g) => ({
+      you: { ms: 18000 - g + (g >= 4000 ? 8000 : 0) },
+      rival: { ms: 24000 - g - (g >= 4000 ? 8000 : 0) },
+      hits: [
+        { side: 'you', at: 4000, tone: 'up', text: `+${sec(8)}` },
+        { side: 'rival', at: 4000, tone: 'down', text: `−${sec(8)}` },
+      ],
+    }),
+  },
+  duel: {
+    still: 13000,
+    at: (g) => {
+      /* كلُّ ثلاث ثوانٍ إصابة: أنت أسرع قليلاً، فتغلب بثلاثٍ مقابل اثنتين */
+      const mine = Math.min(3, Math.floor(g / 2800));
+      const theirs = Math.min(2, Math.floor(g / 4200));
+      return {
+        you: { ms: 22000 - g, mark: 'duel', pts: g >= 11000 ? `+${sec(5)}` : `${sec(mine)}:${sec(theirs)}` },
+        rival: { ms: 22000 - g, mark: 'duel', pts: g >= 11000 ? sec(0) : `${sec(theirs)}:${sec(mine)}` },
+        hits: [],
+      };
+    },
+  },
+  mirror: {
+    still: 6000,
+    at: (g) => ({
+      you: { ms: 20000 - g, mark: g < 4000 ? 'mirror' : undefined },
+      rival: { ms: 21000 - g, frost: g >= 4000 && g < 12000 },
+      hits: [
+        { side: 'you', at: 4000, tone: 'hold', icon: 'freeze' },
+        { side: 'rival', at: 4000, tone: 'down', icon: 'freeze' },
+      ],
     }),
   },
 };
@@ -187,7 +177,7 @@ export function CardLab() {
           <div className="lab-stats">
             <span>
               <b className="tnum">{arabic(meta.price)}</b>
-              {countWord(meta.price, 'نقطة', 'نقطتان', 'نقاط')}
+              {countWord(meta.price, 'شرارة', 'شرارتان', 'شرارات')}
             </span>
             <span>
               <b className="tnum">{arabic(meta.limit)}</b>

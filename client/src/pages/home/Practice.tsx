@@ -52,7 +52,7 @@ function score(teams: Team[]): Result[] {
   const alive = teams.filter((t) => !t.flat).sort((a, b) => b.ms - a.ms);
   const rows = [
     ...alive.map((t, i) => ({ ...t, points: rankPoints(i, teams.length) + t.correct })),
-    ...teams.filter((t) => t.flat).map((t) => ({ ...t, points: t.correct })),
+    ...teams.filter((t) => t.flat).map((t) => ({ ...t, points: 0 })),
   ];
   return rows
     .map(({ id, name, me, points, ms, flat }) => ({ id, name, me, points, ms, flat }))

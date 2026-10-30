@@ -4,6 +4,8 @@ import { ask, onWake, useFreshBuild, watchSession, socket } from '../lib/socket'
 import { projectRoom, roomTicking, useProjected } from '../lib/clock';
 import type { CardEvent, CardId, PublicTeam, RoomState } from '../lib/types';
 import { CARD_LOOK } from '../lib/cards';
+import { EffectBadges } from '../components/effects';
+import { LivesBar, playersWord } from '../components/lives';
 import {
   Button,
   Card,
@@ -25,6 +27,7 @@ import {
   EyeOffIcon,
   FlatlineIcon,
   OfflineIcon,
+  ReviveIcon,
   SnowflakeIcon,
 } from '../components/icons';
 import {
@@ -35,7 +38,6 @@ import {
   Lane,
   PausedMark,
   ResultBars,
-  RollingNumber,
   Standings,
   useReorderSlide,
 } from '../components/game';
@@ -188,28 +190,36 @@ function Board({ room }: { room: RoomState }) {
    *      ونزاحت، فتُسلّم الشاشة إلى الجولة الجديدة.
    * ولذلك تُركَّب الستارتان معاً: الثانية جاهزة تحت الأولى قبل انفراجها.
    */
-  const stopped = useFlatlineMoment(room.teams, room.round);
+  const lives = room.lives ?? 1;
+  const stopped = useFlatlineMoment(room.teams, room.round, lives, room.status, room.fallen ?? []);
+  const racing =
+    room.status === 'countdown' || room.status === 'running' || room.status === 'paused';
   const curtain = useLingering(room.status === 'ended' ? room.result : null, CURTAIN_OUT_MS);
-
-  /* المنتظِرون ليسوا في السباق: لا يُعدّون نبضاً حيّاً ولا من جملة المتسابقين */
-  const racing = room.teams.filter((t) => !t.waiting);
-  const alive = racing.filter((t) => !t.flatlined).length;
 
   /*
    * القاعة تقرأ سباقاً لا جدولاً: الترتيب هنا بما بقي من الوقت لحظةً
    * بلحظة، والساكنون في الذيل. فإذا سبق أحدٌ أحداً رأت القاعةَ التجاوزَ
    * يحدث، لا نتيجتَه بعد أن حدث.
    */
-  const ranked = [...room.teams].sort((a, b) => {
+  const live = [...room.teams].sort((a, b) => {
     /* من دخل والجولة جارية يُذيَّل: ليس متسابقاً، وعدّادُه الممتلئ ليس تصدّراً */
     if (a.waiting !== b.waiting) return a.waiting ? 1 : -1;
     if (a.flatlined !== b.flatlined) return a.flatlined ? 1 : -1;
-    const ad = darkened(a, room.status);
-    if (ad !== darkened(b, room.status)) return ad ? 1 : -1;
-    if (ad) return a.name.localeCompare(b.name, 'ar');
     return b.timeMs - a.timeMs || b.score - a.score;
   });
-  const leaderId = ranked.find((t) => !t.flatlined && !t.waiting && !darkened(t, room.status))?.id;
+  const dense = denseLayout(live.length);
+  /*
+   * في القاعة الكبيرة يُعاد الترتيبُ كل ثانيةٍ ونصف لا مع كل إجابة: ثلاثون
+   * صفّاً في أعمدةٍ تتبادل أماكنها أربع مرّاتٍ في الثانية تصير زحاماً لا
+   * يُقرأ فيه اسم. والمتوقّفُ يُذيَّل فوراً — ذاك خبرٌ لا يُؤجَّل.
+   */
+  const order = useSteadyOrder(
+    live.map((t) => t.id),
+    dense ? 1500 : 0,
+    live.filter((t) => t.flatlined).length + ':' + room.status,
+  );
+  const ranked = [...live].sort((a, b) => order(a.id) - order(b.id));
+  const leaderId = ranked.find((t) => !t.flatlined && !t.waiting)?.id;
 
   const board = useRef<HTMLDivElement>(null);
   useReorderSlide(board, ranked.map((t) => t.id).join(','));
@@ -246,6 +256,18 @@ function Board({ room }: { room: RoomState }) {
           }`}
         >
           <Wordmark className={phone ? 'text-[24px]' : 'text-[28px]'} />
+          {/*
+           * نبضاتُ الجولة في وسط الترويسة: تنكسر نبضةٌ باسم كل من يسكن —
+           * فالقاعةُ ترى كم بقي قبل أن تنتهي. وبثمانيةٍ فأقلّ لا تُرسم.
+           */}
+          {lives > 1 && racing && (
+            <LivesBar
+              lives={lives}
+              fallen={room.fallen ?? []}
+              size={phone ? 'sm' : 'lg'}
+              names={!phone}
+            />
+          )}
           <div className={`flex items-center gap-3 ${phone ? 'text-[15px]' : 'text-[19px]'}`}>
             <Chip label="الجولة" value={room.round} />
             <Chip label="الغرفة" value={room.code} signal />
@@ -265,18 +287,51 @@ function Board({ room }: { room: RoomState }) {
                 <Lobby code={room.code} qr={qr} teams={room.teams} />
               )
             ) : room.status === 'finished' && room.standings ? (
-              <div className="flex min-h-0 flex-1 items-center overflow-y-auto py-6">
-                <Standings standings={room.standings} />
+              /*
+               * m-auto لا items-center: الوسطُ بالفلكس يقصّ أعلى ما طال عن الشاشة
+               * فيضيع البطل. وفوق ثمانيةٍ تبقى المنصّةُ أشرطةً والبقيّةُ شبكةً صغيرة.
+               */
+              <div className="flex min-h-0 flex-1 overflow-y-auto py-6">
+                <div className="m-auto w-full">
+                  <Standings
+                    standings={room.standings}
+                    bars={room.standings.length > 8 ? 2 : undefined}
+                  />
+                </div>
               </div>
             ) : (
               <div
                 ref={board}
-                className={`flex min-h-0 flex-1 flex-col gap-2.5 py-4 ${
-                  phone ? 'justify-start overflow-y-auto' : 'justify-center'
+                className={`min-h-0 flex-1 py-4 ${
+                  phone
+                    ? 'flex flex-col justify-start gap-2.5 overflow-y-auto'
+                    : dense
+                      ? 'grid content-center'
+                      : 'flex flex-col justify-center gap-2.5'
                 }`}
+                style={
+                  !phone && dense
+                    ? {
+                        /* ينزل العمودُ قبل أن يعبر: الأولُ أعلى اليمين والترتيبُ يُقرأ عموداً عموداً */
+                        gridAutoFlow: 'column',
+                        gridTemplateColumns: `repeat(${dense.cols}, minmax(0, 1fr))`,
+                        gridTemplateRows: `repeat(${dense.rows}, ${dense.row}px)`,
+                        gap: `${dense.gap}px ${Math.round(dense.gap * 2.4)}px`,
+                      }
+                    : undefined
+                }
               >
                 {ranked.map((team, index) =>
-                  phone ? (
+                  !phone && dense ? (
+                    <CompactChannel
+                      key={team.id}
+                      team={team}
+                      rank={index + 1}
+                      status={room.status}
+                      leader={team.id === leaderId}
+                      font={dense.font}
+                    />
+                  ) : phone ? (
                     <PhoneChannel
                       key={team.id}
                       team={team}
@@ -308,38 +363,16 @@ function Board({ room }: { room: RoomState }) {
           )}
         </div>
 
-        {/* الذيلُ مفتاحُ ألوانٍ يُقرأ مرّةً ثم يُنسى — فلا يُعطى قامةَ المجرى */}
-        <footer
-          className={`flex shrink-0 items-center justify-between border-t-2 border-line-2 font-medium text-muted ${
-            phone ? 'h-[52px] text-[15px]' : 'h-[58px] text-[19px]'
-          }`}
-        >
-          <div className={phone ? 'hidden' : 'flex items-center gap-7'}>
-            <Legend color="var(--color-safe)" label="نبض قوي" />
-            <Legend color="var(--color-warn)" label="يضعف" />
-            <Legend color="var(--color-danger)" label="على وشك السكون" />
-          </div>
-          <div className={`tnum flex items-center gap-4 ${phone ? 'w-full justify-between' : ''}`}>
-            <span>
-              {alive} نبضة حيّة من {racing.length}
-            </span>
-            <span className="text-faint">·</span>
-            <span className="font-black text-ink">{location.host}/play</span>
-          </div>
-        </footer>
-
         <CountdownGate ms={room.countdownMs} on={room.status === 'countdown'} />
         {room.status === 'countdown' && (room.cardEvents?.length ?? 0) > 0 && (
-          <div className="pointer-events-none fixed inset-x-0 bottom-[6vh] z-[60] flex flex-col items-center gap-[1vh] px-[4vw]">
+          <div className="pointer-events-none fixed inset-x-0 bottom-[6vh] z-[60] flex flex-wrap items-center justify-center gap-[1vw] px-[4vw]">
             {room.cardEvents!.map((event, i) => {
               const look =
-                CARD_LOOK[
-                  event.kind === 'hit' ? event.card : event.kind === 'blocked' ? 'fort' : 'mirror'
-                ];
+                CARD_LOOK[event.kind === 'hit' || event.kind === 'duel' ? event.card : 'mirror'];
               return (
                 <div
                   key={i}
-                  className="rise-in flex items-center gap-[1vw] rounded-card bg-surface/95 px-[2vw] py-[1vh] text-[clamp(18px,2.4vw,42px)] font-black shadow-[inset_0_0_0_1px_var(--color-line-2)]"
+                  className="rise-in flex items-center gap-[0.6vw] rounded-card bg-surface/95 px-[1.4vw] py-[1vh] text-[clamp(16px,1.8vw,32px)] font-black shadow-[inset_0_0_0_1px_var(--color-line-2)]"
                   style={{ animationDelay: `${i * 0.12}s` }}
                 >
                   <look.Icon className={look.ink} style={{ width: '1.1em', height: '1.1em' }} />
@@ -369,13 +402,19 @@ function Board({ room }: { room: RoomState }) {
   );
 }
 
-function Legend({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="flex items-center gap-2.5">
-      <i className="size-5 rounded-[3px]" style={{ backgroundColor: color }} aria-hidden="true" />
-      {label}
-    </span>
-  );
+/**
+ * ترتيبٌ يتبدّل على مهل: يُؤخذ الترتيبُ الجديد إذا مضت المهلة أو تبدّل
+ * المفتاح (سكن نبضٌ، تبدّلت الحال)، وإلا بقي السابق. ومن جاء جديداً يُلحق
+ * بآخره حتى يُعاد الترتيب.
+ */
+function useSteadyOrder(ids: string[], ms: number, key: string) {
+  const kept = useRef<{ ids: string[]; at: number; key: string }>({ ids, at: 0, key });
+  const now = Date.now();
+  if (ms === 0 || kept.current.key !== key || now - kept.current.at >= ms) {
+    kept.current = { ids, at: now, key };
+  }
+  const index = new Map(kept.current.ids.map((id, i) => [id, i]));
+  return (id: string) => index.get(id) ?? ids.length + ids.indexOf(id);
 }
 
 /**
@@ -383,19 +422,31 @@ function Legend({ color, label }: { color: string; label: string }) {
  * فلا عدادات ولا مجارٍ — رمز كبير يُقرأ من آخر صفّ، وأسماء من انضمّ.
  */
 function Lobby({ code, qr, teams }: { code: string; qr: string; teams: PublicTeam[] }) {
+  /*
+   * القاعةُ الكبيرة تملأ الشاشة أسماءً: فكلما كثروا صغرت الأسماءُ والرمزُ
+   * معاً، وغاب التوقيع — وإلا دفعت الأسماءُ الرمزَ إلى الترويسة وركب
+   * التوقيعُ الذيل. والرمزُ يبقى أكبرَ ما في الشاشة مهما كثروا.
+   */
+  const crowd = teams.length > 40 ? 'xl' : teams.length > 18 ? 'lg' : '';
   return (
-    <div className="flex min-h-0 flex-1 flex-col justify-center gap-12 py-8">
+    <div
+      className={`flex min-h-0 flex-1 flex-col justify-center py-8 ${crowd ? 'gap-7' : 'gap-12'}`}
+    >
       <div className="flex items-center justify-center gap-16">
         {qr && (
           <div className="rounded-card bg-ink p-4">
-            <img src={qr} alt="امسح للانضمام" className="size-60" />
+            <img src={qr} alt="امسح للانضمام" className={crowd ? 'size-44' : 'size-60'} />
           </div>
         )}
         <div>
           <p className="text-[34px] font-medium text-muted">
             <span className="font-black text-ink">{location.host}/play</span>
           </p>
-          <div className="tnum mt-6 text-[150px] leading-none font-black tracking-[0.1em] text-signal">
+          <div
+            className={`tnum leading-none font-black tracking-[0.1em] text-signal ${
+              crowd ? 'mt-4 text-[112px]' : 'mt-6 text-[150px]'
+            }`}
+          >
             {code}
           </div>
         </div>
@@ -403,13 +454,19 @@ function Lobby({ code, qr, teams }: { code: string; qr: string; teams: PublicTea
 
       <div className="border-t-2 border-line-2 pt-8">
         <p className="tnum mb-5 text-[28px] font-bold tracking-[0.14em] text-muted">
-          {teams.length === 0 ? 'بانتظار انضمام اللاعبين…' : `انضمّ ${teams.length} لاعباً`}
+          {teams.length === 0 ? 'بانتظار انضمام اللاعبين…' : `انضمّ ${playersWord(teams.length)}`}
         </p>
         <div className="flex flex-wrap gap-3">
           {teams.map((team) => (
             <span
               key={team.id}
-              className="rise-in rounded-card bg-surface px-7 py-3.5 text-[34px] font-black shadow-[inset_0_0_0_1px_var(--color-line-2)]"
+              className={`rise-in rounded-card bg-surface font-black shadow-[inset_0_0_0_1px_var(--color-line-2)] ${
+                crowd === 'xl'
+                  ? 'px-3.5 py-1.5 text-[19px]'
+                  : crowd === 'lg'
+                    ? 'px-5 py-2.5 text-[25px]'
+                    : 'px-7 py-3.5 text-[34px]'
+              }`}
             >
               {team.name}
             </span>
@@ -422,7 +479,7 @@ function Lobby({ code, qr, teams }: { code: string; qr: string; teams: PublicTea
        * فهو موضعُه. ولا يظهر والجولة تجري — لا يُزاحم عدّاداً.
        * والقياسُ مكبَّرٌ لأن بينه وبين العين عرضُ القاعة.
        */}
-      <Credit className="text-center !text-[20px]" />
+      {!crowd && <Credit className="text-center !text-[20px]" />}
     </div>
   );
 }
@@ -443,16 +500,16 @@ function Channel({
   leader?: boolean;
 }) {
   const frozen = team.locked && !team.flatlined;
-  const dark = darkened(team, status);
   const gilded = team.doubled && !team.flatlined && !frozen;
   const level = teamLevel(team.timeMs, team.flatlined);
   const dying = level === 'danger' && status === 'running' && !frozen;
+  const effects = inRound(status) ? team.effects : undefined;
 
   return (
     <div
       data-row={team.id}
-      style={dark ? undefined : stateStyle(level, team.timeMs)}
-      className={`relative grid max-h-[128px] min-h-[86px] flex-1 grid-cols-[64px_340px_minmax(0,1fr)_168px_148px] items-center gap-6 overflow-hidden rounded-card px-6 ${
+      style={stateStyle(level, team.timeMs)}
+      className={`relative grid max-h-[128px] min-h-[86px] flex-1 grid-cols-[64px_minmax(0,380px)_minmax(0,1fr)_168px] items-center gap-6 overflow-hidden rounded-card px-6 ${
         frozen
           ? 'frosted'
           : gilded
@@ -498,28 +555,26 @@ function Channel({
         >
           {team.waiting ? (
             'ينتظر الجولة القادمة'
-          ) : dark ? (
-            <span className="text-muted">عتّمه {team.blackoutBy}</span>
           ) : frozen && team.frozenBy ? (
             /* القاعة تحبّ أن تعرف من جمّد من — والمجمَّد يُقرأ له عذرُه */
             <span className="text-frost">جمّده {team.frozenBy}</span>
+          ) : effects?.length ? (
+            /* شاراتُ البطاقات تحلّ محلّ عدد الصحيحات: هي الخبرُ الأجدّ في الجولة */
+            <EffectBadges effects={effects} size="lg" className="flex-nowrap overflow-hidden" />
           ) : (
             `${team.correct}/${team.answered} إجابة صحيحة`
           )}
         </div>
       </div>
 
-      {dark ? (
-        <div className="relative h-[58px] rounded-card bg-sunk" />
-      ) : (
-        <Lane
-          timeMs={team.timeMs}
-          running={status === 'running'}
-          flatlined={team.flatlined}
-          size="lg"
-          className="relative h-[58px]"
-        />
-      )}
+      <Lane
+        timeMs={team.timeMs}
+        running={status === 'running'}
+        flatlined={team.flatlined}
+        size="lg"
+        className="relative h-[58px]"
+      />
+      <RevivedFlash at={team.revivedAt} className="text-[38px]" />
 
       {/* العدّاد لا يغيب وإن سكن النبض: الصفر خبرٌ يُقرأ، والكلمة تحته تفسّره */}
       <div className="relative text-center">
@@ -539,11 +594,6 @@ function Channel({
               {team.dropped ? 'انقطع اتصاله' : 'توقف النبض'}
             </span>
           </>
-        ) : dark ? (
-          <>
-            <b className="tnum block text-[50px] leading-none font-black text-faint">؟</b>
-            <span className="mt-1 block text-[28px] font-medium text-muted">ثانية</span>
-          </>
         ) : (
           <>
             <b className="ink-state tnum block text-[50px] leading-none font-black">
@@ -552,16 +602,6 @@ function Channel({
             <span className="mt-1 block text-[28px] font-medium text-muted">ثانية</span>
           </>
         )}
-      </div>
-
-      <div className="relative border-r border-line-2 pr-5 text-center">
-        <RollingNumber
-          value={team.score}
-          className={`tnum block text-[44px] leading-none font-black ${
-            team.flatlined ? 'text-faint' : 'text-signal'
-          }`}
-        />
-        <span className="mt-1 block text-[28px] font-medium text-muted">نقطة</span>
       </div>
     </div>
   );
@@ -599,7 +639,13 @@ function FlatlineMoment({
           </p>
           <h2
             className={`thump mt-3 font-black text-balance break-words ${
-              phone ? 'text-[56px] leading-[1.15]' : 'text-[132px] leading-none'
+              name.includes('، ')
+                ? phone
+                  ? 'text-[34px] leading-[1.3]'
+                  : 'text-[72px] leading-[1.15]'
+                : phone
+                  ? 'text-[56px] leading-[1.15]'
+                  : 'text-[132px] leading-none'
             }`}
           >
             {name}
@@ -663,7 +709,13 @@ function useLingering<T>(value: T | null, ms: number) {
  */
 const FLATLINE_HOLD_MS = 2300;
 
-function useFlatlineMoment(teams: PublicTeam[], round: number) {
+function useFlatlineMoment(
+  teams: PublicTeam[],
+  round: number,
+  lives: number,
+  status: RoomState['status'],
+  fallen: string[],
+) {
   const seen = useRef(new Set<string>());
   const [name, setName] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -675,18 +727,44 @@ function useFlatlineMoment(teams: PublicTeam[], round: number) {
     setLeaving(false);
   }, [round]);
 
+  /*
+   * شاشةٌ فُتحت (أو أُعيد تحميلها) والجولةُ قد انتهت: من سكن قبل فتحها
+   * خبرٌ قديم، فلا تُعاد ستارتُه ولا صفيرُه — يُعلَّم مرئياً في أول حالٍ تصل.
+   */
+  const primed = useRef(false);
   useEffect(() => {
+    if (!primed.current) {
+      primed.current = true;
+      for (const team of teams) if (team.flatlined) seen.current.add(team.id);
+      return;
+    }
     for (const team of teams) {
       if (team.flatlined && !seen.current.has(team.id)) {
         seen.current.add(team.id);
         /* من سكن وهو منقطع لم يُنهِ الجولة — فلا صفيرَ ولا ستارةَ تقول «انتهت» */
         if (team.dropped) continue;
+        /* وبنبضاتٍ كثيرة لا يُنهيها كلُّ من يسكن: مربّعُه ينكسر في الترويسة، والستارةُ لآخرهم */
+        if (lives > 1) continue;
         playFlatline();
         setName(team.name);
         setLeaving(false);
       }
     }
   }, [teams]);
+
+  /* انكسرت آخرُ نبضة: الستارةُ باسم من كسرها — هو من أنهى الجولة */
+  const was = useRef(status);
+  useEffect(() => {
+    const before = was.current;
+    was.current = status;
+    if (lives > 1 && before === 'running' && status === 'ended' && fallen.length) {
+      playFlatline();
+      /* الجولةُ انتهت بانكسار النبضات كلها: تُسمّى كلُّها لا آخرُها وحده */
+      setName(fallen.join('، '));
+      setLeaving(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   // تمهل، ثم تنفرج، ثم تُرفع — فتظهر النتائج التي كانت تحتها
   useEffect(() => {
@@ -705,23 +783,158 @@ function useFlatlineMoment(teams: PublicTeam[], round: number) {
   return { name, leaving };
 }
 
-const VERB: Partial<Record<CardId, string>> = { freeze: 'تجميد', blackout: 'تعتيم', steal: 'سرقة' };
+const VERB: Partial<Record<CardId, string>> = { freeze: 'تجميد', steal: 'سرقة' };
 
 function describe(event: CardEvent) {
-  if (event.kind === 'blocked') return `حصن ${event.on} صدّ ${VERB[event.card]} ${event.by}`;
+  if (event.kind === 'duel') return `${event.by} يبارز ${event.on}`;
+  if (event.kind === 'blocked') {
+    return `مرآتا ${event.by} و${event.on} تقابلتا فضاع ${VERB[event.card]}`;
+  }
   if (event.kind === 'reflected') return `مرآة ${event.on} ردّت ${VERB[event.card]} ${event.by}`;
   if (event.card === 'freeze') return `${event.by} جمّد ${event.on}`;
-  if (event.card === 'blackout') return `${event.by} عتّم على ${event.on}`;
   return `${event.by} سرق ${event.secs ?? ''} ث من ${event.on}`;
 }
 
-function darkened(team: PublicTeam, status: RoomState['status']) {
+/* الشارات خبرُ جولةٍ قائمة — وبعد نهايتها تُخفى حتى تبدأ التالية */
+const inRound = (status: RoomState['status']) =>
+  status === 'countdown' || status === 'running' || status === 'paused';
+
+/**
+ * كم عموداً تحتاج القاعة: سبعةٌ فأقلّ صفوفٌ كاملة كما هي، وما زاد يُصفّ
+ * أعمدةً بصفوفٍ أقصر حتى يظهر الجميع في الشاشة — لا يُقصّ آخرُهم. والطولُ
+ * المتاح للصفوف نحو ٧٩٠ بكسلاً من لوح ٩٠٠ بعد الترويسة.
+ */
+function denseLayout(count: number) {
+  if (count <= 7) return null;
+  const cols = count <= 16 ? 2 : count <= 30 ? 3 : count <= 52 ? 4 : 5;
+  const rows = Math.ceil(count / cols);
+  const gap = rows > 12 ? 4 : 8;
+  const row = Math.max(26, Math.min(96, Math.floor((790 - gap * (rows - 1)) / rows)));
+  /*
+   * والخطُّ بالأضيق من البُعدين: ارتفاعُ الصفّ وعرضُ العمود. كان بالارتفاع
+   * وحده، فبأربعة أعمدة يكبر الرقمُ والوقتُ حتى لا يبقى للاسم إلا حرف.
+   * والصفُّ يحتاج نحو عشرة أضعافٍ من الخطّ: مركزٌ ووقتٌ واسم.
+   */
+  const width = (1328 - Math.round(gap * 2.4) * (cols - 1)) / cols;
+  const font = Math.max(14, Math.min(34, Math.round(row * 0.42), Math.floor(width / 10)));
+  return { cols, rows, row, gap, font };
+}
+
+/**
+ * ومضةُ صاعق القلب على صفّ من عاد نبضه: القاعة ترى العدّاد يقفز من
+ * الصفر إلى عشرين فتعرف ما حدث.
+ */
+function RevivedFlash({ at, className = '' }: { at?: number | null; className?: string }) {
+  const [on, setOn] = useState(false);
+  const seen = useRef(at);
+  useEffect(() => {
+    if (!at || at === seen.current) return;
+    seen.current = at;
+    setOn(true);
+    const timer = setTimeout(() => setOn(false), 2200);
+    return () => clearTimeout(timer);
+  }, [at]);
+  if (!on) return null;
   return (
-    Boolean(team.blackout) &&
-    !team.flatlined &&
-    !team.waiting &&
-    status !== 'ended' &&
-    status !== 'lobby'
+    <span
+      className={`pointer-events-none absolute inset-0 z-[2] flex items-center justify-center gap-[0.4em] bg-danger/25 ${className}`}
+    >
+      <ReviveIcon size={36} className="thump text-danger" />
+      <b className="thump font-black">عاد نبضه</b>
+    </span>
+  );
+}
+
+/**
+ * صفٌّ مضغوط للقاعة الكبيرة: المجرى خلفيةٌ خافتة على طول الصفّ، وفوقه
+ * المركز والاسم وشارات البطاقات أيقوناتٍ بلا نصّ، ثم الوقت والنقاط.
+ * الخطُّ يتبع ارتفاع الصفّ، فيبقى مقروءاً من آخر القاعة ما أمكن.
+ */
+function CompactChannel({
+  team,
+  rank,
+  status,
+  leader,
+  font,
+}: {
+  team: PublicTeam;
+  rank: number;
+  status: RoomState['status'];
+  leader?: boolean;
+  font: number;
+}) {
+  const frozen = team.locked && !team.flatlined;
+  const gilded = team.doubled && !team.flatlined && !frozen;
+  const level = teamLevel(team.timeMs, team.flatlined);
+  const dying = level === 'danger' && status === 'running' && !frozen;
+  const icon = Math.round(font * 0.8);
+  const effects = inRound(status) ? (team.effects ?? []) : [];
+
+  return (
+    <div
+      data-row={team.id}
+      style={{ ...stateStyle(level, team.timeMs), fontSize: font }}
+      className={`relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[0.5em] overflow-hidden rounded-card px-[0.6em] ${
+        frozen
+          ? 'frosted'
+          : gilded
+            ? 'gilded'
+            : team.flatlined
+              ? 'bg-transparent shadow-[inset_0_0_0_1px_var(--color-line)]'
+              : 'bg-surface shadow-[inset_0_0_0_1px_var(--color-line)]'
+      } ${dying ? 'alarm-channel' : ''}`}
+    >
+      <span className="bg-state absolute inset-y-0 start-0 z-[1] w-1" aria-hidden="true" />
+      {/* المجرى خلفيةٌ في غلافٍ مطلق: ‎.lane‎ تفرض موضعها النسبيّ فلا يُطلَق هو نفسه */}
+      {!team.waiting && (
+        <span className="pointer-events-none absolute inset-0 opacity-30" aria-hidden="true">
+          <Lane
+            timeMs={team.timeMs}
+            running={status === 'running'}
+            flatlined={team.flatlined}
+            size="sm"
+            className="h-full w-full"
+          />
+        </span>
+      )}
+
+      <span
+        className={`tnum relative w-[1.6em] text-center ${
+          leader && !team.flatlined ? 'font-black text-signal' : 'font-light text-faint'
+        }`}
+      >
+        {rank}
+      </span>
+
+      <span
+        className={`relative flex min-w-0 items-center gap-[0.3em] font-black ${team.flatlined ? 'text-faint' : ''}`}
+      >
+        {leader && !team.flatlined && <CrownIcon size={icon} className="shrink-0 text-signal" />}
+        {/* الاسمُ أولى بالمكان من الشارات: هي تُقصّ قبله */}
+        <span className="max-w-[82%] shrink-0 truncate">{team.name}</span>
+        <span className="flex min-w-0 items-center gap-[0.25em] overflow-hidden">
+          {frozen && <SnowflakeIcon size={icon} className="shrink-0 text-frost" />}
+          {gilded && <span className="shrink-0 text-gold">×٢</span>}
+          {effects.map((fx, i) => {
+            const look = CARD_LOOK[fx.card];
+            return look ? (
+              <look.Icon key={i} size={icon} className={`shrink-0 ${look.ink}`} />
+            ) : null;
+          })}
+          {!team.connected && <OfflineIcon size={icon} className="shrink-0 text-faint" />}
+        </span>
+      </span>
+
+      <b
+        className={`tnum relative font-black ${
+          team.waiting ? 'text-faint' : team.flatlined ? 'text-danger' : 'ink-state'
+        }`}
+      >
+        {team.waiting ? '-' : formatTime(team.timeMs)}
+      </b>
+
+      <RevivedFlash at={team.revivedAt} />
+    </div>
   );
 }
 
@@ -743,7 +956,7 @@ function PhoneLobby({ code, qr, teams }: { code: string; qr: string; teams: Publ
       </div>
       <div className="w-full border-t-2 border-line-2 pt-5">
         <p className="tnum mb-3 text-[17px] font-bold tracking-[0.1em] text-muted">
-          {teams.length === 0 ? 'بانتظار انضمام اللاعبين…' : `انضمّ ${teams.length} لاعباً`}
+          {teams.length === 0 ? 'بانتظار انضمام اللاعبين…' : `انضمّ ${playersWord(teams.length)}`}
         </p>
         <div className="flex flex-wrap justify-center gap-2">
           {teams.map((team) => (
@@ -772,15 +985,15 @@ function PhoneChannel({
   leader?: boolean;
 }) {
   const frozen = team.locked && !team.flatlined;
-  const dark = darkened(team, status);
   const gilded = team.doubled && !team.flatlined && !frozen;
   const level = teamLevel(team.timeMs, team.flatlined);
   const dying = level === 'danger' && status === 'running' && !frozen;
+  const effects = inRound(status) ? team.effects : undefined;
 
   return (
     <div
       data-row={team.id}
-      style={dark ? undefined : stateStyle(level, team.timeMs)}
+      style={stateStyle(level, team.timeMs)}
       className={`relative grid shrink-0 grid-cols-[26px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 overflow-hidden rounded-card px-4 py-3.5 ${
         frozen
           ? 'frosted'
@@ -818,8 +1031,6 @@ function PhoneChannel({
         <div className="tnum mt-0.5 truncate text-[15px] font-medium text-muted">
           {team.waiting ? (
             'ينتظر الجولة القادمة'
-          ) : dark ? (
-            `عتّمه ${team.blackoutBy}`
           ) : frozen && team.frozenBy ? (
             <span className="text-frost">جمّده {team.frozenBy}</span>
           ) : team.flatlined ? (
@@ -828,8 +1039,7 @@ function PhoneChannel({
             </span>
           ) : (
             <>
-              {team.correct}/{team.answered} صحيحة ·{' '}
-              <RollingNumber value={team.score} className="font-black text-signal" /> نقطة
+              {team.correct}/{team.answered} صحيحة
             </>
           )}
         </div>
@@ -837,23 +1047,23 @@ function PhoneChannel({
 
       <b
         className={`tnum relative text-[34px] leading-none font-black ${
-          team.waiting || dark ? 'text-faint' : team.flatlined ? 'text-danger' : 'ink-state'
+          team.waiting ? 'text-faint' : team.flatlined ? 'text-danger' : 'ink-state'
         }`}
       >
-        {team.waiting ? '-' : dark ? '؟' : formatTime(team.timeMs)}
+        {team.waiting ? '-' : formatTime(team.timeMs)}
       </b>
 
-      {dark ? (
-        <div className="relative col-span-3 h-[38px] rounded-card bg-sunk" />
-      ) : (
-        <Lane
-          timeMs={team.timeMs}
-          running={status === 'running'}
-          flatlined={team.flatlined}
-          size="md"
-          className="relative col-span-3 h-[38px]"
-        />
+      {effects && effects.length > 0 && (
+        <EffectBadges effects={effects} size="md" className="relative col-span-3" />
       )}
+      <Lane
+        timeMs={team.timeMs}
+        running={status === 'running'}
+        flatlined={team.flatlined}
+        size="md"
+        className="relative col-span-3 h-[38px]"
+      />
+      <RevivedFlash at={team.revivedAt} className="text-[22px]" />
     </div>
   );
 }

@@ -200,8 +200,8 @@ if (ended) {
     byRank.every((a, i) => i === 0 || byRank[i - 1].timeMs >= a.timeMs),
   );
   check(
-    'نقاط الإجابات محسوبة',
-    ended.awards.every((a) => a.points >= (a.correct ?? 0)),
+    'نقاط الإجابات للصامدين، والساكن صفر',
+    ended.awards.every((a) => (a.flatlined ? a.points === 0 : a.points >= (a.correct ?? 0))),
   );
   check('كل الفرق توقفت', adminState.status === 'ended');
 }
@@ -258,32 +258,42 @@ admin.emit('admin:toggleBlur');
 await wait(400);
 check('إلغاء التغبيش يعمل', adminState.displayBlurred === false);
 
-// متجر البطاقات عبر السوكِت: المتصدّر يشتري «وقت إضافي» حتى الحدّ ثم يُمنع
-const buyer = teams.reduce((best, t) => (t.state.score > best.state.score ? t : best), teams[0]);
+// متجر البطاقات عبر السوكِت: يُشترى بالشرارات ولا ينقص من نقاط الفوز
+const buyer = teams.reduce((best, t) => (t.state.sparks > best.state.sparks ? t : best), teams[0]);
 const timeCard = buyer.state.shop.cards.find((c) => c.id === 'time');
 check('المتجر مفتوح بين الجولات', buyer.state.shop.open === true);
 check('المتجر يعلن المتبقي من البطاقة', timeCard.left === 4);
-// نمنحه رصيداً كافياً عبر تعديل المنظّم — فالحدّ أربعٌ ولا نريد رفضاً لقلّة الرصيد
-admin.emit('admin:adjustScore', { teamId: buyer.id, points: 40 });
-await wait(500);
+// الفرقُ تجيب «الخيار الأول» والخيارات مخلوطة: فالسلسلةُ مصادفة، وقد لا يملك المشتري إلا شرارتي المشاركة
+check(`شرارات المشاركة على الأقل — ${buyer.state.sparks}`, buyer.state.sparks >= 3);
 const scoreBefore2 = buyer.state.score;
+const sparksBefore = buyer.state.sparks;
 const bought = await ask(buyer.socket, 'team:buyCard', { card: 'time' });
-check('شراء بطاقة الوقت عبر السوكِت', bought.ok === true);
-await wait(500);
-check(
-  `خُصم سعر البطاقة (ست نقاط) — ${scoreBefore2} ← ${buyer.state.score}`,
-  buyer.state.score === scoreBefore2 - 6,
-);
-check('المتبقي صار ثلاثاً', buyer.state.shop.cards.find((c) => c.id === 'time').left === 3);
-const rest = [];
-for (let i = 0; i < 3; i++) rest.push((await ask(buyer.socket, 'team:buyCard', { card: 'time' })).ok);
-check('تُشترى حتى الحدّ — أربعاً', rest.every(Boolean));
-await wait(300);
-check('المتجر علّمها مستنفَدة', buyer.state.shop.cards.find((c) => c.id === 'time').used === true);
-check(
-  'رفض الشراء بعد الحدّ',
-  (await ask(buyer.socket, 'team:buyCard', { card: 'time' })).ok === false,
-);
+let more = 0;
+if (sparksBefore >= 3) {
+  check('شراء بطاقة الوقت عبر السوكِت', bought.ok === true);
+  await wait(500);
+  check(
+    `خُصم سعرها من الشرارات (ثلاث) — ${sparksBefore} ← ${buyer.state.sparks}`,
+    buyer.state.sparks === sparksBefore - 3,
+  );
+  check('ونقاط الفوز لم تُمسّ', buyer.state.score === scoreBefore2);
+  check('المتبقي صار ثلاثاً', buyer.state.shop.cards.find((c) => c.id === 'time').left === 3);
+  // يشتري ما تكفيه شراراته حتى الحدّ — والحدُّ نفسه يفحصه cards-test
+  while (more < 3 && (await ask(buyer.socket, 'team:buyCard', { card: 'time' })).ok) more++;
+  await wait(300);
+  check(
+    'يُشترى ما تكفيه الشرارات ثم يُرفض',
+    more === Math.min(3, Math.floor((sparksBefore - 3) / 3)),
+  );
+} else {
+  check('يُرفض الشراء لقلّة الشرارات عبر السوكِت', bought.ok === false && /شرارات/.test(bought.error));
+  await wait(300);
+  check(
+    'ولا يُمسّ رصيدٌ ولا نقاط',
+    buyer.state.sparks === sparksBefore && buyer.state.score === scoreBefore2,
+  );
+}
+const timeBought = bought.ok ? 1 + more : 0;
 
 // المسؤول يفتح البطاقات من جديد فتصير متاحة
 check('فتح البطاقات من المسؤول', (await ask(admin, 'admin:reopenCards')).ok === true);
@@ -302,8 +312,10 @@ check(
   adminState.teams.some((t) => t.score > 0),
 );
 check(
-  'المشتري بدأ بـ70 ث (أربع بطاقات ×10ث) والبقية بـ30',
-  adminState.teams.every((t) => (t.id === buyer.id ? t.timeMs === 70000 : t.timeMs === 30000)),
+  `المشتري بدأ بـ${30 + 15 * timeBought} ث (${timeBought} بطاقات ×١٥ث) والبقية بـ30`,
+  adminState.teams.every((t) =>
+    t.id === buyer.id ? t.timeMs === Math.min(120000, 30000 + 15000 * timeBought) : t.timeMs === 30000,
+  ),
 );
 check('الجولة الثانية بدأت باستعداد', adminState.status === 'countdown');
 
@@ -380,8 +392,9 @@ if (standings) {
     standings.every((s, i) => i === 0 || standings[i - 1].score >= s.score),
   );
   check(
-    'المراتب متسلسلة 1..N',
-    standings.every((s, i) => s.rank === i + 1),
+    'المراتب تبدأ بواحد، والمتعادلان تماماً في مركزٍ واحد',
+    standings[0].rank === 1 &&
+      standings.every((s, i) => i === 0 || (s.rank === i + 1 || (s.rank === standings[i - 1].rank && s.score === standings[i - 1].score))),
   );
 }
 check(

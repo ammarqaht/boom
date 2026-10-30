@@ -345,3 +345,12 @@ export const ReviveIcon = (p: IconProps) => (
   <Icon {...p}><path d="M12 20s-7.5-4.6-7.5-10A4.5 4.5 0 0 1 12 7.3 4.5 4.5 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10Z" /><path d="m12.8 9-2.3 3.6h3l-2.3 3.6" /></Icon>
 );
 
+
+export const DuelIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M14.5 17.5 3 6V3h3l11.5 11.5" /><path d="m13 19 6-6M16 16l4 4M19 21l2-2" /><path d="M14.5 6.5 18 3h3v3l-3.5 3.5" /><path d="m5 14 4 4M7 17l-3 3M3 19l2 2" /></Icon>
+);
+
+/* الشرارة: عملةُ الشراء — برقُ صاعق القلب */
+export const SparkIcon = (p: IconProps) => (
+  <Icon {...p}><path d="M13 2 4 13.5h7L10 22l9-11.5h-7L13 2Z" fill="currentColor" strokeWidth={1.4} /></Icon>
+);

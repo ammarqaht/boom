@@ -11,7 +11,7 @@ export const DEFAULT_SETTINGS = {
 const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // بدون الأحرف والأرقام المتشابهة
 const IDLE_ROOM_MS = 2 * 60 * 60 * 1000;
 const COUNTDOWN_MS = 3000;
-const FREEZE_MS = 5000; // مدة قفل الإجابة عند التجميد
+const FREEZE_MS = 8000; // مدة قفل الإجابة عند التجميد
 /*
  * سقفُ المجموعات في الغرفة الواحدة. القاعةُ الحقيقية دونه بكثير، وهو حرزٌ
  * من رابطٍ يتسرّب فيدخل منه مئات فيثقل البثُّ على القاعة كلّها.
@@ -33,58 +33,78 @@ export const MAX_TEAMS = 200;
 export const FLATLINE_GRACE_MS = 1500;
 const LATE_ANSWER_MS = 1000;
 const OFFLINE_AFTER_MS = 3000;
-const TIME_CARD_MS = 10000;
+const TIME_CARD_MS = 15000;
 const DOUBLE_FACTOR = 2;
-const FREEZE_CAP_MS = 10000;
-const STEAL_MS = 5000;
+const FREEZE_CAP_MS = 16000;
+const STEAL_MS = 8000;
 const STEAL_FLOOR_MS = 10000;
-const SHIELD_HITS = 2;
-const TRUCE_MS = 10000;
-const REVIVE_MS = 10000;
+const SHIELD_HITS = 3;
+const REVIVE_MS = 20000;
+const DUEL_POINTS = 5;
+
+/*
+ * الشرارات: عملةُ الشراء، منفصلةٌ عن نقاط الفوز.
+ *
+ * كانت البطاقات تُشترى بنقاط الفوز نفسها، فكلُّ بطاقةٍ خسارةٌ في الترتيب:
+ * قيست في محاكاةٍ على هذا الملف فلم تردّ واحدةٌ منها ثمنَها، وأقربُها
+ * المضاعفة بخسارة خُمس نقطة. فلم يشترِ اللاعبون — وكانوا محقّين.
+ *
+ * فصارت للشراء عملةٌ لا تُحسب في الترتيب، تُكسب من اللعب نفسه: ثلاث شرارات
+ * لكل من لعب الجولة ولو توقّف نبضه (فلا يبقى أحدٌ مفلساً)، وشرارتان لكل
+ * ثلاث صحيحاتٍ متتالية. ولا شيء للإجابة المفردة ولا للمركز: كانت شرارةٌ
+ * لكل صحيحة فكثرت الشرارات حتى صار الشراء بلا قرار. فالسلسلة وحدها تُغني،
+ * والخطأ يقطعها — فيكسب الأقوى نحو سبع والأضعف نحو ثلاث.
+ */
+const SPARK_BASE = 3;
+const STREAK_EVERY = 3;
+const STREAK_SPARKS = 2;
 
 /**
  * تعريفات البطاقات — المرجع الوحيد للأسعار والحدود والأنواع.
  *
- * موازنة السعر تُقاس بحصيلة الجولة لا بالتقدير: الجولة تنتهي بأول نبضٍ
- * يتوقّف، فطولها يساوي عدّادَ البداية — نحو ثلاثين ثانية يجيب فيها
- * اللاعب خمسة أسئلة إلى سبعة. فحصيلة الجولة ثلاثٌ للأضعف، وخمسٌ أو ستّ
- * للوسط، وإحدى عشرة لأقوى من في القاعة. والعشر جولات تبلغ به ثلاثين إلى
- * مئة وسبع.
+ * الأسعار بالشرارات لا بنقاط الفوز، ودخلُ اللاعب الوسط نحو أربعٍ في الجولة:
+ * فبطاقةٌ بأربعٍ قرارُ جولة، والمضاعفة بستٍّ رهانٌ يُدّخر له.
  *
- * وعلى هذه الحصيلة تُسعَّر كل بطاقة بما تُغِلّه فعلاً:
+ * والبطاقات ثمانٍ لكلٍّ منها أثرٌ لا يشاركها فيه غيرها:
+ *   دعم:  وقت إضافي (+١٥ ث) · صاعق القلب (يعود النبض بعشرين ثانية) ·
+ *         مضاعفة (×٢ إن نجوت، وتسقط وحدها إن سكنت)
+ *   هجوم: تجميد (قفل ثماني ثوانٍ) · سرقة نبض (ثماني ثوانٍ إليك) ·
+ *         مبارزة (تتحدّى من فوقك، فإن أصبت أكثر سرقت منه خمس نقاط)
+ *   دفاع: درع (ثلاثة أخطاء بلا خصم) · مرآة (تردّ كل تجميدٍ وسرقة)
  *
- * • «مضاعفة» تساوي حصيلة جولتك بعينها (ثلاثٌ للأضعف، إحدى عشرة للأقوى)،
- *   فثمنها جولةٌ وسطى: ستّ. فيخسر بها الضعيف ويربح القويّ — رهانُ مهارةٍ
- *   لا قرعة. ولو سُعِّرت بخمس عشرة لما استحقّت الشراء أبداً: احتمال أن
- *   تبلغ جولةُ أقوى لاعبٍ خمس عشرة أربعةٌ في المئة.
- *
- * • «وقت إضافي» لا يُثمر نقاطاً كثيرة: الجولة تنتهي بموت غيرك لا بنفاد
- *   وقتك، فعشر الثواني تساوي نقطةً أو نقطةً ونصفاً لمن يحتاجها، ودون
- *   نصف نقطة لأقوى من في القاعة. فهي شريانُ نجاةٍ من التوقّف لا مكسبُ
- *   نقاط، وثمنها ثلاث: يقدر عليها من دخله ثلاث.
- *
- * • «تجميد» لا تردّ على مشتريها نقاطاً أصلاً — الترتيب بمجموع النقاط،
- *   وهي تنقص الخصم نقطةً وسبعاً من عشرٍ ولا تزيدك إلا جزءاً من نقطةٍ
- *   يأتي من تبدّل المراكز. فثمنها أربع: تضحيةٌ محسوبة لا انتحار.
- *
- * والحدود تتبع الثمن: المضاعفة مرّتان (رهانٌ يُحسم)، والوقت والتجميد
- * أربعاً — فأقصى الإنفاق أربعون، نحو ثلثي حصيلة لاعبٍ وسط: ميزانيةٌ
- * تُدار لا مصروفٌ يُنفَق أول جولة.
+ * دُمجت الهدنة في الوقت الإضافي (كان أثرهما في النقاط واحداً)، والحصن في
+ * المرآة، وأُسقط التعتيم: لاعبٌ سريعٌ لا ينظر إلى عدّاده أصلاً.
  */
 export const CARDS = {
-  time: { price: 6, name: 'وقت إضافي', limit: 4, stack: true },
-  truce: { price: 3, name: 'هدنة', limit: 2 },
-  shield: { price: 2, name: 'درع', limit: 3 },
-  revive: { price: 7, name: 'صاعق القلب', limit: 1 },
-  fort: { price: 5, name: 'حصن', limit: 3 },
-  mirror: { price: 5, name: 'مرآة', limit: 2 },
-  blackout: { price: 4, name: 'تعتيم', limit: 3, target: true },
-  freeze: { price: 3, name: 'تجميد', limit: 3, target: true },
-  steal: { price: 4, name: 'سرقة نبض', limit: 2, target: true },
+  time: { price: 3, name: 'وقت إضافي', limit: 4, stack: true },
+  revive: { price: 4, name: 'صاعق القلب', limit: 1 },
   double: { price: 6, name: 'مضاعفة', limit: 2 },
+  freeze: { price: 4, name: 'تجميد', limit: 3, target: true },
+  steal: { price: 4, name: 'سرقة نبض', limit: 2, target: true },
+  duel: { price: 6, name: 'مبارزة', limit: 2, target: true, upward: true },
+  shield: { price: 2, name: 'درع', limit: 3 },
+  mirror: { price: 4, name: 'مرآة', limit: 2 },
 };
 
-const ATTACK_VERB = { freeze: 'تجميد', blackout: 'تعتيم', steal: 'سرقة' };
+/*
+ * وقتُ الشراء بين الجولتين: دقيقةٌ ونصف من نهاية الجولة، يراها
+ * اللاعب عدّاداً تحت بطاقته. فإذا انقضت أُغلق المتجر حتى تبدأ الجولة —
+ * فلا يبقى قرارٌ معلّقاً إلى ما لا نهاية، ولا تبدأ جولةٌ بلا إذن المنظّم.
+ */
+const BREAK_MS = 90000;
+
+/*
+ * نبضاتُ الجولة: لا تنتهي الجولةُ بأول من يسكن نبضُه، بل حين يسكن ثُمنُ
+ * القاعة. قيست بمحاكاةٍ فيها مستعجلٌ يضغط بلا قراءةٍ من كل خمسة عشر: بستين
+ * لاعباً كانت الجولةُ تنتهي في أربع عشرة ثانية، وأكثرُ من نصف القاعة لم
+ * يُجب ثلاثة أسئلة. وبالثُّمن تطول إلى سبعٍ وعشرين ويكاد لا يُحرم أحد.
+ * ومن كانوا ثمانيةً فأقلّ فنبضتُهم واحدة — القاعدةُ كما عرفها الناس.
+ */
+const livesFor = (players) => Math.max(1, Math.ceil(players / 8));
+
+const ATTACK_VERB = { freeze: 'تجميد', steal: 'سرقة' };
+/* «سرقة» تُضاف فتصير «سرقتك» — التاء المربوطة تنفتح مع الضمير */
+const own = (verb, suffix) => verb.replace(/ة$/, 'ت') + suffix;
 
 const toArabic = (n) => String(n).replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[d]);
 
@@ -237,12 +257,17 @@ export function spreadAnswers(questions) {
   return out;
 }
 
+/** أيُّهما أمام: النقاطُ أولاً، ثم مجموعُ الصحيحات عند التساوي */
+const ahead = (a, b) => a.score > b.score || (a.score === b.score && a.totalCorrect > b.totalCorrect);
+
 class Team {
   constructor(name, settings) {
     this.id = randomUUID();
     this.token = randomUUID(); // يسمح للفريق بالرجوع بعد انقطاع الاتصال
     this.name = name;
-    this.score = 0;
+    this.score = 0; // نقاط الفوز — عليها الترتيب
+    this.totalCorrect = 0; // صحيحاتُ اللعبة كلها — بها يُكسر تعادلُ النقاط
+    this.sparks = 0; // عملة الشراء — لا تدخل في الترتيب
     this.connected = true;
     /*
      * بصمةُ الجهاز الذي انضمّ منه. بها يعود اللاعب إلى مجموعته باسمه نفسه
@@ -289,14 +314,16 @@ class Team {
     this.dyingAt = null; // بلغ الصفر هنا — وينتظر مهلةَ السكون
     this.dropped = false; // سكن نبضُه وهو منقطع — فلم يُنهِ الجولة على غيره
     this.lateUsed = false; // استُعملت له مهلةُ المتأخّرة في هذه الجولة
+    this.streak = 0; // صحيحاتٌ متتالية الآن — والخطأ يصفّرها
+    this.streaks = 0; // كم مرّةً بلغت السلسلةُ ثلاثاً — بكلٍّ منها شرارة
     this.shieldLeft = 0;
-    this.truceMs = 0;
     this.reviveLeft = 0;
     this.revivedAt = null;
-    this.blackout = false;
-    this.blackoutBy = null;
-    this.fort = false;
     this.mirror = false;
+    this.timeBonusMs = 0; // ما أضافه الوقتُ الإضافي في بدء الجولة — يُعرض شارةً
+    this.robbed = []; // من سرق منه هذه الجولة: [{ name, ms }]
+    this.robbing = []; // ومن سرق هو منه
+    this.duels = []; // معرّفات من يبارزهم في هذه الجولة — تحدّاهم أو تحدّوه
     this.notices = [];
   }
 }
@@ -352,6 +379,9 @@ export class Room {
     /* عليها تُبنى الكتابة على القرص: تتبدّل الحالة فتُكتب، وإلا فلا */
     this.dirty = true;
     this.result = null;
+    this.breakEndsAt = null; // نهايةُ وقت الشراء بعد كل جولة
+    this.lives = 1; // كم نبضاً يسكن فتنتهي الجولة
+    this.fallen = []; // أسماءُ من سكن في الجولة الجارية بترتيب سكونهم
     this.history = []; // نتائج كل الجولات السابقة
     /*
      * عدّادٌ لا يرجع: history يُفرَغ عند «البدء من جديد» لأن اللعبة الجديدة
@@ -526,6 +556,9 @@ export class Room {
       for (const buy of team.pendingBuys) this.roundBuys.push({ ...buy, by: team.id });
       team.pendingBuys = [];
     }
+    /* النبضاتُ تُعدّ عند البدء وتثبت: من انضمّ أو خرج أثناءها لا يغيّرها */
+    this.lives = livesFor(this.teams.size);
+    this.fallen = [];
     this.applyCards(this.roundBuys);
     for (const team of this.teams.values()) this.nextQuestion(team);
     this.result = null;
@@ -557,6 +590,8 @@ export class Room {
     this.applyCards(this.roundBuys ?? []);
     for (const team of this.teams.values()) this.nextQuestion(team);
     this.result = null;
+    this.lives = livesFor(this.teams.size);
+    this.fallen = [];
     this.status = 'countdown';
     this.countdownEndsAt = Date.now() + COUNTDOWN_MS;
     this.lastTickAt = this.countdownEndsAt;
@@ -633,14 +668,26 @@ export class Room {
       isCorrect,
     });
     let shielded = false;
+    /* السلسلة: كل ثالثةٍ متتالية شرارة — والدرعُ يقي الوقتَ لا السلسلة */
+    let streaked = false;
     if (isCorrect) {
       team.correct++;
+      /* خصمُه في المبارزة يرى العدّاد يتحرّك — حالُه تُبعث إليه في النبضة القادمة */
+      for (const id of team.duels) this.changedTeams.add(id);
+      team.streak++;
+      if (team.streak % STREAK_EVERY === 0) {
+        team.streaks++;
+        streaked = true;
+      }
       team.timeMs = this.clampTime(team.timeMs + this.settings.correctBonus * 1000);
-    } else if (team.shieldLeft > 0) {
-      team.shieldLeft--;
-      shielded = true;
     } else {
-      team.timeMs = this.clampTime(team.timeMs - this.settings.wrongPenalty * 1000);
+      team.streak = 0;
+      if (team.shieldLeft > 0) {
+        team.shieldLeft--;
+        shielded = true;
+      } else {
+        team.timeMs = this.clampTime(team.timeMs - this.settings.wrongPenalty * 1000);
+      }
     }
     team.lastResult = isCorrect ? 'correct' : 'wrong';
     if (team.timeMs > 0) team.dyingAt = null; // نجا من مهلة السكون
@@ -653,17 +700,19 @@ export class Room {
      */
     const reveal = { questionId: team.current.id, answer: team.current.answer };
 
+    const streak = { streak: team.streak, streaked, shieldLeft: team.shieldLeft };
+
     let revived = false;
     if (team.timeMs === 0) {
       revived = this.revive(team);
       if (!revived) {
         this.flatline(team);
-        return { isCorrect, flatlined: true, shielded, ...reveal };
+        return { isCorrect, flatlined: true, shielded, ...streak, ...reveal };
       }
     }
 
     this.nextQuestion(team);
-    return { isCorrect, flatlined: false, shielded, revived, ...reveal };
+    return { isCorrect, flatlined: false, shielded, revived, ...streak, ...reveal };
   }
 
   /**
@@ -715,8 +764,19 @@ export class Room {
 
   flatline(team) {
     if (team.flatlined) return;
+    this.fall(team);
+    if (this.fallen.length >= this.lives) this.endRound();
+  }
+
+  /**
+   * سكونٌ يُحسب من نبضات الجولة: يُسكَن الفريق ويُكتب اسمُه في الساقطين —
+   * فتنكسر نبضةٌ على كل شاشة. ومن بقي يُبعث إليه الخبر كذلك، فمربّعاتُ
+   * ترويسته تنقص معه.
+   */
+  fall(team) {
     this.stop(team);
-    this.endRound();
+    this.fallen.push(team.name);
+    for (const t of this.teams.values()) this.changedTeams.add(t.id);
   }
 
   /** يُسكِن نبض فريقٍ بلا إنهاء الجولة — تُنهيها الدالةُ المستدعية مرّةً واحدة */
@@ -749,7 +809,6 @@ export class Room {
      * وينال نقاط مركزٍ ويحتفظ بمضاعِفه. وإنهاءُ الجولة يبقى مرّةً واحدة
      * بعد الحلقة، فلا تُحتسب النقاط ولا يُكتب السجلّ مرّتين.
      */
-    let stopped = false;
     for (const team of this.teams.values()) {
       if (team.flatlined || team.waiting) continue;
       // فترة التجميد: العدّاد ينزل لكن الإجابة مقفلة
@@ -757,13 +816,7 @@ export class Room {
         team.lockedMs = Math.max(0, team.lockedMs - elapsed);
         if (team.lockedMs === 0) team.frozenBy = null;
       }
-      let drain = elapsed;
-      if (team.truceMs > 0) {
-        const held = Math.min(team.truceMs, drain);
-        team.truceMs -= held;
-        drain -= held;
-      }
-      team.timeMs = Math.max(0, team.timeMs - drain);
+      team.timeMs = Math.max(0, team.timeMs - elapsed);
       if (team.timeMs > 0) continue;
       if (this.revive(team, now)) continue;
 
@@ -782,12 +835,9 @@ export class Room {
         continue;
       }
       team.dyingAt ??= now;
-      if (now - team.dyingAt >= FLATLINE_GRACE_MS) {
-        this.stop(team);
-        stopped = true;
-      }
+      if (now - team.dyingAt >= FLATLINE_GRACE_MS) this.fall(team);
     }
-    if (stopped || this.noneAlive()) this.endRound();
+    if (this.fallen.length >= this.lives || this.noneAlive()) this.endRound();
     return true;
   }
 
@@ -808,8 +858,8 @@ export class Room {
    * توقف أول نبض ينهي الجولة للجميع.
    *
    * حصيلة اللاعب = نقطةٌ عن كل إجابة صحيحة + نصيبُه من الترتيب
-   * (مع N لاعبين: الأول N-1، ثم N-2 … والمتوقّف صفر) ثم يُضرب الكل في
-   * مضاعِفه إن كان اشترى المضاعفة.
+   * (مع N لاعبين: الأول N-1، ثم N-2 …) ثم يُضرب الكل في
+   * مضاعِفه إن كان اشترى المضاعفة. ومن توقّف نبضه صفرٌ كلُّه.
    *
    * ولا تُضاف هذه النقاط إلى الرصيد إلا هنا — عند انتهاء الجولة — فلا
    * يرى اللاعب رصيده يتضخّم وهو يجيب، ولا ينفق ما لم يُحصّله بعد.
@@ -822,19 +872,27 @@ export class Room {
     if (this.status === 'ended') return;
     this.status = 'ended';
     this.endedAt = Date.now(); // تبدأ منها مهلةُ المتأخّرة
+    this.breakEndsAt = this.endedAt + BREAK_MS;
     /* المنتظِرون لم يلعبوا هذه الجولة: لا جائزةَ لهم ولا يُعدّون في المراكز */
     const teams = [...this.teams.values()].filter((t) => !t.waiting);
     const survivors = teams.filter((t) => !t.flatlined).sort((a, b) => b.timeMs - a.timeMs);
 
     /*
-     * المضاعفة رهانٌ على الصمود: من سكن نبضه يأخذ نقاط إجاباته الصحيحة
-     * كاملةً، لكن مضاعِفه يسقط عنه — وإلا صار الخروج المبكر مربحاً.
+     * نقاط الفوز للصامدين وحدهم: من سكن نبضه لا يأخذ شيئاً ولا عن إجاباته
+     * الصحيحة — فالجولة تُكسب بالبقاء حتى آخرها، لا بما أُصيب قبل السقوط.
+     * والمضاعفةُ تضرب نقاط الصامد، وتسقط مع من سكن.
+     *
+     * والشرارات لا يمسّها السكون: شرارات المشاركة والسلاسل لمن لعب.
      */
     const credit = (team, base, extra, alive = true) => {
-      const raw = base + team.correct;
+      const raw = alive ? base + team.correct : 0;
+      const betting = team.pendingMultiplier > 1;
       const factor = alive ? team.pendingMultiplier : 1;
       const points = raw * factor;
       team.score += points;
+      team.totalCorrect += team.correct;
+      const sparks = SPARK_BASE + STREAK_SPARKS * team.streaks;
+      team.sparks += sparks;
       return {
         teamId: team.id,
         name: team.name,
@@ -843,7 +901,10 @@ export class Room {
         base: raw,
         correct: team.correct, // كم منها جاء من الإجابات — يُقرأ في المراجعة
         doubled: factor > 1 && raw > 0,
+        burned: (betting && !alive) || undefined, // سقطت مضاعفته بسكون نبضه
         factor, // تُضرب فيه نقطةُ إجابةٍ وصلت متأخرة
+        sparks,
+        streaks: team.streaks,
         dropped: team.dropped || undefined, // سكن وهو منقطع — لم يُنهِ الجولة
         ...extra,
       };
@@ -874,6 +935,7 @@ export class Room {
     }
     // المضاعِف يُستهلك بانتهاء الجولة
     for (const team of teams) team.pendingMultiplier = 1;
+    this.settleDuels(awards);
 
     this.result = { round: this.round, awards };
     this.history.push(this.result);
@@ -881,16 +943,57 @@ export class Room {
     this.touch();
   }
 
+  /**
+   * المبارزات تُحسم بنهاية الجولة: إن أصاب المتحدّي أكثر سرق من خصمه خمس
+   * نقاط (أو ما بقي له إن كان دونها). وإن لم يغلبه فلا شيء على أحد: الخصمُ
+   * صدّ التحدّي، والمتحدّي خسر ثمن البطاقة وحده. ونقاطُها بعد المضاعفة —
+   * فالمبارزة لا تُضاعَف ولا يُحرقها سكونُ النبض.
+   */
+  settleDuels(awards) {
+    const awardOf = (team) => awards.find((a) => a.teamId === team.id);
+    for (const buy of this.roundBuys ?? []) {
+      if (buy.card !== 'duel') continue;
+      const a = this.teams.get(buy.by);
+      const b = this.teams.get(buy.targetId);
+      if (!a || !b || a.waiting || b.waiting) continue;
+      const won = a.correct > b.correct;
+      const take = won ? Math.min(DUEL_POINTS, b.score) : 0;
+      const tie = a.correct === b.correct;
+      for (const [me, rival, delta] of [
+        [a, b, take],
+        [b, a, -take],
+      ]) {
+        me.score += delta;
+        const award = awardOf(me);
+        if (!award) continue;
+        award.points += delta;
+        award.duelPoints = (award.duelPoints ?? 0) + delta;
+        award.duels = [
+          ...(award.duels ?? []),
+          {
+            rival: rival.name,
+            mine: me.correct,
+            theirs: rival.correct,
+            /* للمتحدّي: غلب أو لم يغلب. وللخصم: صدّ أو سُرق منه */
+            won: tie ? null : me === a ? won : !won,
+            challenger: me === a,
+            points: delta,
+          },
+        ];
+      }
+    }
+  }
+
   /** إنهاء اللعبة كلياً وإعلان الأوائل حسب مجموع النقاط */
   finish() {
     this.status = 'finished';
     this.standings = [...this.teams.values()]
-      .sort((a, b) => b.score - a.score || b.timeMs - a.timeMs)
-      .map((team, index) => ({
+      .sort((a, b) => b.score - a.score || b.totalCorrect - a.totalCorrect)
+      .map((team) => ({
         teamId: team.id,
         name: team.name,
         score: team.score,
-        rank: index + 1,
+        rank: this.rankOf(team),
       }));
     this.touch();
   }
@@ -918,6 +1021,8 @@ export class Room {
     this.standings = null;
     for (const team of this.teams.values()) {
       team.score = 0;
+      team.totalCorrect = 0;
+      team.sparks = 0;
       team.seen.clear(); // لعبة جديدة تماماً — كل الأسئلة متاحة من جديد
       team.cardUses.clear(); // البطاقات تعود متاحة
       team.pendingMultiplier = 1;
@@ -937,16 +1042,26 @@ export class Room {
     if (this.status !== 'ended') {
       return { ok: false, error: 'الشراء متاح بين الجولات فقط' };
     }
+    if (this.breakEndsAt && this.breakRemaining() === 0) {
+      return { ok: false, error: 'انتهى وقت الشراء' };
+    }
     const card = CARDS[cardId];
     if (!card) return { ok: false, error: 'بطاقة غير معروفة' };
     if ((team.cardUses.get(cardId) ?? 0) >= card.limit) {
       return { ok: false, error: 'استنفدت هذه البطاقة' };
     }
-    if (team.score < card.price) return { ok: false, error: 'نقاطك لا تكفي' };
+    if (team.sparks < card.price) return { ok: false, error: 'شراراتك لا تكفي' };
 
     if (card.target) {
       const target = this.teams.get(targetId);
       if (!target || target.id === team.id) return { ok: false, error: 'اختر لاعباً آخر' };
+      /* المبارزة تصعد ولا تنزل: لا يستقوي المتقدّم على من خلفه */
+      if (card.upward && target.score <= team.score) {
+        return { ok: false, error: 'تُبارز من هو أعلى منك في النقاط فقط' };
+      }
+      if (cardId === 'duel' && this.duelOn(target.id, team.id)) {
+        return { ok: false, error: `${target.name} تحدّاه غيرك لهذه الجولة` };
+      }
       if (team.pendingBuys.some((buy) => buy.card === cardId && buy.targetId === targetId)) {
         return { ok: false, error: `اخترتَ ${target.name} لهذه البطاقة` };
       }
@@ -954,7 +1069,7 @@ export class Room {
       return { ok: false, error: 'اشتريتها للجولة القادمة' };
     }
 
-    team.score -= card.price;
+    team.sparks -= card.price;
     team.cardUses.set(cardId, (team.cardUses.get(cardId) ?? 0) + 1);
     team.pendingBuys.push({
       card: cardId,
@@ -965,46 +1080,87 @@ export class Room {
     return { ok: true };
   }
 
+  /**
+   * هل تحدّى أحدٌ (غيرُ هذا) هذا اللاعبَ للجولة القادمة؟
+   *
+   * لاعبٌ واحد يُتحدّى مرّةً في الجولة: كانت المبارزة تُسرق بها خمسٌ لكل
+   * متحدٍّ غالب، فيتكالب على المتصدّر ثلاثةٌ أو أربعة فيخسر عشرين نقطةً
+   * في جولة. فأوّلُ من يتحدّاه يحجزه، ومن بعده يرى اسمه محجوزاً.
+   */
+  duelOn(targetId, exceptId = null) {
+    for (const team of this.teams.values()) {
+      if (team.id === exceptId) continue;
+      if (team.pendingBuys.some((buy) => buy.card === 'duel' && buy.targetId === targetId)) return true;
+    }
+    return false;
+  }
+
+  /** ما بقي من وقت الشراء — صفرٌ خارج الاستراحة أو بعد انقضائها */
+  breakRemaining(now = Date.now()) {
+    if (this.status !== 'ended' || !this.breakEndsAt) return 0;
+    return Math.max(0, this.breakEndsAt - now);
+  }
+
   applyCards(buys) {
     const mine = (team, card) => buys.filter((buy) => buy.by === team.id && buy.card === card).length;
+    /*
+     * بطاقاتُ اللاعب على نفسه تُقال له عند البدء — في شاشة الاستعداد مع
+     * ما وقع عليه من غيره — فيعرف بماذا يدخل الجولة.
+     */
     for (const team of this.teams.values()) {
       const extra = mine(team, 'time') * TIME_CARD_MS;
-      if (extra) team.timeMs = this.clampTime(team.timeMs + extra);
+      team.timeBonusMs = extra;
+      if (extra) {
+        team.timeMs = this.clampTime(team.timeMs + extra);
+        team.notices.push(`وقتك الإضافي: +${toArabic(extra / 1000)} ث`);
+      }
       team.shieldLeft = mine(team, 'shield') ? SHIELD_HITS : 0;
-      team.truceMs = mine(team, 'truce') ? TRUCE_MS : 0;
+      if (team.shieldLeft) team.notices.push(`درعك يقيك ${toArabic(SHIELD_HITS)} أخطاء`);
       team.reviveLeft = mine(team, 'revive') ? 1 : 0;
+      if (team.reviveLeft) team.notices.push('صاعق القلب جاهز إن توقّف نبضك');
       team.pendingMultiplier = mine(team, 'double') ? DOUBLE_FACTOR : 1;
-      team.fort = mine(team, 'fort') > 0;
+      if (team.pendingMultiplier > 1) team.notices.push('المضاعفة فعّالة: اصمد تتضاعف نقاطك');
       team.mirror = mine(team, 'mirror') > 0;
+      team.duels = [];
     }
 
     const events = [];
     const freezers = new Map();
+
+    /* المبارزة لا تُردّ بمرآة: هي تحدٍّ يلعبه الاثنان، لا ضربةٌ تقع على أحدهما */
     for (const buy of buys) {
-      if (!CARDS[buy.card]?.target) continue;
+      if (buy.card !== 'duel') continue;
+      const challenger = this.teams.get(buy.by);
+      const rival = this.teams.get(buy.targetId);
+      if (!challenger || !rival) continue;
+      challenger.duels.push(rival.id);
+      rival.duels.push(challenger.id);
+      const stake = toArabic(DUEL_POINTS);
+      challenger.notices.push(`تبارز ${rival.name}: أصب أكثر منه تسرق ${stake} نقاط`);
+      rival.notices.push(`${challenger.name} يبارزك: لا تدعه يُصب أكثر منك`);
+      events.push({ kind: 'duel', card: 'duel', by: challenger.name, on: rival.name });
+    }
+
+    for (const buy of buys) {
+      if (!ATTACK_VERB[buy.card]) continue;
       const attacker = this.teams.get(buy.by);
       const target = this.teams.get(buy.targetId);
       if (!attacker || !target) continue;
       const verb = ATTACK_VERB[buy.card];
 
-      if (target.fort) {
-        target.notices.push(`حصنك صدّ ${verb} ${attacker.name}`);
-        attacker.notices.push(`حصنُ ${target.name} صدّ ${verb}ك`);
-        events.push({ kind: 'blocked', card: buy.card, by: attacker.name, on: target.name });
-        continue;
-      }
-
       let source = attacker;
       let victim = target;
       if (target.mirror) {
-        target.notices.push(`مرآتك ردّت ${verb} ${attacker.name} عليه`);
-        attacker.notices.push(`مرآةُ ${target.name} ردّت ${verb}ك عليك`);
-        events.push({ kind: 'reflected', card: buy.card, by: attacker.name, on: target.name });
-        if (attacker.fort) {
-          attacker.notices.push(`حصنك صدّ ما ردّته مرآةُ ${target.name}`);
-          events.push({ kind: 'blocked', card: buy.card, by: target.name, on: attacker.name });
+        /* مرآتان متقابلتان: الضربة تتردّد بينهما ثم تضيع */
+        if (attacker.mirror) {
+          target.notices.push(`مرآتك ومرآةُ ${attacker.name} تقابلتا، فضاع ${own(verb, 'ه')}`);
+          attacker.notices.push(`مرآتك ومرآةُ ${target.name} تقابلتا، فضاع ${own(verb, 'ك')}`);
+          events.push({ kind: 'blocked', card: buy.card, by: attacker.name, on: target.name });
           continue;
         }
+        target.notices.push(`مرآتك ردّت ${verb} ${attacker.name} عليه`);
+        attacker.notices.push(`مرآةُ ${target.name} ردّت ${own(verb, 'ك')} عليك`);
+        events.push({ kind: 'reflected', card: buy.card, by: attacker.name, on: target.name });
         source = target;
         victim = attacker;
       }
@@ -1017,12 +1173,6 @@ export class Room {
         victim.frozenBy = names.join(' و');
         if (source === attacker) attacker.notices.push(`جمّدتَ ${victim.name}`);
         events.push({ kind: 'hit', card: 'freeze', by: source.name, on: victim.name });
-      } else if (buy.card === 'blackout') {
-        victim.blackout = true;
-        victim.blackoutBy = victim.blackoutBy ? `${victim.blackoutBy} و${source.name}` : source.name;
-        victim.notices.push(`عتّم ${source.name} على عدّادك`);
-        if (source === attacker) attacker.notices.push(`عتّمتَ على ${victim.name}`);
-        events.push({ kind: 'hit', card: 'blackout', by: source.name, on: victim.name });
       } else if (buy.card === 'steal') {
         const take = Math.max(0, Math.min(STEAL_MS, victim.timeMs - STEAL_FLOOR_MS));
         if (take === 0) {
@@ -1031,6 +1181,8 @@ export class Room {
         }
         victim.timeMs -= take;
         source.timeMs = this.clampTime(source.timeMs + take);
+        victim.robbed.push({ name: source.name, ms: take });
+        source.robbing.push({ name: victim.name, ms: take });
         const secs = toArabic(Math.round(take / 1000));
         victim.notices.push(`سرق ${source.name} ${secs} ث من نبضك`);
         source.notices.push(`سرقتَ ${secs} ث من ${victim.name}`);
@@ -1103,6 +1255,7 @@ export class Room {
       standings: this.standings,
       displayBlurred: this.displayBlurred,
       countdownMs: this.countdownRemaining(),
+      breakMs: this.breakRemaining(),
       teams: [...this.teams.values()]
         .map((t) => ({
           id: t.id,
@@ -1119,16 +1272,51 @@ export class Room {
           frozenBy: t.lockedMs > 0 ? t.frozenBy : null, // من جمّدها — تذكره القاعة والمنظّم
           doubled: t.pendingMultiplier > 1, // مضاعفة فعّالة هذه الجولة — بطاقة ذهبية
           shieldLeft: t.shieldLeft,
-          truceMs: Math.round(t.truceMs),
           reviveLeft: t.reviveLeft,
           revivedAt: t.revivedAt,
-          blackout: t.blackout,
-          blackoutBy: t.blackoutBy,
+          sparks: t.sparks,
+          rank: this.rankOf(t),
+          totalCorrect: t.totalCorrect,
+          effects: this.effectsOf(t), // شاراتُ البطاقات الفاعلة — تُرسم على كل شاشة بالشكل نفسه
           waiting: t.waiting, // دخل والجولة جارية — ينتظر القادمة
           cardsLeft: this.cardsLeftFor(t), // ما بقي له من كل بطاقة — للوحة المنظّم
         }))
-        .sort((a, b) => b.score - a.score || b.timeMs - a.timeMs),
+        .sort((a, b) => b.score - a.score || b.totalCorrect - a.totalCorrect),
+      lives: this.lives,
+      fallen: this.fallen,
     };
+  }
+
+  /**
+   * مركزُ الفريق في نقاط الفوز، والتعادلُ يُكسر بمجموع الإجابات الصحيحة —
+   * ومن تساويا فيهما معاً ففي المركز نفسه.
+   */
+  rankOf(team) {
+    let above = 0;
+    for (const t of this.teams.values()) if (ahead(t, team)) above++;
+    return above + 1;
+  }
+
+  /**
+   * شاراتُ ما يحمله الفريق من بطاقاتٍ في الجولة الجارية.
+   *
+   * قائمةٌ واحدة تقرؤها الشاشات الثلاث (اللاعب والمنظّم والعرض) فلا يحسب
+   * كلٌّ منها أثرَ البطاقات بطريقته. والتجميد والمضاعفة لهما زيّهما
+   * الخاص على الصفّ (صقيعٌ وذهب)، فلا يُكرَّران هنا.
+   */
+  effectsOf(team) {
+    const fx = [];
+    if (team.timeBonusMs) fx.push({ card: 'time', n: Math.round(team.timeBonusMs / 1000) });
+    if (team.shieldLeft) fx.push({ card: 'shield', n: team.shieldLeft });
+    if (team.reviveLeft) fx.push({ card: 'revive' });
+    if (team.mirror) fx.push({ card: 'mirror' });
+    for (const r of team.robbed) fx.push({ card: 'steal', n: -Math.round(r.ms / 1000), who: r.name });
+    for (const r of team.robbing) fx.push({ card: 'steal', n: Math.round(r.ms / 1000), who: r.name });
+    for (const id of team.duels) {
+      const rival = this.teams.get(id);
+      if (rival) fx.push({ card: 'duel', who: rival.name, mine: team.correct, theirs: rival.correct });
+    }
+    return fx;
   }
 
   /**
@@ -1156,7 +1344,7 @@ export class Room {
   /**
    * نقضُ شراءٍ ما دامت الجولة لم تبدأ.
    *
-   * الضغطةُ على هاتفٍ في قاعةٍ مظلمة تُخطئ، وستُّ نقاطٍ ثمنُ جولةٍ كاملة
+   * الضغطةُ على هاتفٍ في قاعةٍ مظلمة تُخطئ، وستُّ شراراتٍ دخلُ جولةٍ كاملة
    * للاعبٍ متوسّط — فمن دفعها بالخطأ خسر جولةً بلا لعب. والبابُ مفتوحٌ
    * ما دام الأثرُ مؤجَّلاً: فإذا بدأت الجولةُ وقع الأثرُ وأُغلق الباب.
    *
@@ -1168,12 +1356,15 @@ export class Room {
     if (this.status !== 'ended') {
       return { ok: false, error: 'النقض متاح بين الجولات فقط' };
     }
+    if (this.breakEndsAt && this.breakRemaining() === 0) {
+      return { ok: false, error: 'انتهى وقت الشراء' };
+    }
     const at = team.pendingBuys.findLastIndex((buy) => buy.card === cardId);
     if (at === -1) return { ok: false, error: 'لم تشترِ هذه البطاقة في هذه الفترة' };
 
     const [buy] = team.pendingBuys.splice(at, 1);
 
-    team.score += buy.price;
+    team.sparks += buy.price;
     const used = team.cardUses.get(cardId) ?? 0;
     team.cardUses.set(cardId, Math.max(0, used - 1));
     this.touch();
@@ -1190,6 +1381,13 @@ export class Room {
       name: team.name,
       timeMs: Math.round(team.timeMs),
       score: team.score,
+      sparks: team.sparks,
+      /* مركزُه في نقاط الفوز ومن كم — «الثالث من اثني عشر» يُقرأ في ترويسته */
+      rank: this.rankOf(team),
+      teamsCount: this.teams.size,
+      lives: this.lives,
+      fallen: this.fallen,
+      streak: team.streak,
       flatlined: team.flatlined,
       dropped: team.dropped,
       waiting: team.waiting, // دخل والجولة جارية — شاشتُه «انتظر الجولة القادمة»
@@ -1199,6 +1397,7 @@ export class Room {
       bonus: this.settings.correctBonus,
       penalty: this.settings.wrongPenalty,
       countdownMs: this.countdownRemaining(),
+      breakMs: this.breakRemaining(),
       standings: this.standings,
       answered: team.answered,
       correct: team.correct,
@@ -1207,6 +1406,11 @@ export class Room {
       /* وأصلُها ومضاعِفُها: تُقرأ المعادلة لا الحصيلةُ وحدها */
       roundBase: award?.base ?? null,
       roundDoubled: Boolean(award?.doubled),
+      roundBurned: Boolean(award?.burned),
+      roundSparks: award?.sparks ?? null,
+      roundStreaks: award?.streaks ?? 0,
+      roundDuelPoints: award?.duelPoints ?? 0,
+      roundDuels: award?.duels ?? [],
       question:
         this.status === 'running' && team.current
           ? {
@@ -1222,11 +1426,10 @@ export class Room {
       lockedMs: Math.round(team.lockedMs),
       frozenBy: team.frozenBy,
       shieldLeft: team.shieldLeft,
-      truceMs: Math.round(team.truceMs),
       reviveLeft: team.reviveLeft,
       revivedAt: team.revivedAt,
-      blackout: team.blackout,
-      blackoutBy: team.blackoutBy,
+      effects: this.effectsOf(team),
+      doubled: team.pendingMultiplier > 1, // مضاعفةٌ فعّالة في الجولة الجارية
       notices: team.notices,
       // متجر البطاقات: متاح بين الجولات فقط
       shop: this.shopFor(team),
@@ -1235,15 +1438,16 @@ export class Room {
 
   /** حالة متجر البطاقات لفريق: ما اشتراه، وما يقدر عليه، ومن يجمّد */
   shopFor(team) {
-    const open = this.status === 'ended'; // بين الجولات فقط
+    const open = this.status === 'ended'; // بين الجولات فقط — وبعد انقضاء وقته يُرى مقفلاً
     const cards = Object.entries(CARDS).map(([id, card]) => ({
       id,
       name: card.name,
       price: card.price,
       used: (team.cardUses.get(id) ?? 0) >= card.limit,
       left: card.limit - (team.cardUses.get(id) ?? 0),
-      affordable: team.score >= card.price,
+      affordable: team.sparks >= card.price,
       target: Boolean(card.target),
+      upward: Boolean(card.upward), // لا يُختار لها إلا من هو أعلى في النقاط
       /* كم مرّةً اشتُريت في هذه الفترة — وبها وحدها يظهر زرُّ النقض */
       bought: team.pendingBuys.filter((buy) => buy.card === id).length,
     }));
@@ -1263,9 +1467,19 @@ export class Room {
     const rivals = open
       ? [...this.teams.values()]
           .filter((t) => t.id !== team.id)
-          .map((t) => ({ id: t.id, name: t.name }))
+          .sort((a, b) => b.score - a.score)
+          .map((t) => ({
+            id: t.id,
+            name: t.name,
+            score: t.score,
+            above: t.score > team.score,
+            /* تحدّاه غيرُك لهذه الجولة — فلا يُتحدّى ثانيةً */
+            dueled: this.duelOn(t.id, team.id),
+          }))
       : [];
-    return { open, cards, pending, chosen, rivals };
+    /* closed: الاستراحة قائمة ووقتُ الشراء انقضى — المتجر يُرى ولا يُشترى منه */
+    const closed = open && !!this.breakEndsAt && this.breakRemaining() === 0;
+    return { open, closed, cards, pending, chosen, rivals };
   }
 }
 
@@ -1296,6 +1510,9 @@ Room.prototype.snapshot = function snapshot() {
     roundBuys: this.roundBuys ?? [],
     cardEvents: this.cardEvents ?? [],
     playedRounds: this.playedRounds,
+    breakEndsAt: this.breakEndsAt ?? null,
+    lives: this.lives,
+    fallen: this.fallen,
     standings: this.standings,
     displayBlurred: this.displayBlurred,
     served: [...this.served.values()],
@@ -1306,6 +1523,8 @@ Room.prototype.snapshot = function snapshot() {
       deviceId: t.deviceId,
       name: t.name,
       score: t.score,
+      totalCorrect: t.totalCorrect,
+      sparks: t.sparks,
       seen: [...t.seen],
       cardUses: [...t.cardUses],
       pendingMultiplier: t.pendingMultiplier,
@@ -1322,14 +1541,16 @@ Room.prototype.snapshot = function snapshot() {
       review: t.review,
       lockedMs: Math.round(t.lockedMs),
       frozenBy: t.frozenBy,
+      streak: t.streak,
+      streaks: t.streaks,
       shieldLeft: t.shieldLeft,
-      truceMs: Math.round(t.truceMs),
       reviveLeft: t.reviveLeft,
       revivedAt: t.revivedAt,
-      blackout: t.blackout,
-      blackoutBy: t.blackoutBy,
-      fort: t.fort,
       mirror: t.mirror,
+      timeBonusMs: t.timeBonusMs,
+      robbed: t.robbed,
+      robbing: t.robbing,
+      duels: t.duels,
       notices: t.notices,
     })),
   };
@@ -1359,6 +1580,10 @@ export function restoreRoom(snap) {
   /* لقطاتٌ قديمة لا تعرف العدّاد — يُبدأ بما في السجلّ فلا يضيع ما مضى */
   room.playedRounds = snap.playedRounds ?? room.history.length;
   room.standings = snap.standings ?? null;
+  room.lives = snap.lives ?? 1;
+  room.fallen = Array.isArray(snap.fallen) ? snap.fallen : [];
+  /* السيرفر سقط في الاستراحة: يُعطى اللاعبون وقتَ شراءٍ جديداً كاملاً من عودته */
+  room.breakEndsAt = snap.breakEndsAt ? Date.now() + BREAK_MS : null;
   room.displayBlurred = Boolean(snap.displayBlurred);
   /*
    * لقطاتٌ قديمة كانت تحفظ المعرّفات وحدها — تُقبل ويُملأ ما نقص فارغاً،
@@ -1381,6 +1606,9 @@ export function restoreRoom(snap) {
     team.token = t.token;
     team.deviceId = t.deviceId ?? null;
     team.score = t.score;
+    team.totalCorrect = t.totalCorrect ?? 0;
+    /* لقطةٌ من قبل الشرارات: يبدأ رصيدُ الشراء صفراً، ونقاطُ فوزه كما هي */
+    team.sparks = t.sparks ?? 0;
     team.connected = false; // حتى يعود بجهازه فعلاً
     team.disconnectedAt = Date.now(); // ومهلةُ الانقطاع تبدأ من عودة السيرفر
     team.seen = new Set(t.seen ?? []);
@@ -1401,14 +1629,16 @@ export function restoreRoom(snap) {
     team.review = t.review ?? [];
     team.lockedMs = t.lockedMs ?? 0;
     team.frozenBy = t.frozenBy ?? null;
+    team.streak = t.streak ?? 0;
+    team.streaks = t.streaks ?? 0;
     team.shieldLeft = t.shieldLeft ?? 0;
-    team.truceMs = t.truceMs ?? 0;
     team.reviveLeft = t.reviveLeft ?? 0;
     team.revivedAt = t.revivedAt ?? null;
-    team.blackout = Boolean(t.blackout);
-    team.blackoutBy = t.blackoutBy ?? null;
-    team.fort = Boolean(t.fort);
     team.mirror = Boolean(t.mirror);
+    team.timeBonusMs = t.timeBonusMs ?? 0;
+    team.robbed = Array.isArray(t.robbed) ? t.robbed : [];
+    team.robbing = Array.isArray(t.robbing) ? t.robbing : [];
+    team.duels = Array.isArray(t.duels) ? t.duels : [];
     team.notices = Array.isArray(t.notices) ? t.notices : [];
     room.teams.set(team.id, team);
   }

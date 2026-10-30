@@ -39,11 +39,40 @@ export interface PublicTeam {
   /** ما بقي له من كل بطاقة — للوحة المنظّم */
   cardsLeft: Record<CardId, number>;
   shieldLeft?: number;
-  truceMs?: number;
   reviveLeft?: number;
   revivedAt?: number | null;
-  blackout?: boolean;
-  blackoutBy?: string | null;
+  /** عملة الشراء — لا تدخل في الترتيب */
+  sparks?: number;
+  /** مركزه في نقاط الفوز (المتساويان في مركزٍ واحد) */
+  rank?: number;
+  /** صحيحاتُ اللعبة كلها — بها يُكسر تعادل النقاط */
+  totalCorrect?: number;
+  /** شاراتُ البطاقات الفاعلة في الجولة الجارية */
+  effects?: Effect[];
+}
+
+/**
+ * شارةُ بطاقةٍ فاعلة — يحسبها السيرفر مرّةً وترسمها الشاشات الثلاث.
+ * n: ثواني الوقت أو السرقة (سالبةٌ للمسروق منه) أو ما بقي من الدرع.
+ * who: الطرفُ الآخر في السرقة أو المبارزة. mine/theirs: نتيجة المبارزة الحيّة.
+ */
+export interface Effect {
+  card: CardId;
+  n?: number;
+  who?: string;
+  mine?: number;
+  theirs?: number;
+}
+
+/** مبارزةٌ حُسمت بنهاية الجولة — won: null للتعادل */
+export interface DuelResult {
+  rival: string;
+  mine: number;
+  theirs: number;
+  won: boolean | null;
+  challenger: boolean;
+  /** ما سرقه المتحدّي (موجبٌ له، وسالبٌ للمسروق منه) */
+  points?: number;
 }
 
 export interface Award {
@@ -63,22 +92,28 @@ export interface Award {
   top?: boolean;
   /** ضوعِفت نقاطه ببطاقة المضاعفة */
   doubled?: boolean;
+  /** راهن بالمضاعفة وتوقّف نبضه — فخسر نقاط جولته */
+  burned?: boolean;
+  /** الشرارات التي كسبها في الجولة، ومنها كم سلسلةً بلغت ثلاثاً */
+  sparks?: number;
+  streaks?: number;
+  /** نقاط المبارزة — تُضاف بعد المضاعفة */
+  duelPoints?: number;
+  duels?: DuelResult[];
 }
 
 export type CardId =
   | 'time'
-  | 'truce'
   | 'shield'
   | 'revive'
-  | 'fort'
-  | 'mirror'
-  | 'blackout'
+  | 'double'
   | 'freeze'
   | 'steal'
-  | 'double';
+  | 'duel'
+  | 'mirror';
 
 export interface CardEvent {
-  kind: 'hit' | 'blocked' | 'reflected';
+  kind: 'hit' | 'blocked' | 'reflected' | 'duel';
   card: CardId;
   by: string;
   on: string;
@@ -98,14 +133,19 @@ export interface ShopCard {
   /** كم مرّةً اشتُريت في هذه الفترة — وبها وحدها يُنقض الشراء */
   bought: number;
   target: boolean;
+  /** لا يُختار لها إلا من هو أعلى منك في النقاط (المبارزة) */
+  upward?: boolean;
 }
 
 export interface Shop {
   open: boolean;
+  /** الاستراحة قائمة ووقتُ الشراء انقضى — يُرى المتجر ولا يُشترى منه */
+  closed?: boolean;
   cards: ShopCard[];
   pending: Partial<Record<CardId, boolean>>;
   chosen: Partial<Record<CardId, string[]>>;
-  rivals: { id: string; name: string }[];
+  /** الخصوم مرتّبين بنقاط الفوز — above: أعلى منك (تجوز مبارزته) */
+  rivals: { id: string; name: string; score: number; above: boolean; dueled?: boolean }[];
 }
 
 export interface RoomResult {
@@ -149,6 +189,11 @@ export interface RoomState {
   standings: Standing[] | null;
   displayBlurred: boolean;
   countdownMs: number;
+  /** ما بقي من وقت الشراء بين الجولتين */
+  breakMs?: number;
+  /** نبضاتُ الجولة: كم لاعباً يسكن فتنتهي، ومن سكن منهم بالترتيب */
+  lives?: number;
+  fallen?: string[];
   teams: PublicTeam[];
 }
 
@@ -177,7 +222,18 @@ export interface TeamState {
   id: string;
   name: string;
   timeMs: number;
+  /** نقاط الفوز — عليها الترتيب */
   score: number;
+  /** عملة الشراء */
+  sparks: number;
+  /** مركزه في نقاط الفوز ومن كم */
+  rank: number;
+  teamsCount: number;
+  /** نبضاتُ الجولة ومن سكن منها */
+  lives?: number;
+  fallen?: string[];
+  /** صحيحاته المتتالية الآن */
+  streak: number;
   flatlined: boolean;
   /** سكن نبضه وهو منقطع — فلم يُنهِ الجولة على غيره */
   dropped?: boolean;
@@ -189,6 +245,8 @@ export interface TeamState {
   bonus: number;
   penalty: number;
   countdownMs: number;
+  /** ما بقي من وقت الشراء بين الجولتين */
+  breakMs: number;
   standings: Standing[] | null;
   answered: number;
   correct: number;
@@ -196,17 +254,23 @@ export interface TeamState {
   /** نقاط الجولة قبل المضاعفة، وهل ضُوعفت — لمعادلة «أ × ٢ = ب» */
   roundBase: number | null;
   roundDoubled: boolean;
+  /** راهن بالمضاعفة وسكن نبضه */
+  roundBurned: boolean;
+  roundSparks: number | null;
+  roundStreaks: number;
+  roundDuelPoints: number;
+  roundDuels: DuelResult[];
   question: Question | null;
   review: ReviewItem[] | null;
   /** قفل التجميد المتبقي بالمللي، واسم من جمّدك */
   lockedMs: number;
   frozenBy: string | null;
   shieldLeft?: number;
-  truceMs?: number;
   reviveLeft?: number;
   revivedAt?: number | null;
-  blackout?: boolean;
-  blackoutBy?: string | null;
+  effects?: Effect[];
+  /** مضاعفةٌ فعّالة في الجولة الجارية */
+  doubled?: boolean;
   notices?: string[];
   shop: Shop;
 }

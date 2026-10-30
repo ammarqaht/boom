@@ -106,7 +106,7 @@ check(
 );
 
 // ══ سقف نقاط المركز ═══════════════════════════════════════════
-/** يُجري جولةً على n فريقاً، آخرهم يتوقّف نبضه، ويُرجع نقاط المركز بالترتيب */
+/** يُجري جولةً على n فريقاً، آخرهم يسكنون بقدر نبضات الجولة، ويُرجع نقاط المركز بالترتيب */
 function ladder(n) {
   const room = createRoom(['quran']);
   const teams = Array.from({ length: n }, (_, i) => room.addTeam(`فريق ${i + 1}`));
@@ -115,16 +115,36 @@ function ladder(n) {
   room.tick(now);
   // أوقاتٌ متباعدة تُثبّت الترتيب، وآخرهم يسقط
   teams.forEach((t, i) => (t.timeMs = (n - i) * 1000));
-  teams[n - 1].timeMs = 0;
+  for (const t of teams.slice(n - room.lives)) t.timeMs = 0;
   settle(room, now + 100);
   return room.result.awards.map((a) => a.points); // لا إجابات، فالنقاط هي نقاط المركز
 }
 
 console.log('   السلالم:', [2, 4, 6, 7, 20].map((n) => `${n}→${ladder(n).join('-')}`).join('  '));
 check(
-  'عشرون فريقاً: 5-4-3-2-1…-1-0',
-  ladder(20).join('-') === '5-4-3-2-1-1-1-1-1-1-1-1-1-1-1-1-1-1-1-0',
+  'عشرون فريقاً بثلاث نبضات: 5-4-3-2-1…-1 ثم ثلاثة أصفار',
+  ladder(20).join('-') === '5-4-3-2-1-1-1-1-1-1-1-1-1-1-1-1-1-0-0-0',
 );
+{
+  const r = createRoom(['quran']);
+  Array.from({ length: 17 }, (_, i) => r.addTeam(`ن${i}`));
+  r.start();
+  check('نبضات الجولة ثُمنُ القاعة: سبعة عشر ← ثلاث، وثمانية ← واحدة', r.lives === 3);
+  const r8 = createRoom(['quran']);
+  Array.from({ length: 8 }, (_, i) => r8.addTeam(`ث${i}`));
+  r8.start();
+  check('ثمانيةٌ فأقلّ: نبضةٌ واحدة كما كان', r8.lives === 1);
+  const t0 = r.countdownEndsAt;
+  r.tick(t0);
+  const ts = [...r.teams.values()];
+  ts[0].timeMs = 0;
+  settle(r, t0 + 100);
+  check('أوّلُ من يسكن لا يُنهي جولةً بثلاث نبضات', r.status === 'running' && r.fallen.length === 1);
+  ts[1].timeMs = 0;
+  ts[2].timeMs = 0;
+  settle(r, t0 + 5000);
+  check('والثالثُ يُنهيها', r.status === 'ended' && r.fallen.length === 3);
+}
 check('سبعة فرق: 5-4-3-2-1-1-0', ladder(7).join('-') === '5-4-3-2-1-1-0');
 check('ستّة فرق تبلغ السقف تماماً', ladder(6).join('-') === '5-4-3-2-1-0');
 check('أقلّ من ستّة: الأول يأخذ عددهم ناقص واحد', ladder(4)[0] === 3 && ladder(2)[0] === 1);
@@ -184,7 +204,7 @@ function room3() {
   room.tick(now);
   b.timeMs = 0;
   settle(room, now + 100); // انتهت الجولة الأولى
-  a.score = 40;
+  a.sparks = 40;
   room.buyCard(a.id, 'time'); // وقتٌ إضافي للجولة الثانية
   room.start(); // الجولة الثانية
   const base = room.settings.startSeconds * 1000;

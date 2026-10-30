@@ -1,19 +1,10 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Credit, Wordmark, prefersReducedMotion, useTheme } from '../components/ui';
-import { Curtain, Lane } from '../components/game';
-import {
-  ClockIcon,
-  MinusIcon,
-  PlayIcon,
-  PlusIcon,
-  ScreenIcon,
-  SlidersIcon,
-  UsersIcon,
-} from '../components/icons';
+import { Lane } from '../components/game';
+import { ScreenIcon, SlidersIcon, UsersIcon } from '../components/icons';
 import { Practice } from './home/Practice';
 import { CardLab } from './home/CardLab';
-import { DEMO, arabic } from './home/demo';
 import { tap } from './home/hooks';
 
 const BOOT_KEY = 'nabdah:boot';
@@ -109,33 +100,6 @@ function HallArt({ kind }: { kind: (typeof HALL)[number]['art'] }) {
 
 export default function Home() {
   useTheme('dark');
-  const navigate = useNavigate();
-  const [code, setCode] = useState('');
-  const [going, setGoing] = useState(false);
-  const [startKey, setStartKey] = useState(0);
-
-  const ready = code.length >= 4;
-
-  useEffect(() => {
-    if (!going) return;
-    const id = window.setTimeout(() => navigate(`/play?code=${code}`), 640);
-    return () => window.clearTimeout(id);
-  }, [going, code, navigate]);
-
-  function enter() {
-    if (!ready || going) return;
-    tap();
-    setGoing(true);
-  }
-
-  function tryRound() {
-    tap();
-    document.getElementById('try')?.scrollIntoView({
-      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
-      block: 'start',
-    });
-    setStartKey((k) => k + 1);
-  }
 
   return (
     <div className="flex min-h-full flex-col">
@@ -157,14 +121,6 @@ export default function Home() {
               القاعة
             </a>
           </nav>
-          <Link to="/display" className="tap home-ghost" aria-label="اعرض الغرفة">
-            <ScreenIcon size={18} />
-            <span className="hidden sm:inline">اعرض</span>
-          </Link>
-          <Link to="/admin" className="tap home-make" onClick={tap}>
-            <SlidersIcon size={18} />
-            أنشئ غرفة
-          </Link>
         </div>
       </header>
 
@@ -191,74 +147,26 @@ export default function Home() {
             والنبض بين يديك
           </h1>
 
+          {/*
+           * بابان لا أربعة: من جاء ليلعب ينضمّ، ومن جاء ليدير يُنشئ. والانضمامُ
+           * أوّلُهما وأبرزُهما، فأكثرُ الداخلين لاعبون. وشاشةُ العرض رابطُها في
+           * لوحة المنظّم، فلا تُزاحم هنا.
+           */}
           <div className="doors">
-            <form
-              className="door door-join"
-              onSubmit={(e) => {
-                e.preventDefault();
-                enter();
-              }}
-            >
-              <input
-                dir="ltr"
-                value={code}
-                onChange={(e) =>
-                  setCode(
-                    e.target.value
-                      .toUpperCase()
-                      .replace(/[^A-Z0-9]/g, '')
-                      .slice(0, 6),
-                  )
-                }
-                inputMode="text"
-                autoCapitalize="characters"
-                autoComplete="off"
-                spellCheck={false}
-                placeholder="رمز الغرفة"
-                aria-label="رمز الغرفة"
-                className="gate-code"
-              />
-              <button type="submit" disabled={!ready} className="tap gate-go">
-                ادخل
-              </button>
-            </form>
-
-            <Link to="/admin" className="tap door door-make" onClick={tap}>
+            <Link to="/play" className="tap door door-make" onClick={tap}>
+              <UsersIcon size={22} />
+              انضمّ إلى غرفة
+            </Link>
+            <Link to="/admin" className="tap door door-show" onClick={tap}>
               <SlidersIcon size={22} />
               أنشئ غرفة
             </Link>
-            <Link to="/display" className="tap door door-show" onClick={tap}>
-              <ScreenIcon size={22} />
-              اعرض الغرفة
-            </Link>
           </div>
-
-          <button type="button" className="tap home-try" onClick={tryRound}>
-            <span className="home-try-dot">
-              <PlayIcon size={16} />
-            </span>
-            جرّب جولة الآن
-          </button>
         </section>
 
         <section id="try" className="home-sec mx-auto max-w-6xl">
-          <Head n="٠١" title="جرّب جولة">
-            <div className="home-rules tnum">
-              <span>
-                <ClockIcon size={16} />
-                {arabic(DEMO.startMs / 1000)}
-              </span>
-              <span className="text-safe">
-                <PlusIcon size={16} />
-                {arabic(DEMO.bonusMs / 1000)}
-              </span>
-              <span className="text-danger">
-                <MinusIcon size={16} />
-                {arabic(DEMO.penaltyMs / 1000)}
-              </span>
-            </div>
-          </Head>
-          <Practice startKey={startKey} />
+          <Head n="٠١" title="جرّب جولة" />
+          <Practice startKey={0} />
         </section>
 
         <section id="cards" className="home-sec mx-auto max-w-6xl">
@@ -289,15 +197,6 @@ export default function Home() {
           نبضة · {new Date().getFullYear()}
         </span>
       </footer>
-
-      {going && (
-        <Curtain mode="drop" tone="var(--color-signal)" cut={false} leaving={false}>
-          <div className="flex flex-col items-center gap-4 px-8 text-center">
-            <Wordmark className="word-beat text-5xl" />
-            <span className="tnum text-sm font-black tracking-[0.35em] text-signal">{code}</span>
-          </div>
-        </Curtain>
-      )}
     </div>
   );
 }

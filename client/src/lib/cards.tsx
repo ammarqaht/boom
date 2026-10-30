@@ -1,10 +1,8 @@
-import type { CardId } from './types';
+import type { CardId, Effect } from './types';
 import type { Tone } from '../components/ui';
 import {
   DoubleIcon,
-  EyeOffIcon,
-  FortIcon,
-  HourglassIcon,
+  DuelIcon,
   MirrorIcon,
   ReviveIcon,
   ShieldIcon,
@@ -12,96 +10,144 @@ import {
   StealIcon,
   TimePlusIcon,
 } from '../components/icons';
+import { countOf } from './arabic';
 
 export type CardLook = {
   Icon: typeof TimePlusIcon;
   effect: string;
   skin: string;
   ink: string;
+  /** لون البطاقة متغيّراً — تُصبغ به مربّعاتُ المتجر */
+  color: string;
   tone: Tone;
 };
 
 export const CARD_LOOK: Record<CardId, CardLook> = {
   time: {
     Icon: TimePlusIcon,
-    effect: 'تبدأ الجولة القادمة بعشر ثوانٍ زيادة',
+    effect: 'تبدأ الجولة القادمة بـ١٥ ثانية إضافية',
     skin: 'skin-time',
     ink: 'text-safe',
-    tone: 'safe',
-  },
-  truce: {
-    Icon: HourglassIcon,
-    effect: 'عدّادك لا ينزل أول عشر ثوانٍ من الجولة',
-    skin: 'skin-time',
-    ink: 'text-safe',
+    color: 'var(--color-safe)',
     tone: 'safe',
   },
   shield: {
     Icon: ShieldIcon,
-    effect: 'أول إجابتين خاطئتين لا يُخصم عليهما وقت',
+    effect: 'أول ٣ إجابات خاطئة لا يُخصم عليها وقت',
     skin: '',
     ink: 'text-signal',
+    color: 'var(--color-signal)',
     tone: 'signal',
   },
   revive: {
     Icon: ReviveIcon,
-    effect: 'إذا وصل عدّادك صفراً يعود نبضك بعشر ثوانٍ، مرّة واحدة',
+    effect: '٢٠ ثانية إضافية في حال توقف نبضك',
     skin: '',
     ink: 'text-danger',
+    color: 'var(--color-danger)',
     tone: 'danger',
   },
-  fort: {
-    Icon: FortIcon,
-    effect: 'يصدّ عنك كل تجميدٍ وتعتيمٍ وسرقة في الجولة القادمة',
-    skin: '',
-    ink: 'text-ink-2',
-    tone: 'signal',
-  },
-  mirror: {
-    Icon: MirrorIcon,
-    effect: 'يردّ كل تجميدٍ وتعتيمٍ وسرقة على من أرسلها',
-    skin: '',
-    ink: 'text-signal',
-    tone: 'signal',
-  },
-  blackout: {
-    Icon: EyeOffIcon,
-    effect: 'يُخفي عدّاد لاعبٍ عن شاشته طوال الجولة القادمة',
-    skin: '',
-    ink: 'text-muted',
-    tone: 'signal',
+  double: {
+    Icon: DoubleIcon,
+    effect: 'نقاط مضاعفة للجولة القادمة في حال لم يتوقف نبضك',
+    skin: 'skin-gold',
+    ink: 'text-gold',
+    color: 'var(--color-gold)',
+    tone: 'gold',
   },
   freeze: {
     Icon: SnowflakeIcon,
-    effect: 'تقفل لاعباً عن الإجابة خمس ثوانٍ في بداية الجولة',
+    effect: 'تقفل لاعباً عن الإجابة ٨ ثوانٍ في بداية الجولة',
     skin: 'skin-frost',
     ink: 'text-frost',
+    color: 'var(--color-frost)',
     tone: 'frost',
   },
   steal: {
     Icon: StealIcon,
-    effect: 'تأخذ خمس ثوانٍ من لاعبٍ وتضيفها إلى نبضك',
+    effect: 'تأخذ ٨ ثوانٍ من لاعبٍ وتضيفها إلى نبضك',
     skin: '',
     ink: 'text-warn',
+    color: 'var(--color-warn)',
     tone: 'gold',
   },
-  double: {
-    Icon: DoubleIcon,
-    effect: 'نقاط جولتك القادمة ×٢، تسقط إن توقف نبضك',
-    skin: 'skin-gold',
-    ink: 'text-gold',
-    tone: 'gold',
+  duel: {
+    Icon: DuelIcon,
+    effect: 'تتحدى لاعباً أعلى منك نقاطاً، إذا أصبت أكثر تسرق منه ٥ نقاط',
+    skin: '',
+    ink: 'text-danger',
+    color: 'var(--color-danger)',
+    tone: 'danger',
+  },
+  mirror: {
+    Icon: MirrorIcon,
+    effect: 'تردّ التجميد والسرقة على من أرسلها',
+    skin: '',
+    ink: 'text-signal',
+    color: 'var(--color-signal)',
+    tone: 'signal',
   },
 };
 
+/** البطاقات في المتجر ثلاثُ زمر: ما تعين به نفسك، وما تضرب به غيرك، وما تصدّ به */
+export const CARD_GROUPS: { title: string; cards: CardId[] }[] = [
+  { title: 'دعم', cards: ['time', 'revive', 'double'] },
+  { title: 'هجوم', cards: ['freeze', 'steal', 'duel'] },
+  { title: 'دفاع', cards: ['shield', 'mirror'] },
+];
+
 export const ATTACK_DONE: Partial<Record<CardId, (name: string) => string>> = {
   freeze: (name) => `جمّدتَ ${name}`,
-  blackout: (name) => `عتّمتَ على ${name}`,
   steal: (name) => `ستسرق من ${name}`,
+  duel: (name) => `تحدّيتَ ${name}`,
 };
 
 export const PICK_LABEL: Partial<Record<CardId, string>> = {
   freeze: 'تجميد',
-  blackout: 'تعتيم',
   steal: 'سرقة',
+  duel: 'مبارزة',
 };
+
+const PLURAL = new Intl.PluralRules('ar');
+
+/** «شرارة» و«شرارتان» و«٣ شرارات» و«١٤ شرارة» */
+export const sparksWord = (n: number) => {
+  const pick = PLURAL.select(n);
+  return pick === 'two' ? 'شرارتان' : pick === 'few' ? 'شرارات' : 'شرارة';
+};
+
+export const pointsWord = (n: number) => {
+  const pick = PLURAL.select(n);
+  return pick === 'two' ? 'نقطتان' : pick === 'few' ? 'نقاط' : 'نقطة';
+};
+
+/**
+ * نصُّ الشارة — قصيرٌ يُقرأ على شريطٍ ضيّق، ومعه وصفٌ أطول للتلميح.
+ * المبارزة تُقرأ نتيجتُها الحيّة: «٣:٢ النسور».
+ */
+export function effectText(fx: Effect): { short: string; long: string } {
+  switch (fx.card) {
+    case 'time':
+      return { short: `+${fx.n}`, long: `بدأ بوقتٍ إضافي +${fx.n} ث` };
+    case 'shield':
+      return {
+        short: `×${fx.n}`,
+        long: `درعٌ يقي ${countOf(fx.n ?? 0, { one: 'خطأً واحداً', two: 'خطأين', few: 'أخطاء', many: 'خطأً' })}`,
+      };
+    case 'revive':
+      return { short: 'جاهز', long: 'صاعق القلب جاهز' };
+    case 'mirror':
+      return { short: 'مرآة', long: 'مرآةٌ تردّ الهجوم' };
+    case 'steal':
+      return (fx.n ?? 0) < 0
+        ? { short: `${fx.n} ${fx.who}`, long: `سرق منه ${fx.who} ${-(fx.n ?? 0)} ث` }
+        : { short: `+${fx.n} ${fx.who}`, long: `سرق ${fx.n} ث من ${fx.who}` };
+    case 'duel':
+      return {
+        short: `${fx.mine ?? 0}:${fx.theirs ?? 0} ${fx.who}`,
+        long: `يبارز ${fx.who}: ${fx.mine ?? 0} مقابل ${fx.theirs ?? 0}`,
+      };
+    default:
+      return { short: '', long: '' };
+  }
+}

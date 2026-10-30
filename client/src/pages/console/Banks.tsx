@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Flag, HoldButton } from '../../components/ui';
+import { Flag, ConfirmButton } from '../../components/ui';
 import { LockIcon, PenIcon, RestoreIcon, TrashIcon, UnlockIcon } from '../../components/icons';
 import {
   type Api,
@@ -91,8 +91,7 @@ type Q = {
  *
  * فرُفع الشرط: ما قيس يُعرض كما هو، وقلّةُ العرضات تُقرأ من عمود «عُرض».
  */
-const isWeak = (row: { rate: number | null; shown: number }) =>
-  row.rate !== null && row.rate < 30;
+const isWeak = (row: { rate: number | null; shown: number }) => row.rate !== null && row.rate < 30;
 
 const COLS: Col[] = [
   { key: 'bank', label: 'البنك', w: '0.95fr' },
@@ -222,20 +221,9 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
           value={mine.length}
           unit={unit(mine.length, 'question')}
         />
-        <Stat
-          label="وسيط الصواب"
-          value={middle === null ? '-' : `${middle}%`}
-        />
-        <Stat
-          label="ضعيفة الصواب"
-          value={weak}
-          tone={weak > 0 ? 'warn' : undefined}
-        />
-        <Stat
-          label="مُبلَّغ عنها"
-          value={reported}
-          tone={reported > 0 ? 'danger' : undefined}
-        />
+        <Stat label="وسيط الصواب" value={middle === null ? '-' : `${middle}%`} />
+        <Stat label="ضعيفة الصواب" value={weak} tone={weak > 0 ? 'warn' : undefined} />
+        <Stat label="مُبلَّغ عنها" value={reported} tone={reported > 0 ? 'danger' : undefined} />
       </StatRow>
 
       <Panel
@@ -247,9 +235,7 @@ export function Questions({ api, sift, onEdit, onCounts, reloadKey }: Shared) {
         flush
       >
         {shown.length === 0 ? (
-          <Empty
-            title="لا سؤال يطابق التصفية الحالية"
-          />
+          <Empty title="لا سؤال يطابق التصفية الحالية" />
         ) : (
           <Grid cols={COLS} sort={sort} onSort={flip}>
             {paged.slice.map((row) => (
@@ -374,18 +360,10 @@ export function Reports({ api, sift, banks, onEdit, onCounts, reloadKey }: Share
   return (
     <div className="grid gap-4">
       <StatRow>
-        <Stat
-          lead
-          label="البلاغات"
-          value={mine.length}
-          unit={unit(mine.length, 'report')}
-        />
+        <Stat lead label="البلاغات" value={mine.length} unit={unit(mine.length, 'report')} />
         <Stat label="أسئلةٌ شُكي منها" value={questions} />
         <Stat label="من اللاعبين" value={byPlayer} />
-        <Stat
-          label="من المنظّمين"
-          value={mine.length - byPlayer}
-        />
+        <Stat label="من المنظّمين" value={mine.length - byPlayer} />
       </StatRow>
 
       {ordered.length === 0 ? (
@@ -528,11 +506,7 @@ export function Shelf({
     });
     setBusy(null);
     if (!res.ok) return flash(res.data?.error ?? 'تعذّر التبديل');
-    flash(
-      bank.active
-        ? `أُلغي تفعيل «${bank.name}»`
-        : `فُعِّل «${bank.name}»`,
-    );
+    flash(bank.active ? `أُلغي تفعيل «${bank.name}»` : `فُعِّل «${bank.name}»`);
     onChanged();
   };
 
@@ -573,23 +547,14 @@ export function Shelf({
   return (
     <div className="grid gap-4">
       <StatRow>
-        <Stat
-          lead
-          label="بنوك"
-          value={banks.length}
-          unit={unit(banks.length, 'bank')}
-        />
+        <Stat lead label="بنوك" value={banks.length} unit={unit(banks.length, 'bank')} />
         <Stat label="أسئلة" value={total} unit={unit(total, 'question')} />
         <Stat
           label="مُلغاة"
           value={banks.length - live}
           tone={banks.length - live ? 'warn' : undefined}
         />
-        <Stat
-          label="محذوفة"
-          value={rows.length}
-          tone={rows.length ? 'warn' : undefined}
-        />
+        <Stat label="محذوفة" value={rows.length} tone={rows.length ? 'warn' : undefined} />
       </StatRow>
 
       {note && (
@@ -605,9 +570,7 @@ export function Shelf({
         زرِّ حذفٍ بجملةٍ طويلة تُقَصّ. والبطاقةُ تملأ العرض بما يُقرأ، وتصفُّ
         نفسها بعرض الشاشة.
       */}
-      <Panel
-        title="البنوك"
-      >
+      <Panel title="البنوك">
         <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
           {banks.map((bank) => (
             <article
@@ -628,13 +591,9 @@ export function Shelf({
                 </span>
                 {/* سببُ الحجب يُقال في موضعه: «فارغ» ليس كـ«مُلغى» */}
                 {!bank.active ? (
-                  <span className="mt-1 block text-[11.5px] font-bold text-warn-ink">
-                    مُلغى
-                  </span>
+                  <span className="mt-1 block text-[11.5px] font-bold text-warn-ink">مُلغى</span>
                 ) : bank.count === 0 ? (
-                  <span className="mt-1 block text-[11.5px] font-bold text-muted">
-                    فارغ
-                  </span>
+                  <span className="mt-1 block text-[11.5px] font-bold text-muted">فارغ</span>
                 ) : null}
               </div>
 
@@ -654,11 +613,7 @@ export function Shelf({
                   <button
                     type="button"
                     onClick={() => void flip(bank)}
-                    title={
-                      bank.active
-                        ? `إلغاء تفعيل «${bank.name}»`
-                        : `تفعيل «${bank.name}»`
-                    }
+                    title={bank.active ? `إلغاء تفعيل «${bank.name}»` : `تفعيل «${bank.name}»`}
                     aria-label={bank.active ? 'إلغاء التفعيل' : 'تفعيل'}
                     className="flex size-8 items-center justify-center rounded-chip text-muted transition hover:bg-surface hover:text-ink"
                   >
@@ -668,7 +623,7 @@ export function Shelf({
                   {banks.length <= 1 ? (
                     <Badge>آخرُ بنك</Badge>
                   ) : (
-                    <HoldButton
+                    <ConfirmButton
                       bare
                       tone="icon"
                       glyph={<TrashIcon size={15} />}
@@ -716,7 +671,7 @@ export function Shelf({
                   ) : (
                     <Badge tone="signal">أُرجع</Badge>
                   )}
-                  <HoldButton
+                  <ConfirmButton
                     bare
                     tone="icon"
                     glyph={<TrashIcon size={15} />}
@@ -806,26 +761,15 @@ export function Edits({
   return (
     <div className="grid gap-4">
       <StatRow>
-        <Stat
-          lead
-          label="نسخٌ محفوظة"
-          value={mine.length}
-          unit={unit(mine.length, 'question')}
-        />
+        <Stat lead label="نسخٌ محفوظة" value={mine.length} unit={unit(mine.length, 'question')} />
         <Stat label="حُرِّرت" value={mine.length - deleted} />
-        <Stat
-          label="حُذِفت"
-          value={deleted}
-          tone={deleted > 0 ? 'warn' : undefined}
-        />
+        <Stat label="حُذِفت" value={deleted} tone={deleted > 0 ? 'warn' : undefined} />
         <Stat label="إحصاءٌ مُحي" value={wiped} />
       </StatRow>
 
       {shown.length === 0 ? (
         <Panel>
-          <Empty
-            title="لم يُحرَّر سؤالٌ في الثلاثين يوماً الماضية"
-          />
+          <Empty title="لم يُحرَّر سؤالٌ في الثلاثين يوماً الماضية" />
         </Panel>
       ) : (
         shown.map((row) => (
@@ -941,7 +885,6 @@ export function Edits({
           </section>
         ))
       )}
-
     </div>
   );
 }
