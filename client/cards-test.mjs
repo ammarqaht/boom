@@ -34,8 +34,8 @@ check(
   Object.keys(CARDS).join() === 'time,revive,double,freeze,steal,duel,shield,mirror',
 );
 check(
-  'الأسعار بالشرارات: وقت 3 · تجميد 4 · مضاعفة 6 · مبارزة 6 · درع 2',
-  CARDS.time.price === 3 && CARDS.freeze.price === 4 && CARDS.double.price === 6 && CARDS.duel.price === 6 && CARDS.shield.price === 2,
+  'الأسعار بالشرارات: وقت 4 · تجميد 5 · مضاعفة 7 · مبارزة 7 · درع 3',
+  CARDS.time.price === 4 && CARDS.freeze.price === 5 && CARDS.double.price === 7 && CARDS.duel.price === 7 && CARDS.shield.price === 3,
 );
 check('لا شراء في اللوبي', room.buyCard(a.id, 'time').ok === false);
 
@@ -61,12 +61,12 @@ a.sparks = 40;
 const scoreBefore = a.score;
 check('شراء وقت إضافي', room.buyCard(a.id, 'time').ok && a.sparks === 40 - CARDS.time.price);
 check('ونقاط الفوز لم تُمسّ', a.score === scoreBefore);
-const rest = [2, 3, 4].map(() => room.buyCard(a.id, 'time').ok);
-check('تُشترى حتى الحدّ — أربعاً', rest.every(Boolean) && a.cardUses.get('time') === CARDS.time.limit);
-check('لا خامسة بعد الحدّ', room.buyCard(a.id, 'time').ok === false);
+const rest = [2, 3, 4, 5].map(() => room.buyCard(a.id, 'time').ok);
+check('تُشترى حتى الحدّ — خمساً', rest.every(Boolean) && a.cardUses.get('time') === CARDS.time.limit);
+check('لا سادسة بعد الحدّ', room.buyCard(a.id, 'time').ok === false);
 c.sparks = 1;
 check('رفض الشراء لقلّة الشرارات', room.buyCard(c.id, 'double').ok === false);
-check('والنقضُ يردّ الشرارات', room.refundCard(a.id, 'time').ok && a.sparks === 40 - 3 * CARDS.time.price);
+check('والنقضُ يردّ الشرارات', room.refundCard(a.id, 'time').ok && a.sparks === 40 - 4 * CARDS.time.price);
 room.buyCard(a.id, 'time');
 
 // المبارزة تصعد ولا تنزل
@@ -91,7 +91,7 @@ check('شراء مضاعفة', room.buyCard(c.id, 'double').ok);
 // الجولة الثانية: الآثار عند البدء
 const base = room.settings.startSeconds * 1000;
 room.start();
-check('وقت النسور +٦٠ ثانية عند البدء (أربع بطاقات ×١٥ث)', a.timeMs === Math.min(120000, base + 60000));
+check('وقت النسور +٧٥ ثانية عند البدء (خمس بطاقات ×١٥ث)', a.timeMs === Math.min(120000, base + 75000));
 check('الأسود مقفل ثماني ثوانٍ (تجميد)', c.lockedMs === 8000 && c.frozenBy === 'النسور');
 check('المبارزة قائمة بين الطرفين', a.duels.includes(b.id) && b.duels.includes(a.id));
 check('وشارتها في الحال العامة', room.publicState().teams.find((t) => t.id === b.id).effects.some((fx) => fx.card === 'duel' && fx.who === 'النسور'));
@@ -110,8 +110,8 @@ check('وخصمُه يُبلَّغ بإصابته', room.changedTeams.has(a.id))
 // الأسود مضاعِفٌ ويسكن: يخسر نقاط جولته
 c.correct = 2;
 finishWith(c, [[a, 40000], [b, 30000]], now);
-check(`المتحدّي الغالب يسرق خمساً — ${award(b).duelPoints}`, award(b).duelPoints === 5 && award(b).duels[0].won === true);
-check('والخصمُ تُسرق منه الخمس', award(a).duelPoints === -5 && award(a).duels[0].won === false);
+check(`المتحدّي الغالب يسرق سبعاً — ${award(b).duelPoints}`, award(b).duelPoints === 7 && award(b).duels[0].won === true);
+check('والخصمُ تُسرق منه السبع', award(a).duelPoints === -7 && award(a).duels[0].won === false);
 check('من سكن نبضه لا يأخذ نقاطاً ولو أصاب', award(c).points === 0 && award(c).correct === 2);
 check('وشراراته باقية', award(c).sparks === 3);
 check('استُهلك المضاعِف', c.pendingMultiplier === 1);
@@ -171,5 +171,29 @@ const { restoreRoom } = await import(pathToFileURL(gamePath).href);
 a.sparks = 7;
 const back = restoreRoom(JSON.parse(JSON.stringify(room.snapshot())));
 check('اللقطة تحفظ الشرارات', back.teams.get(a.id).sparks === 7);
+
+// الأسماءُ الحقيقية: لا تمرّ في الحال العامة قبل الكشف، وتُكشف الثالثُ فالثاني فالأول فالبقيّة
+a.realName = 'خالد';
+b.realName = 'سارة';
+c.realName = 'يوسف';
+const d = room.addTeam('الفهود', null, 'نورة');
+check('addTeam يحفظ الاسم الحقيقي', d.realName === 'نورة');
+a.score = 9; b.score = 7; c.score = 5; d.score = 3;
+room.finish();
+const clean = JSON.stringify(room.publicState());
+check('لا اسم حقيقي في الحال العامة قبل الكشف', !['خالد', 'سارة', 'يوسف', 'نورة'].some((n) => clean.includes(n)));
+check('خطط الكشف أربع: ثلاثة أوائل ثم البقيّة', room.revealState().total === 4);
+room.revealNext();
+check('الأولى تكشف الثالث', JSON.stringify(room.revealState().names) === JSON.stringify({ [c.id]: 'يوسف' }));
+room.revealNext();
+room.revealNext();
+check('الثالثة تكشف البطل', room.revealState().latest[0] === a.id && Object.keys(room.revealState().names).length === 3);
+room.revealNext();
+check('والأخيرة البقيّة', room.revealState().names[d.id] === 'نورة');
+check('ولا خطوة بعدها', room.revealNext() === false);
+const back2 = restoreRoom(JSON.parse(JSON.stringify(room.snapshot())));
+check('اللقطة تحفظ الأسماء الحقيقية وخطوة الكشف', back2.teams.get(d.id).realName === 'نورة' && back2.revealStep === 4);
+room.resetAll();
+check('إعادة اللعبة تطوي الكشف', room.revealStep === 0 && room.revealState() === null);
 
 process.exit(failed ? 1 : 0);

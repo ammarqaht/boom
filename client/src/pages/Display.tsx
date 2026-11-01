@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ask, onWake, useFreshBuild, watchSession, socket } from '../lib/socket';
 import { projectRoom, roomTicking, useProjected } from '../lib/clock';
 import type { CardEvent, CardId, PublicTeam, RoomState } from '../lib/types';
 import { CARD_LOOK } from '../lib/cards';
 import { EffectBadges } from '../components/effects';
+import { DuelStage } from '../components/duel';
 import { LivesBar, playersWord } from '../components/lives';
 import {
   Button,
@@ -220,6 +221,7 @@ function Board({ room }: { room: RoomState }) {
   );
   const ranked = [...live].sort((a, b) => order(a.id) - order(b.id));
   const leaderId = ranked.find((t) => !t.flatlined && !t.waiting)?.id;
+  const strikes = (room.cardEvents ?? []).filter((event) => event.kind !== 'duel');
 
   const board = useRef<HTMLDivElement>(null);
   useReorderSlide(board, ranked.map((t) => t.id).join(','));
@@ -291,14 +293,14 @@ function Board({ room }: { room: RoomState }) {
                * m-auto لا items-center: الوسطُ بالفلكس يقصّ أعلى ما طال عن الشاشة
                * فيضيع البطل. وفوق ثمانيةٍ تبقى المنصّةُ أشرطةً والبقيّةُ شبكةً صغيرة.
                */
-              <div className="flex min-h-0 flex-1 overflow-y-auto py-6">
-                <div className="m-auto w-full">
-                  <Standings
-                    standings={room.standings}
-                    bars={room.standings.length > 8 ? 2 : undefined}
-                  />
-                </div>
-              </div>
+              <FitScreen on={!phone} watch={`${room.standings.length}:${room.reveal?.step ?? 0}`}>
+                {/* الأسماءُ الحقيقية تحت المستعارة، تُملأ بكل ضغطةِ كشفٍ من المنظّم */}
+                <Standings
+                  standings={room.standings}
+                  names={room.reveal?.names}
+                  bars={room.standings.length > 8 ? 2 : undefined}
+                />
+              </FitScreen>
             ) : (
               <div
                 ref={board}
@@ -364,11 +366,14 @@ function Board({ room }: { room: RoomState }) {
         </div>
 
         <CountdownGate ms={room.countdownMs} on={room.status === 'countdown'} />
-        {room.status === 'countdown' && (room.cardEvents?.length ?? 0) > 0 && (
+        {/* المبارزاتُ مواجهةٌ أعلى الشاشة، وسائرُ البطاقات شاراتٌ في أسفلها */}
+        {room.status === 'countdown' && (
+          <DuelStage duels={(room.cardEvents ?? []).filter((event) => event.kind === 'duel')} />
+        )}
+        {room.status === 'countdown' && strikes.length > 0 && (
           <div className="pointer-events-none fixed inset-x-0 bottom-[6vh] z-[60] flex flex-wrap items-center justify-center gap-[1vw] px-[4vw]">
-            {room.cardEvents!.map((event, i) => {
-              const look =
-                CARD_LOOK[event.kind === 'hit' || event.kind === 'duel' ? event.card : 'mirror'];
+            {strikes.map((event, i) => {
+              const look = CARD_LOOK[event.kind === 'hit' ? event.card : 'mirror'];
               return (
                 <div
                   key={i}
@@ -397,6 +402,57 @@ function Board({ room }: { room: RoomState }) {
         {stopped.name && (
           <FlatlineMoment name={stopped.name} leaving={stopped.leaving} phone={phone} />
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * لوحةٌ تسعها الشاشةُ كلُّها: البروجكتر لا يُمرَّر.
+ *
+ * الأسماءُ الحقيقية سطرٌ ثانٍ تحت كل مستعار، فتطول لوحةُ الأوائل مع كل
+ * كشف، وفي القاعة الكبيرة تتجاوز الشاشة فيضيع آخرُها. فإن طالت صُغّرت
+ * كلُّها معاً (scale) حتى تسعها، ووُسّطت فيما بقي. والتصغيرُ رسمٌ لا تخطيط:
+ * لو صُغّرت بـzoom لضاقت الحاوية فكبُر خطُّها المقيس بها (cqw) — دورٌ لا ينتهي.
+ * وفي الجوّال (on=false) تُمرَّر كما كانت.
+ */
+function FitScreen({ on, watch, children }: { on: boolean; watch: string; children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState({ scale: 1, top: 0 });
+
+  useLayoutEffect(() => {
+    const outer = box.current;
+    const inner = body.current;
+    if (!on || !outer || !inner) return setFit({ scale: 1, top: 0 });
+    const measure = () => {
+      const room = outer.clientHeight;
+      const need = inner.offsetHeight;
+      const scale = need > room ? room / need : 1;
+      setFit({ scale, top: Math.max(0, (room - need * scale) / 2) });
+    };
+    measure();
+    const watcher = new ResizeObserver(measure);
+    watcher.observe(outer);
+    watcher.observe(inner);
+    return () => watcher.disconnect();
+  }, [on, watch]);
+
+  if (!on) {
+    return (
+      <div className="flex min-h-0 flex-1 overflow-y-auto py-6">
+        <div className="m-auto w-full">{children}</div>
+      </div>
+    );
+  }
+  return (
+    <div ref={box} className="relative min-h-0 flex-1 overflow-hidden my-6">
+      <div
+        ref={body}
+        className="absolute inset-x-0 top-0 origin-top"
+        style={{ transform: `translateY(${fit.top}px) scale(${fit.scale})` }}
+      >
+        {children}
       </div>
     </div>
   );

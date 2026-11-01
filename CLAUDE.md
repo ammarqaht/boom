@@ -44,6 +44,7 @@ Server source files contain Arabic text that makes grep treat them as binary; us
 Design invariants (do not break):
 - **Server is the only authority for time and scores.** The browser only renders and interpolates.
 - **The correct answer never leaves the server before the round ends.**
+- **A player's real name (`team.realName`) never leaves the server before the organiser reveals it.** Players join with an alias; the organiser gets real names over `adminChannel` only (`admin:names` / `admin:realNames`), and `publicState().reveal` carries just the names revealed so far.
 - **Live rooms live in process memory**, so production must run exactly **one instance** (no autoscaling/replicas) on a platform with persistent processes and WebSockets (not serverless). Idle rooms are swept after two hours.
 - The container disk is ephemeral; anything that must persist goes to PostgreSQL.
 - The Vite build emits `build.txt`; the server broadcasts it so stale clients reload between rounds.

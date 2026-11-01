@@ -1327,6 +1327,11 @@ async function keepFeedback(entry, reply) {
 /** آخر نسخةٍ من سجلّ الأسئلة أُرسلت لكل غرفة — فلا يُعاد إرسال ما لم يتغيّر */
 const feedSent = new Map();
 
+/** الأسماءُ الحقيقية إلى المنظّم وحده — قناةُ الغرفة يسمعها اللاعبون والقاعة */
+function pushNames(room) {
+  io.to(adminChannel(room.code)).emit('admin:names', room.realNames());
+}
+
 function pushFeed(room, force = false) {
   if (!force && feedSent.get(room.code) === room.feedVersion) return;
   feedSent.set(room.code, room.feedVersion);
@@ -1497,6 +1502,7 @@ io.on('connection', (socket) => {
     socket.join(channel(room.code));
     socket.join(adminChannel(room.code));
     socket.join(watchChannel(room.code));
+    socket.emit('admin:names', room.realNames());
   };
 
   const attachDisplay = (room) => {
@@ -1714,6 +1720,26 @@ io.on('connection', (socket) => {
     room.removeTeam(teamId);
     /* خصومُ الباقين في متجرهم نقصوا واحداً — فتُعاد حالُ كلٍّ منهم */
     changed(room, { teams: 'all', players: true });
+    pushNames(room);
+  });
+
+  /*
+   * الأسماءُ الحقيقية عند الطلب: ما يُبعث عند الوصل قد يسبق لوحةَ المنظّم
+   * إلى الاستماع (الوصلُ عند تحميل الصفحة، والاستماعُ بعد رسمها) فيضيع.
+   */
+  socket.on('admin:realNames', (_payload, reply) => {
+    const room = asAdmin();
+    if (!room) return reply?.({ ok: false, error: 'غير مصرح' });
+    reply?.({ ok: true, names: room.realNames() });
+  });
+
+  /* كشفُ الأسماء بعد الأوائل: خطوةٌ بكل ضغطة، والحالُ إلى الجميع في لحظةٍ واحدة */
+  socket.on('admin:reveal', (_payload, reply) => {
+    const room = asAdmin();
+    if (!room) return reply?.({ ok: false, error: 'غير مصرح' });
+    if (!room.revealNext()) return reply?.({ ok: false, error: 'لا أسماء تُكشف' });
+    pushAll(room);
+    reply?.({ ok: true, reveal: room.revealState() });
   });
 
   socket.on('display:join', ({ code } = {}, reply) => {
@@ -1723,7 +1749,7 @@ io.on('connection', (socket) => {
     reply?.({ ok: true, state: room.publicState() });
   });
 
-  socket.on('team:join', ({ code, name, device } = {}, reply) => {
+  socket.on('team:join', ({ code, name, real, device } = {}, reply) => {
     const room = getRoom(code);
     if (!room) return reply?.({ ok: false, error: 'رمز الغرفة غير صحيح' });
     /*
@@ -1755,14 +1781,24 @@ io.on('connection', (socket) => {
       });
     }
 
+    /*
+     * الاسمُ الحقيقي يُطلب لمن دخل أول مرّة — العائدُ بجهازه معروفٌ من قبل.
+     * وبقدر الاسم الثنائي: يُكتب تحت المستعار بخطٍّ صغير، والطويلُ يزحمه.
+     */
+    const realName = String(real || '')
+      .trim()
+      .slice(0, 20);
+    if (!realName) return reply?.({ ok: false, error: 'اكتب اسمك الحقيقي' });
+
     const taken = [...room.teams.values()].some((t) => t.name === clean);
     if (taken) return reply?.({ ok: false, error: 'الاسم مستخدم، اختر اسماً آخر' });
     if (room.teams.size >= MAX_TEAMS) {
       return reply?.({ ok: false, error: 'الغرفة ممتلئة، راجع المنظّم' });
     }
 
-    const team = room.addTeam(clean, deviceId);
+    const team = room.addTeam(clean, deviceId, realName);
     attachTeam(room, team);
+    pushNames(room);
     changed(room, { teams: 'all', players: true }); // قائمةُ الخصوم في متاجر الباقين زادت واحداً
     reply?.({
       ok: true,

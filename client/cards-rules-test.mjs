@@ -37,7 +37,7 @@ const base = (room) => room.settings.startSeconds * 1000;
   check('ولا بطاقةٌ ذاتيةٌ مرّتين للجولة نفسها', room.buyCard(a.id, 'shield').ok && !room.buyCard(a.id, 'shield').ok);
   check('والوقتُ الإضافي يتراكم', room.buyCard(a.id, 'time').ok && room.buyCard(a.id, 'time').ok);
   const before = a.sparks;
-  check('النقضُ يردّ الشرارات', room.refundCard(a.id, 'freeze').ok && a.sparks === before + 4);
+  check('النقضُ يردّ الشرارات', room.refundCard(a.id, 'freeze').ok && a.sparks === before + 5);
   check('والشراءُ لا يمسّ نقاط الفوز', a.score === score);
   dropRoom(room.code);
 }

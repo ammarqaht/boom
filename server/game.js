@@ -40,7 +40,7 @@ const STEAL_MS = 8000;
 const STEAL_FLOOR_MS = 10000;
 const SHIELD_HITS = 3;
 const REVIVE_MS = 20000;
-const DUEL_POINTS = 5;
+const DUEL_POINTS = 7;
 
 /*
  * الشرارات: عملةُ الشراء، منفصلةٌ عن نقاط الفوز.
@@ -63,27 +63,29 @@ const STREAK_SPARKS = 2;
  * تعريفات البطاقات — المرجع الوحيد للأسعار والحدود والأنواع.
  *
  * الأسعار بالشرارات لا بنقاط الفوز، ودخلُ اللاعب الوسط نحو أربعٍ في الجولة:
- * فبطاقةٌ بأربعٍ قرارُ جولة، والمضاعفة بستٍّ رهانٌ يُدّخر له.
+ * فبطاقةٌ بخمسٍ قرارُ جولة أو جولتين، والمضاعفة والمبارزة بسبعٍ رهانٌ يُدّخر
+ * له. ورُفع كلُّ سعرٍ وكلُّ حدٍّ واحداً معاً: بطاقاتٌ أكثر في اللعبة، وكلٌّ
+ * منها أغلى قليلاً، فلا يغرق المتجر ولا يُحرم منه أحد.
  *
  * والبطاقات ثمانٍ لكلٍّ منها أثرٌ لا يشاركها فيه غيرها:
  *   دعم:  وقت إضافي (+١٥ ث) · صاعق القلب (يعود النبض بعشرين ثانية) ·
  *         مضاعفة (×٢ إن نجوت، وتسقط وحدها إن سكنت)
  *   هجوم: تجميد (قفل ثماني ثوانٍ) · سرقة نبض (ثماني ثوانٍ إليك) ·
- *         مبارزة (تتحدّى من فوقك، فإن أصبت أكثر سرقت منه خمس نقاط)
+ *         مبارزة (تتحدّى من فوقك، فإن أصبت أكثر سرقت منه سبع نقاط)
  *   دفاع: درع (ثلاثة أخطاء بلا خصم) · مرآة (تردّ كل تجميدٍ وسرقة)
  *
  * دُمجت الهدنة في الوقت الإضافي (كان أثرهما في النقاط واحداً)، والحصن في
  * المرآة، وأُسقط التعتيم: لاعبٌ سريعٌ لا ينظر إلى عدّاده أصلاً.
  */
 export const CARDS = {
-  time: { price: 3, name: 'وقت إضافي', limit: 4, stack: true },
-  revive: { price: 4, name: 'صاعق القلب', limit: 1 },
-  double: { price: 6, name: 'مضاعفة', limit: 2 },
-  freeze: { price: 4, name: 'تجميد', limit: 3, target: true },
-  steal: { price: 4, name: 'سرقة نبض', limit: 2, target: true },
-  duel: { price: 6, name: 'مبارزة', limit: 2, target: true, upward: true },
-  shield: { price: 2, name: 'درع', limit: 3 },
-  mirror: { price: 4, name: 'مرآة', limit: 2 },
+  time: { price: 4, name: 'وقت إضافي', limit: 5, stack: true },
+  revive: { price: 5, name: 'صاعق القلب', limit: 2 },
+  double: { price: 7, name: 'مضاعفة', limit: 3 },
+  freeze: { price: 5, name: 'تجميد', limit: 4, target: true },
+  steal: { price: 5, name: 'سرقة نبض', limit: 3, target: true },
+  duel: { price: 7, name: 'مبارزة', limit: 3, target: true, upward: true },
+  shield: { price: 3, name: 'درع', limit: 4 },
+  mirror: { price: 5, name: 'مرآة', limit: 3 },
 };
 
 /*
@@ -264,7 +266,12 @@ class Team {
   constructor(name, settings) {
     this.id = randomUUID();
     this.token = randomUUID(); // يسمح للفريق بالرجوع بعد انقطاع الاتصال
-    this.name = name;
+    this.name = name; // الاسمُ في اللعبة: مستعارٌ يراه الجميع
+    /*
+     * الاسمُ الحقيقي: للمنظّم وحده حتى يكشفه بعد الأوائل. يُعامَل كالإجابة
+     * الصحيحة — لا يمرّ في حالٍ عامة قبل وقته، فلا يقرؤه لاعبٌ من الشبكة.
+     */
+    this.realName = '';
     this.score = 0; // نقاط الفوز — عليها الترتيب
     this.totalCorrect = 0; // صحيحاتُ اللعبة كلها — بها يُكسر تعادلُ النقاط
     this.sparks = 0; // عملة الشراء — لا تدخل في الترتيب
@@ -390,6 +397,7 @@ export class Room {
      */
     this.playedRounds = 0;
     this.standings = null; // الترتيب النهائي بعد إنهاء اللعبة
+    this.revealStep = 0; // كم خطوةً كُشفت من الأسماء الحقيقية بعد الأوائل
     this.displayBlurred = false; // تغبيش الترتيب على شاشة العرض
   }
 
@@ -487,9 +495,10 @@ export class Room {
     return out;
   }
 
-  addTeam(name, deviceId = null) {
+  addTeam(name, deviceId = null, realName = '') {
     const team = new Team(name, this.settings);
     team.deviceId = deviceId;
+    team.realName = realName;
     /*
      * من جاء والجولة جارية ينتظر القادمة: لا يُردّ على الباب كما كان —
      * فالمنظّم لا يملك أن يفتح له، واللاعب يقف بلا شاشةٍ ولا خبر — ولا
@@ -995,7 +1004,47 @@ export class Room {
         score: team.score,
         rank: this.rankOf(team),
       }));
+    this.revealStep = 0;
     this.touch();
+  }
+
+  /**
+   * كشفُ الأسماء على مراحل يقودها المنظّم: الثالثُ ثم الثاني ثم الأول —
+   * كلٌّ بضغطة، فيصعد الترقّب إلى البطل — ثم البقيّةُ دفعةً واحدة. ستون
+   * اسماً واحداً واحداً تُملّ القاعة.
+   */
+  revealPlan() {
+    const ids = (this.standings ?? []).map((s) => s.teamId);
+    const top = Math.min(3, ids.length);
+    const steps = [];
+    for (let i = top - 1; i >= 0; i--) steps.push([ids[i]]);
+    if (ids.length > 3) steps.push(ids.slice(3));
+    return steps;
+  }
+
+  revealNext() {
+    if (this.status !== 'finished') return false;
+    if (this.revealStep >= this.revealPlan().length) return false;
+    this.revealStep++;
+    this.touch();
+    return true;
+  }
+
+  /** ما كُشف وحده يُرسل: اسمُ من لم يُكشف بعد لا يغادر السيرفر */
+  revealState() {
+    if (this.status !== 'finished' || !this.standings) return null;
+    const plan = this.revealPlan();
+    const names = {};
+    for (const id of plan.slice(0, this.revealStep).flat()) {
+      names[id] = this.teams.get(id)?.realName ?? '';
+    }
+    const latest = this.revealStep > 0 ? plan[this.revealStep - 1] : [];
+    return { step: this.revealStep, total: plan.length, names, latest };
+  }
+
+  /** الأسماءُ الحقيقية كلها — لقناة المنظّم وحدها */
+  realNames() {
+    return Object.fromEntries([...this.teams.values()].map((t) => [t.id, t.realName]));
   }
 
   newRound() {
@@ -1019,6 +1068,7 @@ export class Room {
     this.result = null;
     this.history = [];
     this.standings = null;
+    this.revealStep = 0;
     for (const team of this.teams.values()) {
       team.score = 0;
       team.totalCorrect = 0;
@@ -1253,6 +1303,7 @@ export class Room {
       history: this.history.map((round) => this.present(round)),
       cardEvents: this.status === 'countdown' || this.status === 'running' ? (this.cardEvents ?? []) : [],
       standings: this.standings,
+      reveal: this.revealState(),
       displayBlurred: this.displayBlurred,
       countdownMs: this.countdownRemaining(),
       breakMs: this.breakRemaining(),
@@ -1514,6 +1565,7 @@ Room.prototype.snapshot = function snapshot() {
     lives: this.lives,
     fallen: this.fallen,
     standings: this.standings,
+    revealStep: this.revealStep,
     displayBlurred: this.displayBlurred,
     served: [...this.served.values()],
     reported: [...this.reported],
@@ -1522,6 +1574,7 @@ Room.prototype.snapshot = function snapshot() {
       token: t.token,
       deviceId: t.deviceId,
       name: t.name,
+      realName: t.realName,
       score: t.score,
       totalCorrect: t.totalCorrect,
       sparks: t.sparks,
@@ -1580,6 +1633,7 @@ export function restoreRoom(snap) {
   /* لقطاتٌ قديمة لا تعرف العدّاد — يُبدأ بما في السجلّ فلا يضيع ما مضى */
   room.playedRounds = snap.playedRounds ?? room.history.length;
   room.standings = snap.standings ?? null;
+  room.revealStep = snap.revealStep ?? 0;
   room.lives = snap.lives ?? 1;
   room.fallen = Array.isArray(snap.fallen) ? snap.fallen : [];
   /* السيرفر سقط في الاستراحة: يُعطى اللاعبون وقتَ شراءٍ جديداً كاملاً من عودته */
@@ -1605,6 +1659,7 @@ export function restoreRoom(snap) {
     team.id = t.id;
     team.token = t.token;
     team.deviceId = t.deviceId ?? null;
+    team.realName = t.realName ?? '';
     team.score = t.score;
     team.totalCorrect = t.totalCorrect ?? 0;
     /* لقطةٌ من قبل الشرارات: يبدأ رصيدُ الشراء صفراً، ونقاطُ فوزه كما هي */

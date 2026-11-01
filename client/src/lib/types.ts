@@ -1,6 +1,17 @@
 export type RoomStatus = 'lobby' | 'countdown' | 'running' | 'paused' | 'ended' | 'finished';
 
 /** الترتيب النهائي بعد إنهاء اللعبة */
+/**
+ * كشفُ الأسماء: خطوةٌ بكل ضغطةٍ من المنظّم — الثالثُ ثم الثاني ثم الأول ثم
+ * البقيّة. names فيها من كُشف وحده، وlatest من كُشف في الخطوة الأخيرة.
+ */
+export interface Reveal {
+  step: number;
+  total: number;
+  names: Record<string, string>;
+  latest: string[];
+}
+
 export interface Standing {
   teamId: string;
   name: string;
@@ -187,6 +198,8 @@ export interface RoomState {
   history: RoomResult[];
   cardEvents?: CardEvent[];
   standings: Standing[] | null;
+  /** كشفُ الأسماء الحقيقية بعد الأوائل — ما كُشف وحده يصل */
+  reveal?: Reveal | null;
   displayBlurred: boolean;
   countdownMs: number;
   /** ما بقي من وقت الشراء بين الجولتين */

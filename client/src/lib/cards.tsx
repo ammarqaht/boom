@@ -73,7 +73,7 @@ export const CARD_LOOK: Record<CardId, CardLook> = {
   },
   duel: {
     Icon: DuelIcon,
-    effect: 'تتحدى لاعباً أعلى منك نقاطاً، إذا أصبت أكثر تسرق منه ٥ نقاط',
+    effect: 'تتحدى لاعباً أعلى منك نقاطاً، إذا أصبت أكثر تسرق منه ٧ نقاط',
     skin: '',
     ink: 'text-danger',
     color: 'var(--color-danger)',

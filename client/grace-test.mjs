@@ -42,7 +42,7 @@ async function setup(names, startSeconds = 4) {
   for (const name of names) {
     const socket = connect();
     await ready(socket);
-    const res = await ask(socket, 'team:join', { code: room.code, name, device: `${name}-${room.code}` });
+    const res = await ask(socket, 'team:join', { real: 'لاعب تجربة', code: room.code, name, device: `${name}-${room.code}` });
     players[name] = { socket, id: res.teamId, token: res.token };
   }
   return { admin, code: room.code, players };

@@ -56,12 +56,12 @@ export function countWord(n: number, one: string, two: string, few: string) {
 export const arabic = (n: number) => n.toLocaleString('ar-EG');
 
 export const CATALOG: { id: CardId; name: string; price: number; limit: number }[] = [
-  { id: 'time', name: 'وقت إضافي', price: 3, limit: 4 },
-  { id: 'shield', name: 'درع', price: 2, limit: 3 },
-  { id: 'revive', name: 'صاعق القلب', price: 4, limit: 1 },
-  { id: 'double', name: 'مضاعفة', price: 6, limit: 2 },
-  { id: 'freeze', name: 'تجميد', price: 4, limit: 3 },
-  { id: 'steal', name: 'سرقة نبض', price: 4, limit: 2 },
-  { id: 'duel', name: 'مبارزة', price: 6, limit: 2 },
-  { id: 'mirror', name: 'مرآة', price: 4, limit: 2 },
+  { id: 'time', name: 'وقت إضافي', price: 4, limit: 5 },
+  { id: 'shield', name: 'درع', price: 3, limit: 4 },
+  { id: 'revive', name: 'صاعق القلب', price: 5, limit: 2 },
+  { id: 'double', name: 'مضاعفة', price: 7, limit: 3 },
+  { id: 'freeze', name: 'تجميد', price: 5, limit: 4 },
+  { id: 'steal', name: 'سرقة نبض', price: 5, limit: 3 },
+  { id: 'duel', name: 'مبارزة', price: 7, limit: 3 },
+  { id: 'mirror', name: 'مرآة', price: 5, limit: 3 },
 ];

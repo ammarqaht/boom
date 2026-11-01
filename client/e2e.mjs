@@ -32,6 +32,9 @@ console.log(
 );
 
 let adminState = created.state;
+// الأسماء الحقيقية: إلى المنظّم وحده
+let adminNames = null;
+admin.on('admin:names', (n) => (adminNames = n));
 admin.on('room:state', (s) => (adminState = s));
 
 // سجلّ الأسئلة — للمنظّم وحده، ونعدّ ما يصله وما يتسرّب لغيره
@@ -50,7 +53,7 @@ const teams = [];
 for (const name of ['النسور', 'الصقور', 'الأسود']) {
   const s = connect();
   await new Promise((r) => s.on('connect', r));
-  const res = await ask(s, 'team:join', { code: created.code, name });
+  const res = await ask(s, 'team:join', { real: `حقيقي ${name}`, code: created.code, name });
   const team = { name, socket: s, id: res.teamId, state: res.state, feedLeak: 0 };
   s.on('team:state', (st) => (team.state = st));
   s.on('admin:feed', () => team.feedLeak++);
@@ -64,8 +67,14 @@ check(
 // رفض الاسم المكرر
 const dup = connect();
 await new Promise((r) => dup.on('connect', r));
-const dupRes = await ask(dup, 'team:join', { code: created.code, name: 'النسور' });
+const dupRes = await ask(dup, 'team:join', { real: 'لاعب تجربة', code: created.code, name: 'النسور' });
 check('رفض اسم فريق مكرر', !dupRes.ok);
+const noReal = await ask(dup, 'team:join', { code: created.code, name: 'بلا اسم' });
+check('الاسم الحقيقي مطلوب', !noReal.ok && /الحقيقي/.test(noReal.error));
+await wait(300);
+check('المنظّم يرى الأسماء الحقيقية', teams.every((t) => adminNames?.[t.id] === `حقيقي ${t.name}`));
+let displayState = null;
+display.on('room:state', (st) => (displayState = st));
 dup.close();
 
 // بدء الجولة — ثلاث ثوانٍ استعداد قبل انطلاق العدادات
@@ -262,28 +271,28 @@ check('إلغاء التغبيش يعمل', adminState.displayBlurred === false)
 const buyer = teams.reduce((best, t) => (t.state.sparks > best.state.sparks ? t : best), teams[0]);
 const timeCard = buyer.state.shop.cards.find((c) => c.id === 'time');
 check('المتجر مفتوح بين الجولات', buyer.state.shop.open === true);
-check('المتجر يعلن المتبقي من البطاقة', timeCard.left === 4);
+check('المتجر يعلن المتبقي من البطاقة', timeCard.left === 5);
 // الفرقُ تجيب «الخيار الأول» والخيارات مخلوطة: فالسلسلةُ مصادفة، وقد لا يملك المشتري إلا شرارتي المشاركة
 check(`شرارات المشاركة على الأقل — ${buyer.state.sparks}`, buyer.state.sparks >= 3);
 const scoreBefore2 = buyer.state.score;
 const sparksBefore = buyer.state.sparks;
 const bought = await ask(buyer.socket, 'team:buyCard', { card: 'time' });
 let more = 0;
-if (sparksBefore >= 3) {
+if (sparksBefore >= 4) {
   check('شراء بطاقة الوقت عبر السوكِت', bought.ok === true);
   await wait(500);
   check(
-    `خُصم سعرها من الشرارات (ثلاث) — ${sparksBefore} ← ${buyer.state.sparks}`,
-    buyer.state.sparks === sparksBefore - 3,
+    `خُصم سعرها من الشرارات (أربع) — ${sparksBefore} ← ${buyer.state.sparks}`,
+    buyer.state.sparks === sparksBefore - 4,
   );
   check('ونقاط الفوز لم تُمسّ', buyer.state.score === scoreBefore2);
-  check('المتبقي صار ثلاثاً', buyer.state.shop.cards.find((c) => c.id === 'time').left === 3);
+  check('المتبقي صار أربعاً', buyer.state.shop.cards.find((c) => c.id === 'time').left === 4);
   // يشتري ما تكفيه شراراته حتى الحدّ — والحدُّ نفسه يفحصه cards-test
-  while (more < 3 && (await ask(buyer.socket, 'team:buyCard', { card: 'time' })).ok) more++;
+  while (more < 4 && (await ask(buyer.socket, 'team:buyCard', { card: 'time' })).ok) more++;
   await wait(300);
   check(
     'يُشترى ما تكفيه الشرارات ثم يُرفض',
-    more === Math.min(3, Math.floor((sparksBefore - 3) / 3)),
+    more === Math.min(4, Math.floor((sparksBefore - 4) / 4)),
   );
 } else {
   check('يُرفض الشراء لقلّة الشرارات عبر السوكِت', bought.ok === false && /شرارات/.test(bought.error));
@@ -339,7 +348,7 @@ const latecomer = connect();
 await new Promise((r) => latecomer.on('connect', r));
 let lateState = null;
 latecomer.on('team:state', (st) => (lateState = st));
-const lateRes = await ask(latecomer, 'team:join', { code: created.code, name: 'المتأخرون' });
+const lateRes = await ask(latecomer, 'team:join', { real: 'لاعب تجربة', code: created.code, name: 'المتأخرون' });
 check('الانضمام أثناء الجولة مقبول', lateRes.ok === true);
 check('وحالته «منتظِر»', lateRes.state.waiting === true);
 check('ولا سؤال عنده', lateRes.state.question === null);
@@ -382,6 +391,19 @@ latecomer.close();
 check('إنهاء اللعبة', (await ask(admin, 'admin:finishGame')).ok);
 await wait(500);
 check('الحالة أصبحت finished', adminState.status === 'finished');
+const leaks = () => [displayState, ...teams.map((t) => t.state)].some((st) => JSON.stringify(st ?? {}).includes('حقيقي'));
+check('لا اسم حقيقي في حال القاعة أو اللاعبين قبل الكشف', !leaks());
+check('الكشف لم يبدأ', adminState.reveal?.step === 0 && adminState.reveal.total === 3);
+const step1 = await ask(admin, 'admin:reveal');
+await wait(300);
+const third = adminState.standings[2].teamId;
+check('الخطوة الأولى تكشف الثالث وحده', step1.ok && Object.keys(displayState.reveal.names).join() === third);
+check('ويصل الاسمُ الشاشة', displayState.reveal.names[third].startsWith('حقيقي'));
+await ask(admin, 'admin:reveal');
+await ask(admin, 'admin:reveal');
+await wait(300);
+check('ثلاث خطواتٍ تكشف الثلاثة', Object.keys(displayState.reveal.names).length === 3 && displayState.reveal.latest[0] === adminState.standings[0].teamId);
+check('ولا خطوة بعد آخرها', (await ask(admin, 'admin:reveal')).ok === false);
 const standings = adminState.standings;
 check('الترتيب النهائي وصل', Array.isArray(standings) && standings.length === 3);
 if (standings) {

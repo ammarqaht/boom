@@ -185,6 +185,8 @@ export default function Admin() {
   const [difficulty, setDifficulty] = useState<Level>('middle');
   const [roomName, setRoomName] = useState('');
   const [feed, setFeed] = useState<FeedItem[]>([]);
+  /* الأسماءُ الحقيقية: تصل المنظّمَ وحده في قناته، لا في حال الغرفة العامة */
+  const [names, setNames] = useState<Record<string, string>>({});
   /* حالُ الوصل: لوحةٌ مقطوعة لا تُدير غرفة، فلا تُترك تبدو سليمة */
   const [live, setLive] = useState(() => socket.connected);
 
@@ -243,18 +245,26 @@ export default function Admin() {
       if (res.ok) setRoom(res.state);
     });
 
-    const onConnect = () => setLive(true);
+    /* تُطلب بعد أن يُستمع لها، ومع كل وصلٍ جديد — فلا يفوت المنظّمَ ما بُعث قبل رسم لوحته */
+    const askNames = async () => {
+      const res = await ask<{ names: Record<string, string> }>('admin:realNames');
+      if (res.ok) setNames(res.names);
+    };
+    void askNames();
+    const onConnect = () => (setLive(true), void askNames());
     const onDrop = () => setLive(false);
     setLive(socket.connected);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDrop);
     socket.on('admin:feed', setFeed);
+    socket.on('admin:names', setNames);
     return () => {
       stop();
       offWake();
       socket.off('connect', onConnect);
       socket.off('disconnect', onDrop);
       socket.off('admin:feed', setFeed);
+      socket.off('admin:names', setNames);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -356,7 +366,7 @@ export default function Admin() {
     );
   }
 
-  return <Console room={shown ?? room} banks={banks} feed={feed} live={live} />;
+  return <Console room={shown ?? room} banks={banks} feed={feed} names={names} live={live} />;
 }
 
 /* «من ١١ بنكاً» و«من ١٠ بنوك» — يتبع عددَ البنوك أيّاً صار */
@@ -397,11 +407,13 @@ function Console({
   room,
   banks,
   feed,
+  names,
   live: online,
 }: {
   room: RoomState;
   banks: Bank[];
   feed: FeedItem[];
+  names: Record<string, string>;
   live: boolean;
 }) {
   const [note, setNote] = useState('');
@@ -638,8 +650,9 @@ function Console({
           <main data-tour="teams" className="grid content-start gap-2.5">
             {over ? (
               <>
+                <RevealControl room={room} />
                 <section className="tile px-4 py-6 sm:px-6">
-                  <Standings compact standings={room.standings!} />
+                  <Standings compact standings={room.standings!} names={room.reveal?.names} />
                 </section>
                 {/* رأي المنظّم كرأي اللاعب: كلاهما لعب، وأسفلَ الترتيب لا نافذةً تعترض */}
                 <div className="mx-auto w-full max-w-md">
@@ -738,6 +751,7 @@ function Console({
             {room.teams.length > 0 && (
               <StandingsPanel
                 teams={room.teams}
+                names={names}
                 last={last}
                 rounds={room.history.length}
                 onAdjust={(teamId, points) => send('admin:adjustScore', { teamId, points })}
@@ -1477,13 +1491,62 @@ function CardsPanel({
  * تحرّك الصفّ ولا مركزه — وإلا قفز الصفُّ من تحت إصبعه فأضاف الثانية إلى
  * غير صاحبها. ويُعاد الفرزُ كذلك إذا دخل لاعبٌ أو خرج.
  */
+/**
+ * زرُّ كشف الأسماء بعد الأوائل: كلُّ ضغطةٍ خطوة — الثالثُ ثم الثاني ثم
+ * الأول ثم البقيّة — والزرُّ يقول ما ستكشفه التالية. المنظّمُ أعرفُ بالقاعة:
+ * يكشف حين يهدأ التصفيق، لا بعد ثوانٍ يعدّها غيره.
+ */
+function RevealControl({ room }: { room: RoomState }) {
+  const [busy, setBusy] = useState(false);
+  const reveal = room.reveal;
+  if (!reveal || reveal.total === 0) return null;
+  const top = Math.min(3, room.standings?.length ?? 0);
+  /* الخطواتُ الأولى للأوائل من الثالث صعوداً، والأخيرةُ للبقيّة */
+  const next =
+    reveal.step >= reveal.total
+      ? null
+      : reveal.step < top
+        ? `اكشف ${PLACES[top - 1 - reveal.step]}`
+        : 'اكشف البقيّة';
+  const go = async () => {
+    setBusy(true);
+    const res = await ask('admin:reveal');
+    setBusy(false);
+    if (!res.ok) toast(res.error, { tone: 'danger' });
+  };
+  return (
+    <section className="tile flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
+      <span className="min-w-0">
+        <b className="block text-[15px] font-black">كشف الأسماء الحقيقية</b>
+        <span className="tnum text-[12.5px] font-medium text-muted">
+          {reveal.step === 0
+            ? 'تظهر على الشاشة والجوّالات معاً'
+            : next
+              ? `كُشف ${reveal.step} من ${reveal.total}`
+              : 'كُشفت الأسماء كلها'}
+        </span>
+      </span>
+      {next && (
+        <Button size="sm" onClick={go} disabled={busy}>
+          <EyeIcon size={15} />
+          {next}
+        </Button>
+      )}
+    </section>
+  );
+}
+const PLACES = ['الأول', 'الثاني', 'الثالث'];
+
 function StandingsPanel({
   teams,
+  names,
   last,
   rounds,
   onAdjust,
 }: {
   teams: PublicTeam[];
+  /** الأسماءُ الحقيقية — تحت كل مستعارٍ بخطٍّ صغير */
+  names: Record<string, string>;
   last: RoomState['result'] | null;
   /** عددُ الجولات المنتهية — به وحده (ومع تبدّل اللاعبين) يُعاد الفرز */
   rounds: number;
@@ -1523,7 +1586,14 @@ function StandingsPanel({
               >
                 {rank}
               </span>
-              <b className="min-w-0 truncate text-[13.5px] font-bold">{team.name}</b>
+              <span className="min-w-0">
+                <b className="block truncate text-[13.5px] font-bold">{team.name}</b>
+                {names[team.id] && (
+                  <span className="block text-[11px] leading-snug font-medium break-words text-faint">
+                    {names[team.id]}
+                  </span>
+                )}
+              </span>
               <span
                 className={`tnum text-[11.5px] font-bold ${award?.burned || (award?.points ?? 0) < 0 ? 'text-danger' : 'text-safe'}`}
                 title={award?.burned ? 'احترقت مضاعفته' : undefined}

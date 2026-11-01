@@ -38,7 +38,7 @@ const { code, adminKey } = created;
 const device = 'device-test-1';
 const p1 = connect();
 await once(p1, 'connect');
-const joined = await ask(p1, 'team:join', { code, name: 'الصقور', device });
+const joined = await ask(p1, 'team:join', { real: 'لاعب تجربة', code, name: 'الصقور', device });
 check(joined.ok, 'انضمام لاعب');
 const session = { code, teamId: joined.teamId, token: joined.token };
 
@@ -56,9 +56,9 @@ bad.close();
 /* ── العودة بالجهاز نفسه بالاسم نفسه ── */
 const p2 = connect();
 await once(p2, 'connect');
-const again = await ask(p2, 'team:join', { code, name: 'الصقور', device });
+const again = await ask(p2, 'team:join', { real: 'لاعب تجربة', code, name: 'الصقور', device });
 check(again.ok && again.teamId === session.teamId && again.resumed, 'الجهاز نفسه بالاسم نفسه يعود إلى مجموعته');
-const thief = await ask(p2, 'team:join', { code, name: 'الصقور', device: 'another' });
+const thief = await ask(p2, 'team:join', { real: 'لاعب تجربة', code, name: 'الصقور', device: 'another' });
 check(!thief.ok, 'وجهازٌ آخر لا ينتحل الاسم');
 p2.close();
 
@@ -77,7 +77,7 @@ const crowd = [];
 for (let i = 0; i < 29; i++) {
   const s = connect();
   await once(s, 'connect');
-  const r = await ask(s, 'team:join', { code, name: `فريق ${i}`, device: `d${i}` });
+  const r = await ask(s, 'team:join', { real: 'لاعب تجربة', code, name: `فريق ${i}`, device: `d${i}` });
   crowd.push({ socket: s, id: r.teamId });
 }
 check(crowd.length === 29, 'انضمّ تسعةٌ وعشرون آخرون');

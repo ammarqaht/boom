@@ -15,9 +15,18 @@ import {
   useCountdown,
   useProjected,
 } from '../lib/clock';
-import type { PublicTeam, Question, RoomResult, RoomState, TeamState } from '../lib/types';
+import type {
+  CardEvent,
+  PublicTeam,
+  Question,
+  Reveal as Unmask,
+  RoomResult,
+  RoomState,
+  TeamState,
+} from '../lib/types';
 import { CARD_GROUPS, CARD_LOOK, sparksWord } from '../lib/cards';
 import { EffectBadges } from '../components/effects';
+import { DuelFaceOff } from '../components/duel';
 import { LivesBar, livesFor, playersWord } from '../components/lives';
 import {
   Button,
@@ -67,6 +76,7 @@ import {
   PausedMark,
   ReviewList,
   RollingNumber,
+  BeatTitle,
   Standings,
   TheEnd,
 } from '../components/game';
@@ -132,6 +142,7 @@ export default function Play() {
   const [busy, setBusy] = useState(false);
   const [code, setCode] = useState(params.get('code')?.toUpperCase() ?? '');
   const [name, setName] = useState('');
+  const [real, setReal] = useState('');
   const [flash, setFlash] = useState<{ key: number; correct: boolean } | null>(null);
   // القفل مرتبط بمعرّف السؤال لا بقيمة منطقية:
   // وصول سؤال جديد يفكّه تلقائياً حتى لو ضاع ردّ السيرفر.
@@ -198,15 +209,16 @@ export default function Play() {
   useEffect(() => {
     const stop = watchSession('team', {
       resumed: (payload) => {
-        const next = payload.state as TeamState;
+        /*
+         * ولعبةٌ انتهت يُعاد إليها أيضاً: لوحةُ الأوائل.
+         *
+         * كانت الجلسة تُطوى هنا ويُرمى اللاعب إلى الباب — فالجوّال الذي
+         * ينقطع سوكِتُه ثوانيَ بعد الإعلان (شاشةٌ تخفت، شبكةٌ تتبدّل) كان
+         * يعود فيفقد الأوائل والقاعةُ تصفّق لهم. والجلسة تُطوى بزرّي
+         * الخروج وحدهما، وغرفةُ يومٍ آخر يغلبها رابطُها (lib/socket.ts).
+         */
         setReturning(false);
-        /* لعبةٌ انتهت لا يُعاد إليها: الجلسة تُطوى ويبدأ اللاعب من الباب */
-        if (next.status === 'finished') {
-          clearSession();
-          setState(null);
-          return;
-        }
-        setState(next);
+        setState(payload.state as TeamState);
         setRoom(payload.room as RoomState);
       },
       invalid: (payload) => {
@@ -280,6 +292,7 @@ export default function Play() {
     const res = await ask<{ teamId: string; token: string; state: TeamState }>('team:join', {
       code: code.trim().toUpperCase(),
       name: name.trim(),
+      real: real.trim(),
       device: deviceId(),
     });
     setBusy(false);
@@ -403,17 +416,33 @@ export default function Play() {
               className="tnum text-center text-3xl tracking-[0.4em]"
             />
           </Field>
-          <Field label="اسمك">
+          {/*
+           * اسمان: المستعارُ يُلعب به ويراه الجميع، والحقيقيُّ للمنظّم وحده حتى
+           * يُكشف بعد الأوائل — فلا يعرف أحدٌ من يجمّده ومن يبارزه.
+           */}
+          <Field label="اسمك في اللعبة">
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="أبو محمد"
+              placeholder="الظلّ"
               maxLength={24}
+            />
+          </Field>
+          <Field label="اسمك الحقيقي">
+            <Input
+              value={real}
+              onChange={(e) => setReal(e.target.value)}
+              placeholder="محمد العتيبي"
+              maxLength={20}
               onKeyDown={(e) => e.key === 'Enter' && void join()}
             />
           </Field>
           <ErrorNote>{error}</ErrorNote>
-          <Button size="lg" onClick={join} disabled={busy || code.length < 4 || !name.trim()}>
+          <Button
+            size="lg"
+            onClick={join}
+            disabled={busy || code.length < 4 || !name.trim() || !real.trim()}
+          >
             {busy ? 'جارٍ الانضمام…' : 'انضمّ'}
           </Button>
           <HomeLink />
@@ -454,6 +483,8 @@ export default function Play() {
         state={shown ?? state}
         teams={(liveRoom ?? room)?.teams ?? []}
         history={room?.history ?? []}
+        cardEvents={room?.cardEvents ?? []}
+        unmask={room?.reveal ?? null}
         flash={flash}
         reveal={reveal}
         reported={reported}
@@ -547,6 +578,8 @@ function TeamScreen({
   state,
   teams,
   history,
+  cardEvents,
+  unmask,
   flash,
   reveal,
   reported,
@@ -561,6 +594,9 @@ function TeamScreen({
   state: TeamState;
   teams: PublicTeam[];
   history: RoomResult[];
+  cardEvents: CardEvent[];
+  /** كشفُ الأسماء الحقيقية بعد الأوائل */
+  unmask: Unmask | null;
   flash: { key: number; correct: boolean } | null;
   reveal: Reveal | null;
   reported: Set<string>;
@@ -612,7 +648,8 @@ function TeamScreen({
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto py-5">
         {/* m-auto يوسّط اللوحة حين تقصر، ولا يقصّ أعلاها حين تطول */}
         <div className="m-auto w-full">
-          <Standings standings={state.standings} meId={state.id} />
+          {/* الكشفُ يصل الجوّالَ في لحظته على الشاشة: يرى كلٌّ من كان يبارزه */}
+          <Standings standings={state.standings} meId={state.id} names={unmask?.names} />
           <CommentCard onSend={(payload) => ask('feedback:comment', payload)} />
           <TheEnd
             primary="العب من جديد"
@@ -639,15 +676,38 @@ function TeamScreen({
   }
 
   if (state.status === 'countdown') {
+    /*
+     * مبارزتي — متحدّياً أو متحدّى — مواجهةٌ أعلى الشاشة، وسطرُها في
+     * الإشعارات يُطوى: قيل فيها أكبرَ مما يقوله السطر.
+     */
+    const myDuels = cardEvents.filter(
+      (event) => event.kind === 'duel' && (event.by === state.name || event.on === state.name),
+    );
+    const notices = (state.notices ?? []).filter(
+      (notice) => myDuels.length === 0 || !notice.includes('بارز'),
+    );
     return frame(
       <>
         <Centered>
           <p className="font-medium text-muted">استعدّ…</p>
         </Centered>
         <CountdownGate ms={state.countdownMs} on />
-        {(state.notices?.length ?? 0) > 0 && (
+        {myDuels.length > 0 && (
+          <div className="pointer-events-none fixed inset-x-0 top-[7vh] z-[70] mx-auto grid w-full max-w-md gap-2.5 px-4">
+            {myDuels.map((event, i) => (
+              <DuelFaceOff
+                key={`${event.by}-${event.on}`}
+                event={event}
+                size="phone"
+                me={state.name}
+                delay={i * 0.22}
+              />
+            ))}
+          </div>
+        )}
+        {notices.length > 0 && (
           <ul className="fixed inset-x-0 bottom-6 z-[70] mx-auto grid w-full max-w-md gap-2 px-4">
-            {state.notices!.map((notice, i) => (
+            {notices.map((notice, i) => (
               <li
                 key={i}
                 className="rise-in rounded-card bg-surface px-4 py-3 text-center text-[15px] font-black text-ink shadow-[inset_0_0_0_1px_var(--color-line-2),0_10px_30px_-12px_#000]"
@@ -957,11 +1017,19 @@ function Pulses({
 }) {
   if (teams.length < 1) return null;
 
+  /*
+   * أطولُ النبض أعلاه، ومن توقّف نبضُه آخرَهم: القائمةُ تصل بترتيب النقاط،
+   * فكان صاحبُ الدقيقة تحت صاحب الثواني الخمس — والعينُ تقرأ النبضَ لا النقاط.
+   */
+  const byPulse = [...teams].sort(
+    (a, b) => Number(a.flatlined) - Number(b.flatlined) || b.timeMs - a.timeMs,
+  );
+
   return (
     <section className="mt-4 border-t border-line pt-3.5 pb-1">
       <h3 className="mb-2.5 text-[11px] font-bold tracking-[0.14em] text-muted">{title}</h3>
       <div className="grid gap-2">
-        {teams.map((team) => {
+        {byPulse.map((team) => {
           const mine = team.id === meId;
           return (
             <div
@@ -1318,7 +1386,7 @@ function BreakTimer({ ms }: { ms: number }) {
   );
 }
 
-/* ما سُرق في المبارزة: «نقطة» و«نقطتين» و«٥ نقاط» */
+/* ما سُرق في المبارزة: «نقطة» و«نقطتين» و«٧ نقاط» */
 const STOLEN = { one: 'نقطة', two: 'نقطتين', few: 'نقاط', many: 'نقطة' };
 
 /** سطرُ المبارزة كما يقرؤه طرفُه: المتحدّي غلب أو لم يغلب، والخصمُ صدّ أو سُرق منه */
@@ -1625,34 +1693,7 @@ function RoundEndsCard({ players }: { players: number }) {
  * اللعبة لا خطٌّ فاصل. والطرفُ الأيسر مرآةُ الأيمن.
  */
 function GuideTitle() {
-  const beat = (flip: boolean) => (
-    <svg
-      viewBox="0 0 120 20"
-      preserveAspectRatio="none"
-      className={`h-5 min-w-0 flex-1 text-signal ${flip ? '-scale-x-100' : ''}`}
-      aria-hidden="true"
-    >
-      <path
-        d="M0 10H70L76 3L82 17L88 10H120"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-        opacity="0.75"
-      />
-    </svg>
-  );
-  return (
-    <div className="mb-3 flex shrink-0 items-center gap-3">
-      {beat(false)}
-      <span className="shrink-0 text-[13px] font-black tracking-[0.18em] text-signal">
-        توجيهات اللعبة
-      </span>
-      {beat(true)}
-    </div>
-  );
+  return <BeatTitle className="mb-3 text-[13px]">توجيهات اللعبة</BeatTitle>;
 }
 
 /**

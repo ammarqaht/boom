@@ -28,7 +28,6 @@ import {
   HistoryIcon,
   PauseIcon,
   PulseIcon,
-  TrophyIcon,
 } from './icons';
 
 /**
@@ -769,13 +768,71 @@ export function Confetti({ count = 60 }: { count?: number }) {
  * المقاسات كلها clamp: اللوحة نفسها تُقرأ على جوالٍ بعرض ٣٩٠ وعلى
  * بروجكتر بعرض ١٩٢٠ بلا نسختين.
  */
+/**
+ * عنوانٌ بين نبضتين: خطّا مخطّطٍ يجريان إليه من الطرفين وفي كلٍّ قفزةٌ
+ * قرب العنوان. ترويسةُ صفحة الانتظار ولوحةِ الأوائل — والمقاسُ من خطّ
+ * الحاوية (em)، فيكبر معه في القاعة ويصغر في الجوّال.
+ */
+export function BeatTitle({
+  children,
+  className = '',
+  style,
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const beat = (flip: boolean) => (
+    <svg
+      viewBox="0 0 120 20"
+      preserveAspectRatio="none"
+      className={`h-[1.5em] min-w-0 flex-1 text-signal ${flip ? '-scale-x-100' : ''}`}
+      aria-hidden="true"
+    >
+      <path
+        d="M0 10H70L76 3L82 17L88 10H120"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+        opacity="0.75"
+      />
+    </svg>
+  );
+  return (
+    <div className={`flex shrink-0 items-center gap-[0.9em] ${className}`} style={style}>
+      {beat(false)}
+      <span className="shrink-0 font-black tracking-[0.18em] text-signal">{children}</span>
+      {beat(true)}
+    </div>
+  );
+}
+
+/** الاسمُ الحقيقي تحت المستعار بخطٍّ صغير — يظهر حين يكشفه المنظّم */
+function RealName({ name, size }: { name?: string; size: string }) {
+  if (!name) return null;
+  return (
+    <span
+      className="reveal-real block font-bold break-words text-muted"
+      style={{ fontSize: size, lineHeight: 1.3 }}
+    >
+      {name}
+    </span>
+  );
+}
+
 export function Standings({
   standings,
   meId,
   compact = false,
   bars,
+  names = {},
 }: {
   standings: Standing[];
+  /** الأسماءُ الحقيقية التي كشفها المنظّم — تحت كلّ مستعارٍ بخطٍّ صغير */
+  names?: Record<string, string>;
   /** صاحب الجهاز — يُعلَّم صفّه */
   meId?: string;
   /** داخل لوحةٍ لا على شاشةٍ: سقوفٌ أقصر تليق بعمودٍ بين لوحاتٍ أخرى */
@@ -812,12 +869,9 @@ export function Standings({
       <div className="grid" style={{ gap: px(8, 0.9, 16) }}>
         <Confetti />
 
-        <header className="thump flex items-center justify-center" style={{ gap: px(10, 0.9, 20) }}>
-          <TrophyIcon className="text-signal" style={{ width: px(26, 2.4, 48), height: 'auto' }} />
-          <h2 className="font-black" style={{ fontSize: px(28, 3, 60), lineHeight: 1.1 }}>
-            الأوائل
-          </h2>
-        </header>
+        <BeatTitle className="thump" style={{ fontSize: px(15, 1.5, 32) }}>
+          <h2>ترتيب الأوائل</h2>
+        </BeatTitle>
 
         {/* البطل */}
         <div
@@ -838,11 +892,12 @@ export function Standings({
                 الأول{champion.teamId === meId ? ' · أنت' : ''}
               </div>
               <div
-                className="truncate font-black"
+                className="font-black break-words"
                 style={{ fontSize: px(26, 3.2, 64), lineHeight: 1.15 }}
               >
                 {champion.name}
               </div>
+              <RealName name={names[champion.teamId]} size={px(14, 1.5, 32)} />
             </div>
             <div className="shrink-0 text-center">
               <div
@@ -884,16 +939,24 @@ export function Standings({
                     // صفُّ صاحب الجهاز بلون الإشارة أينما وقع: أول ما يبحث عنه
                     '--bar': podium || mine ? 'var(--color-signal)' : 'var(--color-ink-2)',
                     '--cut': `${(1 - Math.max(team.score / top, 0.08)) * 100}%`,
-                    height: px(42, 4.2, 80),
+                    /* الارتفاعُ أدنى لا ثابت: الاسمُ الحقيقي سطرٌ ثانٍ يطول به الشريط */
+                    minHeight: px(42, 4.2, 80),
                     paddingInline: px(12, 1.2, 26),
+                    paddingBlock: px(4, 0.4, 8),
                     gap: px(8, 0.8, 18),
                   } as CSSProperties
                 }
               >
                 <span className="bar-fill" aria-hidden="true" />
-                <b className="relative truncate font-black" style={{ fontSize: px(15, 1.8, 40) }}>
-                  {team.name}
-                </b>
+                <span className="relative min-w-0">
+                  <b
+                    className="block font-black break-words"
+                    style={{ fontSize: px(15, 1.8, 40), lineHeight: 1.2 }}
+                  >
+                    {team.name}
+                  </b>
+                  <RealName name={names[team.teamId]} size={px(11, 1.05, 24)} />
+                </span>
                 {mine && (
                   <span
                     className="relative shrink-0 font-bold text-signal"
@@ -918,7 +981,8 @@ export function Standings({
           <div
             className="rise-in grid"
             style={{
-              gridTemplateColumns: `repeat(${tail.length > 24 ? 4 : 3}, minmax(0, 1fr))`,
+              /* القاعةُ الكبيرة أعمدةٌ أكثر: الصفوفُ أقصر فلا تُصغَّر اللوحةُ كلُّها لتسعها الشاشة */
+              gridTemplateColumns: `repeat(${tail.length > 40 ? 6 : tail.length > 24 ? 5 : tail.length > 12 ? 4 : 3}, minmax(0, 1fr))`,
               gap: `${px(4, 0.35, 8)} ${px(10, 1, 22)}`,
               marginTop: px(6, 0.6, 12),
               animationDelay: '0.7s',
@@ -937,7 +1001,10 @@ export function Standings({
                 }}
               >
                 <span className="tnum shrink-0 font-light text-faint">{team.rank}</span>
-                <b className="min-w-0 flex-1 truncate font-black">{team.name}</b>
+                <span className="min-w-0 flex-1">
+                  <b className="block font-black break-words">{team.name}</b>
+                  <RealName name={names[team.teamId]} size="0.8em" />
+                </span>
                 <span className="tnum shrink-0 font-black">{team.score}</span>
               </div>
             ))}

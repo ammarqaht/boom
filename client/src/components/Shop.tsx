@@ -1,4 +1,13 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type AnimationEvent,
+  type CSSProperties,
+  type MouseEvent,
+  type PointerEvent,
+} from 'react';
 import type { CardId, Shop as ShopData } from '../lib/types';
 import { ask } from '../lib/socket';
 import { toast } from './ui';
@@ -41,7 +50,6 @@ export function Shop({ shop }: { shop: ShopData }) {
     setBusy(card);
     const res = await ask('team:buyCard', { card, targetId });
     setBusy(null);
-    setOpened(null);
     if (!res.ok) return flash(res.error);
     const done = victim ? ATTACK_DONE[card]?.(victim) : null;
     toast(done ?? `اشتريتَ «${meta?.name ?? 'البطاقة'}»`, {
@@ -64,7 +72,6 @@ export function Shop({ shop }: { shop: ShopData }) {
     setBusy(card);
     const res = await ask('team:refundCard', { card });
     setBusy(null);
-    setOpened(null);
     if (!res.ok) return flash(res.error);
     toast(`نُقض شراء «${meta?.name ?? 'البطاقة'}»`, {
       tone: 'signal',
@@ -298,23 +305,31 @@ function CardSheet({
           ? 'اشتريتها للجولة القادمة'
           : null;
 
+  const { sheetProps, veilStyle, close } = useSheetDrag(onClose);
+
   useEffect(() => {
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const key = (e: KeyboardEvent) => e.key === 'Escape' && close();
     document.addEventListener('keydown', key);
     return () => document.removeEventListener('keydown', key);
-  }, [onClose]);
+  }, [close]);
+
+  /* الشراءُ والنقضُ يُنزلان النافذة نزولاً كالإغلاق — لا تختفي من تحت الإصبع */
+  const buy = (targetId?: string) => (close(), onBuy(targetId));
+  const undo = () => (close(), onUndo());
 
   return (
     <div className="fixed inset-0 z-[80] flex flex-col justify-end" role="dialog" aria-modal="true">
       <button
         type="button"
         aria-label="إغلاق"
-        onClick={onClose}
+        onClick={close}
         className="veil-in absolute inset-0 bg-ground/75 backdrop-blur-[2px]"
+        style={veilStyle}
       />
       <div
-        className="sheet-up relative mx-auto flex max-h-[80vh] w-full max-w-md flex-col rounded-t-[26px] bg-surface pb-[max(16px,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_-12px_#000]"
-        style={{ '--c': look.color } as CSSProperties}
+        {...sheetProps}
+        className={`${sheetProps.className} relative mx-auto flex max-h-[80vh] w-full max-w-md touch-none flex-col rounded-t-[26px] bg-surface pb-[max(16px,env(safe-area-inset-bottom))] shadow-[0_-12px_40px_-12px_#000]`}
+        style={{ ...sheetProps.style, '--c': look.color } as CSSProperties}
       >
         <span className="mx-auto mt-2.5 h-1.5 w-11 rounded-full bg-line-2" aria-hidden="true" />
         <div className="flex items-start gap-3.5 px-5 pt-4 pb-4">
@@ -343,7 +358,10 @@ function CardSheet({
         </div>
 
         {card.target && !blocked ? (
-          <div className="grid gap-1.5 overflow-y-auto border-t border-line px-4 pt-3">
+          <div
+            data-sheet-scroll
+            className="grid touch-pan-y gap-1.5 overflow-y-auto border-t border-line px-4 pt-3"
+          >
             {list.length === 0 ? (
               <p className="py-6 text-center font-bold text-muted">أنت أعلى واحد نقاطاً</p>
             ) : (
@@ -356,7 +374,7 @@ function CardSheet({
                     key={r.id}
                     type="button"
                     disabled={already || held || busy}
-                    onClick={() => onBuy(r.id)}
+                    onClick={() => buy(r.id)}
                     className={`flex items-center gap-3 rounded-[14px] px-4 py-3 text-right font-bold shadow-[inset_0_0_0_1px_var(--color-line-2)] transition hover:bg-surface-2 active:scale-[0.98] ${
                       already || held ? 'opacity-40' : ''
                     }`}
@@ -381,7 +399,7 @@ function CardSheet({
             <button
               type="button"
               disabled={!!blocked || busy}
-              onClick={() => onBuy()}
+              onClick={() => buy()}
               className="tnum flex w-full items-center justify-center gap-2 rounded-[16px] py-3.5 text-[17px] font-black text-ground transition active:scale-[0.98] disabled:bg-surface-2 disabled:text-muted"
               style={blocked ? undefined : { background: 'var(--c)' }}
             >
@@ -402,7 +420,7 @@ function CardSheet({
             <button
               type="button"
               disabled={busy}
-              onClick={onUndo}
+              onClick={undo}
               className="flex w-full items-center justify-center gap-1.5 rounded-[14px] py-3 text-[14px] font-bold text-muted shadow-[inset_0_0_0_1px_var(--color-line-2)]"
             >
               <RestoreIcon size={15} />
@@ -413,6 +431,125 @@ function CardSheet({
       </div>
     </div>
   );
+}
+
+/* منحنى النوافذ السفلية في الهواتف: ينطلق سريعاً ويهدأ عند الحافة */
+const SHEET_EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
+const SHEET_MS = 300;
+
+/**
+ * النافذةُ السفلية تُسحب وتُغلق كما تُغلق نوافذ الهاتف.
+ *
+ * تتبع الإصبعَ نزولاً (وصعوداً بمقاومةٍ لا تتعدّى حافتها)، فإذا أُفلتت بعد
+ * ربع طولها أو بنفضةٍ سريعة نزلت إلى خارج الشاشة، وإلا عادت إلى مكانها.
+ * والإغلاقُ من أيّ بابٍ — النقرُ خارجها أو Escape أو الشراء — نزولٌ سلس
+ * لا اختفاء: تُرسم ذاهبةً ثم تُطوى.
+ *
+ * والقائمةُ داخلها تجري بالإصبع (touch-pan-y)، فالسحبُ يبدأ من رأسها أو
+ * من زرّها. وسحبٌ ابتدأ على زرٍّ لا يضغطه حين يُفلت.
+ */
+function useSheetDrag(onClose: () => void) {
+  const [entered, setEntered] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  /* حالُ السحب في مرجعٍ لا في حالة: الإفلاتُ قد يسبق إعادةَ الرسم */
+  const drag = useRef<{
+    id: number;
+    y0: number;
+    y: number;
+    t: number;
+    v: number;
+    moving: boolean;
+  } | null>(null);
+  const swallow = useRef(false);
+  const height = useRef(400);
+  const closed = useRef(false);
+
+  const close = useCallback(() => {
+    if (closed.current) return;
+    closed.current = true;
+    setDragging(false);
+    setLeaving(true);
+    const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setTimeout(onClose, calm ? 0 : SHEET_MS);
+  }, [onClose]);
+
+  const end = (e: PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d || !d.moving) return;
+    swallow.current = true;
+    setDragging(false);
+    const moved = e.clientY - d.y0;
+    if (moved > height.current * 0.25 || (moved > 24 && d.v > 0.5)) close();
+    else setOffset(0);
+  };
+
+  const sheetProps = {
+    className: 'sheet-up',
+    onAnimationEnd: (e: AnimationEvent) => {
+      if (e.target === e.currentTarget) setEntered(true);
+    },
+    onPointerDown: (e: PointerEvent<HTMLDivElement>) => {
+      if (leaving || e.button !== 0) return;
+      const list = (e.target as HTMLElement).closest('[data-sheet-scroll]');
+      if (list) return;
+      height.current = e.currentTarget.offsetHeight || 400;
+      drag.current = {
+        id: e.pointerId,
+        y0: e.clientY,
+        y: e.clientY,
+        t: performance.now(),
+        v: 0,
+        moving: false,
+      };
+    },
+    onPointerMove: (e: PointerEvent<HTMLDivElement>) => {
+      const d = drag.current;
+      if (!d || e.pointerId !== d.id) return;
+      const moved = e.clientY - d.y0;
+      if (!d.moving) {
+        if (Math.abs(moved) < 6) return;
+        d.moving = true;
+        setDragging(true);
+        setEntered(true);
+        e.currentTarget.setPointerCapture(d.id);
+      }
+      const now = performance.now();
+      d.v = (e.clientY - d.y) / Math.max(1, now - d.t);
+      d.y = e.clientY;
+      d.t = now;
+      /* نزولاً يتبع الإصبع كما هو، وصعوداً يقاوم: ربعُ المسافة وحتى ١٢ بكسلاً */
+      setOffset(moved >= 0 ? moved : Math.max(-12, moved / 4));
+    },
+    onPointerUp: end,
+    onPointerCancel: end,
+    onClickCapture: (e: MouseEvent) => {
+      if (!swallow.current) return;
+      swallow.current = false;
+      e.stopPropagation();
+      e.preventDefault();
+    },
+    /* بعد الصعود يُرفع عنها الحراك المرسوم (يثبّت موضعها) فيتولّاها السحب */
+    style:
+      entered || leaving
+        ? {
+            animation: 'none',
+            transform: leaving ? 'translateY(100%)' : `translateY(${offset}px)`,
+            transition: dragging ? 'none' : `transform ${SHEET_MS}ms ${SHEET_EASE}`,
+          }
+        : undefined,
+  };
+
+  /* الغشاءُ يخفّ مع السحب، ويذهب مع النافذة */
+  const veilStyle: CSSProperties = {
+    ...(entered || leaving ? { animation: 'none' } : null),
+    opacity: leaving ? 0 : 1 - Math.min(0.6, Math.max(0, offset) / (height.current * 1.2)),
+    transition: dragging ? 'none' : `opacity ${SHEET_MS}ms ${SHEET_EASE}`,
+  };
+
+  return { sheetProps, veilStyle, close };
 }
 
 /*
